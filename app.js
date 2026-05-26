@@ -502,6 +502,52 @@ function buildProductionDetailsFromExtra(sheet) {
   return Object.entries(parts).flatMap(([category, value]) => splitProductionAmount(value, category, sheet));
 }
 
+function normalizeCallsheetProductionDetails(sheet) {
+  const rawDetails = Array.isArray(sheet?.productionDetails) ? sheet.productionDetails : [];
+  const expectedParts = productionCostPartsFromExtra(sheet);
+  const expectedTotal = productionDetailKeys.reduce((sum, key) => sum + Math.round(Number(expectedParts[key]) || 0), 0);
+  const normalizedDetails = rawDetails
+    .map((detail, index) => {
+      const value = Math.round(Number(detail?.value) || 0);
+      const category = productionDetailCategoryKey(detail);
+      const label = String(detail?.label || detail?.vendor || productionDetailTypeLabel(category)).trim();
+      if (value <= 0 || !label) return null;
+      return {
+        key: String(detail?.key || `production:${category}:${label}:${index}`),
+        label,
+        vendor: String(detail?.vendor || label).trim(),
+        type: String(detail?.type || productionDetailTypeLabel(category)).trim(),
+        category,
+        value,
+        meta: String(detail?.meta || sheet?.title || "").trim(),
+      };
+    })
+    .filter(Boolean);
+  const rawTotal = normalizedDetails.reduce((sum, detail) => sum + detail.value, 0);
+  const onlyGenericProduction =
+    normalizedDetails.length > 0 &&
+    expectedTotal > 0 &&
+    Math.abs(rawTotal - expectedTotal) <= 2 &&
+    normalizedDetails.every((detail) => detail.category === "misc" && /生产|通告|外部费用|production/i.test(`${detail.type} ${detail.label}`));
+  if (onlyGenericProduction) {
+    return buildProductionDetailsFromExtra(sheet);
+  }
+  const detailTotals = normalizedDetails.reduce((result, detail) => {
+    result[detail.category] = (result[detail.category] || 0) + detail.value;
+    return result;
+  }, {});
+  const mergedDetails = [...normalizedDetails];
+  productionDetailKeys.forEach((key) => {
+    const expected = Math.round(Number(expectedParts[key]) || 0);
+    const existing = Math.round(Number(detailTotals[key]) || 0);
+    const missing = expected - existing;
+    if (missing > 0) {
+      mergedDetails.push(...splitProductionAmount(missing, key, sheet));
+    }
+  });
+  return mergedDetails;
+}
+
 function buildFullDemoCallSheets() {
   return clone(defaultCallSheets).map((sheet) => ({
     ...sheet,
@@ -567,19 +613,36 @@ const baseCategoryColors = {
   labor: "#2867b2",
   equipment: "#c84c39",
   production: "#157a6e",
+  meals: "#477a38",
+  vehicles: "#6b5aa6",
+  rooms: "#c98a1c",
+  locationFee: "#173f52",
+  misc: "#945f35",
 };
 
 const colorBlindCategoryColors = {
   labor: "#0072b2",
   equipment: "#d55e00",
   production: "#009e73",
+  meals: "#009e73",
+  vehicles: "#cc79a7",
+  rooms: "#e69f00",
+  locationFee: "#56b4e9",
+  misc: "#999999",
 };
 
 const categoryNames = {
   labor: "人员",
   equipment: "器材",
   production: "生产",
+  meals: "餐食",
+  vehicles: "车辆",
+  rooms: "住宿/酒店",
+  locationFee: "场地",
+  misc: "杂费",
 };
+
+const productionDetailKeys = ["meals", "vehicles", "rooms", "locationFee", "misc"];
 
 const gradeOptions = ["none", "A", "B", "C", "D", "E", "F", "G"];
 const ratedGradeOptions = gradeOptions.filter((grade) => grade !== "none");
@@ -793,6 +856,7 @@ const chartZoomStep = 0.15;
 const chartMinZoom = 0.7;
 const chartMaxZoom = 1.85;
 const zoomableChartIds = new Set(["analysisVisualChart", "fundFlowChart", "fundFlowLargeChart", "visualExplorerChart"]);
+const canvasPanState = new Map();
 
 let visualState = {
   dataset: "daily",
@@ -1439,13 +1503,18 @@ function ensureReferenceData() {
   callSheets = callSheets.map((sheet) => {
     const sheetDepartments = Array.isArray(sheet.departments) ? sheet.departments : [];
     const expandedDepartments = expandCallsheetDepartments(sheetDepartments, sheet);
-    if (expandedDepartments.join("|") === sheetDepartments.join("|")) {
+    const productionDetails = normalizeCallsheetProductionDetails(sheet);
+    const existingDetails = Array.isArray(sheet.productionDetails) ? sheet.productionDetails : [];
+    const departmentsChanged = expandedDepartments.join("|") !== sheetDepartments.join("|");
+    const detailsChanged = JSON.stringify(productionDetails) !== JSON.stringify(existingDetails);
+    if (!departmentsChanged && !detailsChanged) {
       return { ...sheet, departments: sheetDepartments };
     }
     changed = true;
     return {
       ...sheet,
       departments: expandedDepartments,
+      productionDetails,
     };
   });
 
@@ -1728,6 +1797,8 @@ function productionCostPartsFromExtra(sheet) {
 }
 
 function productionDetailCategoryKey(detail) {
+  const explicitCategory = String(detail?.category || "").trim();
+  if (productionDetailKeys.includes(explicitCategory)) return explicitCategory;
   const text = `${detail?.type || ""} ${detail?.label || ""} ${detail?.vendor || ""}`.toLowerCase();
   if (/餐|meal|food|catering|热餐/.test(text)) return "meals";
   if (/车|vehicle|transport|司机|货运/.test(text)) return "vehicles";
@@ -1758,23 +1829,7 @@ function productionDetailDisplayLabel(detail) {
 
 function normalizeProductionDetailRows(sheet, options = {}) {
   const useFallback = options.fallback !== false;
-  const rawDetails = Array.isArray(sheet?.productionDetails) ? sheet.productionDetails : [];
-  const detailedRows = rawDetails
-    .map((detail, index) => {
-      const value = Number(detail?.value) || 0;
-      const category = productionDetailCategoryKey(detail);
-      const label = String(detail?.label || detail?.vendor || productionDetailTypeLabel(category)).trim();
-      return {
-        key: String(detail?.key || `production:${category}:${label}:${index}`),
-        label,
-        vendor: String(detail?.vendor || label).trim(),
-        type: String(detail?.type || productionDetailTypeLabel(category)).trim(),
-        category,
-        value,
-        meta: String(detail?.meta || sheet?.title || "").trim(),
-      };
-    })
-    .filter((detail) => detail.value > 0 && detail.label);
+  const detailedRows = normalizeCallsheetProductionDetails(sheet);
 
   if (detailedRows.length > 0 || !useFallback) return detailedRows;
 
@@ -2134,6 +2189,9 @@ function setChartFullscreen(id, fullscreen) {
   if (fullscreen && id === "fundFlowLargeChart" && state.zoom < 1.15) {
     state.zoom = 1.15;
   }
+  if (fullscreen) {
+    resetCanvasPan(id);
+  }
   applyChartFrameState(id);
   hideChartTooltip(document.querySelector(`#${id}`));
   requestAnimationFrame(() => {
@@ -2149,7 +2207,6 @@ function setChartZoom(id, nextZoom) {
   hideChartTooltip(document.querySelector(`#${id}`));
   requestAnimationFrame(() => {
     redrawChartById(id);
-    if (state.fullscreen) centerChartFrame(id);
   });
 }
 
@@ -2162,6 +2219,27 @@ function centerChartFrame(id) {
     frame.scrollTop = Math.max(0, (canvas.offsetHeight - frame.clientHeight) / 2);
     frame.dataset.centered = "true";
   });
+}
+
+function getCanvasPan(id) {
+  if (!canvasPanState.has(id)) {
+    canvasPanState.set(id, { x: 0, y: 0 });
+  }
+  return canvasPanState.get(id);
+}
+
+function applyCanvasPan(id) {
+  const canvas = document.querySelector(`#${id}`);
+  if (!canvas) return;
+  const pan = getCanvasPan(id);
+  canvas.style.transform = `translate(${Math.round(pan.x)}px, ${Math.round(pan.y)}px)`;
+}
+
+function resetCanvasPan(id) {
+  const pan = getCanvasPan(id);
+  pan.x = 0;
+  pan.y = 0;
+  applyCanvasPan(id);
 }
 
 function chartControlButton({ action, id, label, title, svg }) {
@@ -2237,6 +2315,7 @@ function resizeCanvas(canvas) {
   canvas.height = Math.round(cssHeight * ratio);
   const ctx = canvas.getContext("2d");
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  applyCanvasPan(canvas.id);
   return { ctx, width: targetWidth, height: cssHeight };
 }
 
@@ -2389,7 +2468,7 @@ function setupChartViewControls() {
       frame.insertAdjacentHTML("afterbegin", chartToolbarMarkup(id));
     }
     if (!frame.querySelector(".chart-pan-hint")) {
-      frame.insertAdjacentHTML("beforeend", '<div class="chart-pan-hint" aria-hidden="true">拖动画布查看全部节点</div>');
+      frame.insertAdjacentHTML("beforeend", '<div class="chart-pan-hint" aria-hidden="true">拖动画布移动图表，滚轮缩放</div>');
     }
     applyChartFrameState(id);
   });
@@ -2406,7 +2485,10 @@ function setupChartViewControls() {
     const state = getChartViewState(id);
     if (zoomOut) setChartZoom(id, state.zoom - chartZoomStep);
     if (zoomIn) setChartZoom(id, state.zoom + chartZoomStep);
-    if (zoomReset) setChartZoom(id, 1);
+    if (zoomReset) {
+      resetCanvasPan(id);
+      setChartZoom(id, 1);
+    }
     if (fullscreen) setChartFullscreen(id, !state.fullscreen);
   });
 
@@ -2419,26 +2501,31 @@ function setupChartViewControls() {
   });
 
   document.querySelectorAll("[data-chart-frame]").forEach((frame) => {
+    const id = frame.dataset.chartFrame;
     let pointerId = null;
     let startX = 0;
     let startY = 0;
-    let startScrollLeft = 0;
-    let startScrollTop = 0;
+    let startPanX = 0;
+    let startPanY = 0;
     frame.addEventListener("pointerdown", (event) => {
       if (event.target.closest(".chart-view-toolbar")) return;
       if (event.button !== 0) return;
       pointerId = event.pointerId;
       startX = event.clientX;
       startY = event.clientY;
-      startScrollLeft = frame.scrollLeft;
-      startScrollTop = frame.scrollTop;
+      const pan = getCanvasPan(id);
+      startPanX = pan.x;
+      startPanY = pan.y;
       frame.classList.add("is-panning");
+      event.preventDefault();
       frame.setPointerCapture(pointerId);
     });
     frame.addEventListener("pointermove", (event) => {
       if (pointerId !== event.pointerId) return;
-      frame.scrollLeft = startScrollLeft - (event.clientX - startX);
-      frame.scrollTop = startScrollTop - (event.clientY - startY);
+      const pan = getCanvasPan(id);
+      pan.x = startPanX + event.clientX - startX;
+      pan.y = startPanY + event.clientY - startY;
+      applyCanvasPan(id);
     });
     const endPan = (event) => {
       if (pointerId !== event.pointerId) return;
@@ -2448,11 +2535,27 @@ function setupChartViewControls() {
     };
     frame.addEventListener("pointerup", endPan);
     frame.addEventListener("pointercancel", endPan);
+    frame.addEventListener(
+      "wheel",
+      (event) => {
+        if (!zoomableChartIds.has(id)) return;
+        event.preventDefault();
+        const state = getChartViewState(id);
+        const zoomDelta = event.deltaY < 0 ? chartZoomStep : -chartZoomStep;
+        setChartZoom(id, state.zoom + zoomDelta);
+      },
+      { passive: false },
+    );
   });
 }
 
 function clearChart(ctx, width, height) {
   ctx.clearRect(0, 0, width, height);
+  if (ctx.canvas?.parentElement?.classList.contains("chart-fullscreen-frame")) {
+    ctx.canvas.style.background = "transparent";
+    return;
+  }
+  ctx.canvas.style.background = "";
   ctx.fillStyle = semanticColor("surface");
   ctx.fillRect(0, 0, width, height);
   const gradient = ctx.createLinearGradient(0, 0, width, height);
@@ -2805,9 +2908,11 @@ function departmentFlowDetailRows(departmentId) {
     if (!sheet.departments.includes(departmentId) || sheet.departments.length === 0) return;
     const factor = 1 / sheet.departments.length;
     normalizeProductionDetailRows(sheet).forEach((detail) => {
+      const category = detail.category || productionDetailCategoryKey(detail);
       const label = productionDetailDisplayLabel(detail);
-      const key = `production:${detail.category}:${label}:${sheet.day || sheet.code || sheet.title}`;
-      addFlowDetail(detailMap, key, label, detail.value * factor, activeCategoryColor("production"), detail.type || "生产", `${sheet.title}${detail.meta && detail.meta !== sheet.title ? ` · ${detail.meta}` : ""}`);
+      const key = `production:${category}:${label}`;
+      const color = activeCategoryColor(category);
+      addFlowDetail(detailMap, key, label, detail.value * factor, color, detail.type || "生产", `${sheet.title}${detail.meta && detail.meta !== sheet.title ? ` · ${detail.meta}` : ""}`);
     });
   });
   return Array.from(detailMap.values()).sort((a, b) => b.value - a.value);
@@ -2878,9 +2983,11 @@ function fundFlowData() {
   completedSheets().forEach((sheet) => {
     const addUnclassifiedProduction = () => {
       normalizeProductionDetailRows(sheet).forEach((detail) => {
+        const category = detail.category || productionDetailCategoryKey(detail);
         const label = productionDetailDisplayLabel(detail);
-        const key = `production:${detail.category}:${label}:${sheet.day || sheet.code || sheet.title}`;
-        addFlowDetail(unclassifiedDetails, key, label, detail.value, activeCategoryColor("production"), detail.type || "生产", `${sheet.title}${detail.meta && detail.meta !== sheet.title ? ` · ${detail.meta}` : ""}`);
+        const key = `production:${category}:${label}`;
+        const color = activeCategoryColor(category);
+        addFlowDetail(unclassifiedDetails, key, label, detail.value, color, detail.type || "生产", `${sheet.title}${detail.meta && detail.meta !== sheet.title ? ` · ${detail.meta}` : ""}`);
       });
     };
     if (sheet.departments.length === 0) {
@@ -2974,13 +3081,16 @@ function flowNodeHeights(rows, key, usableH, gap, minH = 18) {
   const values = rows.map((row) => Math.max(0, Number(row[key]) || 0));
   const total = values.reduce((sum, value) => sum + value, 0);
   if (rows.length === 0) return [];
-  const availableH = Math.max(minH * rows.length, usableH - gap * (rows.length - 1));
+  const availableH = usableH - gap * (rows.length - 1);
+  if (availableH < minH * rows.length) {
+    return rows.map(() => Math.max(8, availableH / rows.length));
+  }
   if (total <= 0) return rows.map(() => Math.max(minH, availableH / rows.length));
   return values.map((value) => Math.max(minH, (value / total) * availableH));
 }
 
-function positionedFlowNodes(rows, key, x, w, top, usableH, gap, colorGetter) {
-  const heights = flowNodeHeights(rows, key, usableH, gap);
+function positionedFlowNodes(rows, key, x, w, top, usableH, gap, colorGetter, minH = 18) {
+  const heights = flowNodeHeights(rows, key, usableH, gap, minH);
   const totalH = heights.reduce((sum, value) => sum + value, 0) + Math.max(0, rows.length - 1) * gap;
   let y = top + Math.max(0, (usableH - totalH) / 2);
   return rows.map((row, index) => {
@@ -3031,11 +3141,24 @@ function aggregateFundRows(rows, key, limit, otherLabel) {
   return [...visible, aggregate];
 }
 
-function aggregateDetails(details, limit = 10, otherLabel = "其他明细") {
+function aggregateDetails(details, limit = 10, otherLabel = "其他明细", options = {}) {
   const positive = details.filter((detail) => (Number(detail.value) || 0) > 0).sort((a, b) => b.value - a.value);
   if (positive.length <= limit) return positive;
-  const visible = positive.slice(0, Math.max(1, limit - 1));
-  const hidden = positive.slice(Math.max(1, limit - 1));
+  const pinnedKeys = Array.isArray(options.pinKeys) ? options.pinKeys : [];
+  const pinned = [];
+  const pinnedDetailKeys = new Set();
+  pinnedKeys.forEach((key) => {
+    const match = positive.find((detail) => classifyFundDetail(detail).key === key && !pinnedDetailKeys.has(detail.key));
+    if (!match) return;
+    pinned.push(match);
+    pinnedDetailKeys.add(match.key);
+  });
+  const remaining = positive.filter((detail) => !pinnedDetailKeys.has(detail.key));
+  const visibleLimit = Math.max(1, limit - 1);
+  const visible = [...pinned, ...remaining.slice(0, Math.max(0, visibleLimit - pinned.length))]
+    .filter((detail, index, rows) => rows.findIndex((item) => item.key === detail.key) === index)
+    .sort((a, b) => b.value - a.value);
+  const hidden = remaining.slice(Math.max(0, visibleLimit - pinned.length));
   const hiddenTotal = hidden.reduce((sum, detail) => sum + detail.value, 0);
   return [
     ...visible,
@@ -3053,6 +3176,10 @@ function aggregateDetails(details, limit = 10, otherLabel = "其他明细") {
 function classifyFundDetail(detail) {
   if (detail.type === "人员") return { key: "labor", label: "人员", color: activeCategoryColor("labor") };
   if (detail.type === "器材") return { key: "equipment", label: "器材", color: activeCategoryColor("equipment") };
+  const category = detail.category || productionDetailCategoryKey(detail);
+  if (["meals", "vehicles", "rooms", "locationFee", "misc"].includes(category)) {
+    return { key: category, label: productionDetailTypeLabel(category), color: activeCategoryColor(category) };
+  }
   return { key: "production", label: isCustomInputMode() ? "外部费用" : "生产", color: activeCategoryColor("production") };
 }
 
@@ -3062,7 +3189,7 @@ function rowUsageDetails(row) {
   return [
     { key: `${row.department?.id || "row"}:labor`, label: "人员", value: row.breakdown?.labor || 0, color: activeCategoryColor("labor"), type: "人员" },
     { key: `${row.department?.id || "row"}:equipment`, label: "器材", value: row.breakdown?.equipment || 0, color: activeCategoryColor("equipment"), type: "器材" },
-    { key: `${row.department?.id || "row"}:production`, label: isCustomInputMode() ? "外部费用" : "生产", value: row.breakdown?.production || 0, color: activeCategoryColor("production"), type: "生产" },
+    { key: `${row.department?.id || "row"}:production`, label: isCustomInputMode() ? "外部费用" : "生产", value: row.breakdown?.production || 0, color: activeCategoryColor("production"), type: "生产", category: "production" },
   ].filter((detail) => detail.value > 0);
 }
 
@@ -3090,6 +3217,7 @@ function fundFlowDetailRows(limit = 80) {
 function fundFlowReadableData(limit = 8) {
   const data = fundFlowData();
   const usageRows = data.usageRows.length > 0 ? data.usageRows : data.budgetRows;
+  const allUsageDetails = usageRows.flatMap((row) => rowUsageDetails(row));
   const usedTotal = Math.max(data.usageTotal, usageRows.reduce((sum, row) => sum + (Number(row.used) || 0), 0));
   const sourceTotal = Math.max(data.sourceTotal || 0, project.budget || 0, data.allocatedTotal, usedTotal);
   const budgetLabel = budgetBudgetLabel();
@@ -3115,7 +3243,12 @@ function fundFlowReadableData(limit = 8) {
   const usageBreakdown = [
     { key: "labor", label: "人员", value: usageRows.reduce((sum, row) => sum + (row.breakdown?.labor || 0), 0), color: activeCategoryColor("labor") },
     { key: "equipment", label: "器材", value: usageRows.reduce((sum, row) => sum + (row.breakdown?.equipment || 0), 0), color: activeCategoryColor("equipment") },
-    { key: "production", label: isCustomInputMode() ? "外部费用" : "生产 / 通告", value: usageRows.reduce((sum, row) => sum + (row.breakdown?.production || 0), 0), color: activeCategoryColor("production") },
+    ...productionDetailKeys.map((key) => ({
+      key,
+      label: productionDetailTypeLabel(key),
+      value: allUsageDetails.filter((detail) => classifyFundDetail(detail).key === key).reduce((sum, detail) => sum + (Number(detail.value) || 0), 0),
+      color: activeCategoryColor(key),
+    })),
   ]
     .filter((row) => row.value > 0)
     .map((row) => ({ ...row, share: usedTotal > 0 ? row.value / usedTotal : 0 }))
@@ -3240,7 +3373,7 @@ function renderFundFlowReadablePanel(selector, options = {}) {
       <section class="fund-flow-readable-card">
         <div class="fund-flow-card-head">
           <strong>用途构成</strong>
-          <span>人员 / 器材 / 生产</span>
+          <span>人员 / 器材 / 餐食 / 车辆 / 住宿</span>
         </div>
         <div class="fund-flow-bar-list">${usageList}</div>
       </section>
@@ -3587,12 +3720,40 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
   const visibleUnallocatedSummary = Math.max(0, data.sourceTotal - data.allocatedTotal - unclassifiedUsed);
   const overAllocated = Math.max(0, data.allocatedTotal - Math.max(project.budget || 0, data.usageTotal));
   const usageRowsForSinks = data.usageRows.length > 0 ? data.usageRows : data.budgetRows;
+  const allUsageDetails = usageRowsForSinks.flatMap((row) => rowUsageDetails(row));
+  const productionSinkRows = productionDetailKeys
+    .map((key) => ({
+      key,
+      label: productionDetailTypeLabel(key),
+      value: allUsageDetails.filter((detail) => classifyFundDetail(detail).key === key).reduce((sum, detail) => sum + (Number(detail.value) || 0), 0),
+      color: activeCategoryColor(key),
+    }))
+    .filter((row) => row.value > 0);
+  if (fullscreen) {
+    ["vehicles", "rooms", "locationFee"].forEach((key) => {
+      if (!productionSinkRows.some((row) => row.key === key)) {
+        productionSinkRows.push({
+          key,
+          label: productionDetailTypeLabel(key),
+          value: 1,
+          color: activeCategoryColor(key),
+          placeholder: true,
+        });
+      }
+    });
+  }
   const sinkRows = [
     { key: "labor", label: "人员", value: usageRowsForSinks.reduce((sum, row) => sum + row.breakdown.labor, 0), color: activeCategoryColor("labor") },
     { key: "equipment", label: "器材", value: usageRowsForSinks.reduce((sum, row) => sum + row.breakdown.equipment, 0), color: activeCategoryColor("equipment") },
-    { key: "production", label: isCustomInputMode() ? "外部费用" : "通告额外", value: usageRowsForSinks.reduce((sum, row) => sum + row.breakdown.production, 0), color: activeCategoryColor("production") },
+    ...productionSinkRows,
   ].filter((row) => row.value > 0);
-  const detailRows = aggregateDetails(usageRowsForSinks.flatMap((row) => rowUsageDetails(row)), width < 760 ? 7 : detailLimit, "其他公司/明细");
+  const fallbackProductionTotal = usageRowsForSinks.reduce((sum, row) => sum + row.breakdown.production, 0) - productionSinkRows.reduce((sum, row) => sum + row.value, 0);
+  if (fallbackProductionTotal > 0) {
+    sinkRows.push({ key: "production", label: isCustomInputMode() ? "外部费用" : "生产其他", value: fallbackProductionTotal, color: activeCategoryColor("production") });
+  }
+  const detailRows = aggregateDetails(allUsageDetails, width < 760 ? 7 : detailLimit, "其他公司/明细", {
+    pinKeys: fullscreen || large ? ["vehicles", "rooms", "locationFee", "meals"] : [],
+  });
   const detailTotal = detailRows.reduce((sum, row) => sum + row.value, 0);
 
   if (insight) {
@@ -3696,6 +3857,7 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
     Math.max(80, usableH - 40),
     fullscreen ? 28 : compact ? 14 : 18,
     (row) => row.color || semanticColor("muted"),
+    fullscreen ? 52 : 18,
   );
   const detailNodes = positionedFlowNodes(
     detailRows.length > 0 ? detailRows : [{ key: "none-detail", label: "暂无明细", value: 1, color: semanticColor("muted"), type: "明细" }],
@@ -3734,8 +3896,9 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
 
   const sinkTotal = Math.max(sinkRows.reduce((sum, row) => sum + row.value, 0), 1);
   sinkNodes.forEach((node) => {
-    drawFundNode(ctx, { ...node, label: node.row.label, valueText: `${compactMoney(node.row.value)} · ${percentText(node.row.value / sinkTotal)}` }, node.color);
-    addChartHit(canvas, rectHit(node.x, node.y, node.w, node.h, makeChartTooltip(`用途 · ${node.row.label}`, [`实际已用：${money.format(node.row.value)}`, `占已用：${percentText(node.row.value / sinkTotal)}`])));
+    const valueText = node.row.placeholder ? "暂无记录" : `${compactMoney(node.row.value)} · ${percentText(node.row.value / sinkTotal)}`;
+    drawFundNode(ctx, { ...node, label: node.row.label, valueText }, node.color, { labelSize: node.row.placeholder ? 10.5 : 12, valueSize: 10 });
+    addChartHit(canvas, rectHit(node.x, node.y, node.w, node.h, makeChartTooltip(`用途 · ${node.row.label}`, [node.row.placeholder ? "当前没有录入该类费用" : `实际已用：${money.format(node.row.value)}`, node.row.placeholder ? "" : `占已用：${percentText(node.row.value / sinkTotal)}`])));
   });
 
   const visibleDetailKeys = new Set(detailNodes.map((node) => node.row.key));
@@ -3747,12 +3910,17 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
     const usages = [
       { key: "labor", label: "人员", value: row.breakdown.labor },
       { key: "equipment", label: "器材", value: row.breakdown.equipment },
-      { key: "production", label: isCustomInputMode() ? "外部费用" : "通告额外", value: row.breakdown.production },
+      ...productionDetailKeys.map((key) => ({
+        key,
+        label: productionDetailTypeLabel(key),
+        value: rowDetails.filter((detail) => classifyFundDetail(detail).key === key).reduce((sum, detail) => sum + (Number(detail.value) || 0), 0),
+      })),
     ].filter((item) => item.value > 0);
     const maxUsage = Math.max(...usages.map((item) => item.value), 1);
     usages.forEach((usage, usageIndex) => {
       const sinkNode = sinkNodes.find((item) => item.row.key === usage.key || item.row.label === usage.label);
       if (!sinkNode) return;
+      if (sinkNode.row.placeholder) return;
       const lineW = Math.max(2.5, (usage.value / maxUsage) * Math.min(node.h * 0.46, 18));
       const offset = (usageIndex - (usages.length - 1) / 2) * Math.max(5, lineW + 3);
       const fromY = node.cy + offset;
@@ -3793,7 +3961,7 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
 
   drawText(ctx, "资金来源", left + sourceW / 2, 22, { size: 12, weight: 900, color: semanticColor("muted"), align: "center" });
   drawText(ctx, `${unitLabel}预算 / 已用`, midX + midW / 2, 22, { size: 12, weight: 900, color: semanticColor("muted"), align: "center" });
-  drawText(ctx, "用途", usageX + usageW / 2, 22, { size: 12, weight: 900, color: semanticColor("muted"), align: "center" });
+  drawText(ctx, "用途 / 部门细项", usageX + usageW / 2, 22, { size: 12, weight: 900, color: semanticColor("muted"), align: "center" });
   drawText(ctx, "公司 / 明细", detailX + detailW / 2, 22, { size: 12, weight: 900, color: semanticColor("muted"), align: "center" });
   if (roomy) {
     drawText(ctx, `显示 ${visibleAllocationRows.length} 个${unitLabel} · ${detailRows.length} 个去向 · 可缩放，拖动画布查看个人 / 职位 / 车辆 / 酒店 / 场地`, width / 2, height - 26, { size: 11, weight: 800, color: semanticColor("muted"), align: "center" });

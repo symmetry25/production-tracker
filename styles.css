@@ -638,6 +638,8 @@ main {
 .chart-canvas-frame canvas,
 .fund-flow-canvas-frame canvas {
   margin: 0 12px 12px;
+  transform-origin: center center;
+  will-change: transform;
 }
 
 .chart-canvas-frame canvas {
@@ -662,9 +664,9 @@ main {
 
 .fund-flow-canvas-frame.chart-fullscreen-frame {
   background:
-    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(245, 242, 234, 0.96)),
     repeating-linear-gradient(90deg, rgba(35, 35, 35, 0.035) 0 1px, transparent 1px 36px),
     repeating-linear-gradient(180deg, rgba(35, 35, 35, 0.03) 0 1px, transparent 1px 36px),
+    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(245, 242, 234, 0.96)),
     var(--surface-strong);
 }
 
@@ -770,9 +772,9 @@ main {
 
 :root.dark-mode .fund-flow-canvas-frame.chart-fullscreen-frame {
   background:
-    linear-gradient(180deg, rgba(24, 29, 34, 0.98), rgba(17, 20, 24, 0.98)),
     repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 36px),
     repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 36px),
+    linear-gradient(180deg, rgba(24, 29, 34, 0.98), rgba(17, 20, 24, 0.98)),
     var(--surface-strong);
 }
 
