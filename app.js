@@ -651,6 +651,8 @@ const i18nText = {
     "personnelInput.rolePreset": "分组岗位",
     "personnelInput.role": "职位",
     "personnelInput.vendor": "公司 / 供应商",
+    "personnelInput.contact": "联系方式",
+    "personnelInput.note": "备注",
     "personnelInput.companyGrade": "公司等级",
     "personnelInput.personGrade": "人员等级",
     "personnelInput.dayRate": "日薪",
@@ -726,6 +728,8 @@ const i18nText = {
     "personnelInput.rolePreset": "Role Preset",
     "personnelInput.role": "Role",
     "personnelInput.vendor": "Company / Vendor",
+    "personnelInput.contact": "Contact",
+    "personnelInput.note": "Notes",
     "personnelInput.companyGrade": "Company Grade",
     "personnelInput.personGrade": "Person Grade",
     "personnelInput.dayRate": "Day Rate",
@@ -1493,6 +1497,8 @@ function normalizeRatings() {
       characterName: person.characterName || "",
       actorKind: person.actorKind || (actor ? inferActorKind(person.role || person.characterName) : ""),
       vendor: person.vendor || "个人 / 自由职业",
+      contact: person.contact || "",
+      note: person.note || "",
       grade: person.grade === "none" ? "none" : normalizeGrade(person.grade || inferPersonGrade(person.dayRate)),
       companyGrade: person.companyGrade === "none" ? "none" : normalizeGrade(person.companyGrade || inferCompanyGrade(person.dayRate)),
       trust: normalizeTrust(person.trust),
@@ -1524,6 +1530,10 @@ function inferCompanyGrade(rate) {
   if (rate >= 900) return "E";
   if (rate >= 300) return "F";
   return "G";
+}
+
+function getFormText(form, name) {
+  return String(form.elements.namedItem(name)?.value || "").trim();
 }
 
 function getDept(id) {
@@ -2213,6 +2223,27 @@ function clearChart(ctx, width, height) {
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = semanticColor("surface");
   ctx.fillRect(0, 0, width, height);
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, displaySettings.darkMode ? "rgba(122, 167, 255, 0.08)" : "rgba(21, 122, 110, 0.06)");
+  gradient.addColorStop(0.55, "rgba(255, 255, 255, 0)");
+  gradient.addColorStop(1, displaySettings.darkMode ? "rgba(53, 194, 173, 0.08)" : "rgba(40, 103, 178, 0.05)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = alphaColor("grid", 0.58);
+  ctx.lineWidth = 1;
+  const gridSize = 32;
+  for (let x = 0.5; x < width; x += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  for (let y = 0.5; y < height; y += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
 }
 
 function drawText(ctx, text, x, y, options = {}) {
@@ -2221,6 +2252,11 @@ function drawText(ctx, text, x, y, options = {}) {
   ctx.textAlign = options.align || "left";
   ctx.textBaseline = options.baseline || "alphabetic";
   ctx.fillText(text, x, y);
+}
+
+function drawChartPanelTitle(ctx, title, subtitle, x = 18, y = 20) {
+  drawText(ctx, title, x, y, { size: 12, weight: 900, color: semanticColor("ink") });
+  if (subtitle) drawText(ctx, subtitle, x, y + 18, { size: 11, weight: 700, color: semanticColor("muted") });
 }
 
 function drawBudgetDonut() {
@@ -2239,6 +2275,11 @@ function drawBudgetDonut() {
   const cy = height / 2 - 2;
   const radius = Math.min(width, height) * 0.33;
   const lineWidth = 18;
+
+  ctx.fillStyle = alphaColor("teal", 0.08);
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius + 25, 0, Math.PI * 2);
+  ctx.fill();
 
   ctx.lineWidth = lineWidth;
   ctx.lineCap = "round";
@@ -2321,7 +2362,8 @@ function drawDailyCostChart() {
     return;
   }
 
-  const padding = { top: 20, right: 18, bottom: 38, left: 58 };
+  const padding = { top: 48, right: 18, bottom: 38, left: 58 };
+  drawChartPanelTitle(ctx, "每日成本", "按通告单成本走势");
   const values = callSheets.map((sheet) => dayTotal(sheet));
   const max = Math.max(...values) * 1.18;
   const min = Math.min(...values) * 0.88;
@@ -2343,6 +2385,20 @@ function drawDailyCostChart() {
     const y = max === min ? padding.top + plotH / 2 : padding.top + plotH - ((value - min) / (max - min)) * plotH;
     return { x, y, value };
   });
+
+  const areaGradient = ctx.createLinearGradient(0, padding.top, 0, padding.top + plotH);
+  areaGradient.addColorStop(0, alphaColor("teal", 0.2));
+  areaGradient.addColorStop(1, alphaColor("teal", 0));
+  ctx.beginPath();
+  points.forEach((point, index) => {
+    if (index === 0) ctx.moveTo(point.x, point.y);
+    else ctx.lineTo(point.x, point.y);
+  });
+  ctx.lineTo(points[points.length - 1].x, padding.top + plotH);
+  ctx.lineTo(points[0].x, padding.top + plotH);
+  ctx.closePath();
+  ctx.fillStyle = areaGradient;
+  ctx.fill();
 
   ctx.strokeStyle = semanticColor("teal");
   ctx.lineWidth = 3;
@@ -2402,10 +2458,11 @@ function drawDepartmentChart() {
   }
   const max = Math.max(...rows.map((row) => row.spent), 1);
   const left = 82;
-  const top = 22;
+  const top = 50;
   const barH = 18;
   const gap = 18;
   const usableW = width - left - 28;
+  drawChartPanelTitle(ctx, `${budgetUnitLabel()}花费`, "按已用金额排序", 8, 16);
 
   rows.forEach((row, index) => {
     const y = top + index * (barH + gap);
@@ -2416,6 +2473,9 @@ function drawDepartmentChart() {
     ctx.fill();
     ctx.fillStyle = activeDepartmentColor(row, index);
     roundRect(ctx, left, y, barW, barH, 8);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255, 255, 255, 0.18)";
+    roundRect(ctx, left, y, barW, Math.max(5, barH * 0.38), 8);
     ctx.fill();
     drawText(ctx, compactMoney(row.spent), left + barW + 8, y + 14, { size: 12, weight: 700, color: semanticColor("ink") });
     addChartHit(canvas, rectHit(left, y, Math.max(barW, 8), barH, makeChartTooltip(row.name, [`已用：${money.format(row.spent)}`, `${budgetBudgetLabel()}：${money.format(row.budget)}`, `占预算：${percentText(row.budget > 0 ? row.spent / row.budget : 0)}`])));
@@ -5157,6 +5217,55 @@ function renderPersonnelModule() {
     })
     .join("");
 
+  const recentPerson = lastSavedPersonId ? people.find((person) => person.id === lastSavedPersonId) : null;
+  const topPeople = [
+    ...(recentPerson ? [recentPerson] : []),
+    ...people
+      .slice()
+      .filter((person) => !recentPerson || person.id !== recentPerson.id)
+      .sort((a, b) => personTotal(b) - personTotal(a)),
+  ].slice(0, 12);
+  const cardGrid = document.querySelector("#personnelCardGrid");
+  if (cardGrid) {
+    cardGrid.innerHTML =
+      topPeople.length > 0
+        ? topPeople
+            .map((person) => {
+              const totalCost = personTotal(person);
+              const fit = budgetFit("person", person.grade, person.dayRate);
+              const trust = normalizeTrust(person.trust);
+              const department = getDept(person.dept);
+              const initials = (person.name || person.role || "人").trim().slice(0, 2);
+              const note = person.note || (isActorPerson(person) && person.characterName ? `角色：${person.characterName}` : `${person.days} 天 · ${money.format(person.dayRate)}/日`);
+              return `
+                <article class="personnel-profile-card ${person.id && person.id === lastSavedPersonId ? "recent" : ""}">
+                  <div class="personnel-avatar" style="background:${activeDepartmentColor(department, departments.findIndex((item) => item.id === department.id))}">${escapeHtml(initials)}</div>
+                  <div class="personnel-profile-main">
+                    <div class="personnel-profile-head">
+                      <div>
+                        <strong>${escapeHtml(person.name || "未命名")}</strong>
+                        <span>${escapeHtml(personRoleDisplay(person))}</span>
+                      </div>
+                      <b>${money.format(totalCost)}</b>
+                    </div>
+                    <div class="personnel-profile-tags">
+                      <span>${escapeHtml(department.name)}</span>
+                      <span>${escapeHtml(person.vendor || "个人 / 自由职业")}</span>
+                      ${ratingOn ? `<span class="${fit.className}">${escapeHtml(fit.label)}</span>` : ""}
+                      ${ratingOn ? `<span class="${trustClass(trust)}">信任 ${trust}</span>` : ""}
+                    </div>
+                    <div class="personnel-profile-detail">
+                      <span>${escapeHtml(person.contact || "未填写联系方式")}</span>
+                      <span>${escapeHtml(note)}</span>
+                    </div>
+                  </div>
+                </article>
+              `;
+            })
+            .join("")
+        : `<div class="personnel-layer-empty">还没有人员档案。先在录入端加入姓名、联系方式和预算信息。</div>`;
+  }
+
   document.querySelector("#personnelTable").innerHTML = people
     .slice()
     .sort((a, b) => personTotal(b) - personTotal(a))
@@ -5169,6 +5278,8 @@ function renderPersonnelModule() {
           <td>${escapeHtml(getDept(person.dept).name)}</td>
           <td>${escapeHtml(personRoleDisplay(person))}</td>
           <td>${escapeHtml(person.vendor || "个人 / 自由职业")}</td>
+          <td>${escapeHtml(person.contact || "--")}</td>
+          <td>${escapeHtml(person.note || "--")}</td>
           <td>${ratingOn ? `<span class="grade-badge">${escapeHtml(gradeLabel(person.grade, "人"))}</span> <span class="grade-badge company">${escapeHtml(gradeLabel(person.companyGrade, "司"))}</span>` : "关闭"}</td>
           <td>${ratingOn ? `<span class="status-text ${trustClass(trust)}">${trust}</span>` : "关闭"}</td>
           <td>${money.format(personTotal(person))}</td>
@@ -5574,6 +5685,8 @@ function personDraftFromForm() {
     role,
     dept: form.elements.dept.value,
     vendor: form.elements.vendor.value.trim() || "个人 / 自由职业",
+    contact: getFormText(form, "contact"),
+    note: getFormText(form, "note"),
     grade: normalizeGrade(form.elements.grade.value),
     companyGrade: normalizeGrade(form.elements.companyGrade.value),
     dayRate,
@@ -5635,6 +5748,8 @@ function actorDraftFromForm() {
     characterName,
     actorKind,
     vendor: form.elements.vendor.value.trim() || "个人 / 自由职业",
+    contact: getFormText(form, "contact"),
+    note: getFormText(form, "note"),
     grade: normalizeGrade(form.elements.grade.value),
     companyGrade: normalizeGrade(form.elements.companyGrade.value),
     dayRate: Math.max(0, Number(form.elements.dayRate.value || 0)),
@@ -5652,6 +5767,8 @@ function createActorFromForm(form) {
     days: Math.max(1, getFormNumber(form, "days")),
     dayRate: getFormNumber(form, "dayRate"),
     allowance: getFormNumber(form, "allowance"),
+    contact: getFormText(form, "contact"),
+    note: getFormText(form, "note"),
   };
 }
 
@@ -5670,6 +5787,8 @@ function personnelExportRows() {
         角色: person.characterName || "",
         演员类型: person.actorKind || "",
         "公司/供应商": person.vendor || "个人 / 自由职业",
+        联系方式: person.contact || "",
+        备注: person.note || "",
         人员等级: gradeLabel(person.grade),
         公司等级: gradeLabel(person.companyGrade),
         "日薪/日片酬": Number(person.dayRate) || 0,
@@ -6869,6 +6988,8 @@ function parseImportRow(row, target) {
       characterName,
       actorKind: isActor ? actorKind || inferActorKind(finalRole) || "演员" : "",
       vendor: String(getRowValue(row, ["经纪公司", "经纪", "公司", "供应商", "公司/供应商", "vendor", "company", "agency"]) || "个人 / 自由职业").trim(),
+      contact: String(getRowValue(row, ["联系方式", "电话", "手机", "微信", "邮箱", "contact", "phone", "wechat", "email"]) || "").trim(),
+      note: String(getRowValue(row, ["备注", "说明", "合同状态", "到组时间", "note", "memo", "remark"]) || "").trim(),
       grade: normalizeGrade(String(getRowValue(row, ["人员等级", "等级", "personGrade", "grade"]) || inferPersonGrade(dayRate)).trim()),
       companyGrade: normalizeGrade(String(getRowValue(row, ["公司等级", "供应商等级", "companyGrade"]) || inferCompanyGrade(dayRate)).trim()),
       dayRate,
@@ -7208,6 +7329,8 @@ function setupInputForms() {
       role: selectedRole,
       dept: form.elements.dept.value,
       vendor: form.elements.vendor.value.trim() || "个人 / 自由职业",
+      contact: getFormText(form, "contact"),
+      note: getFormText(form, "note"),
       grade: normalizeGrade(form.elements.grade.value),
       companyGrade: normalizeGrade(form.elements.companyGrade.value),
       dayRate: getFormNumber(form, "dayRate"),

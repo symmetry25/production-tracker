@@ -13,7 +13,7 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=fundflow-readable-1" />
+    <link rel="stylesheet" href="./styles.css?v=personnel-ui-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -433,6 +433,14 @@
               <div class="module-risk-list" id="personnelRiskList"></div>
             </article>
 
+            <article class="panel module-full personnel-card-panel">
+              <div class="panel-heading">
+                <h3>人员档案</h3>
+                <span>姓名 / 联系方式 / 备注</span>
+              </div>
+              <div class="personnel-card-grid" id="personnelCardGrid"></div>
+            </article>
+
             <article class="panel module-full">
               <div class="panel-heading">
                 <h3>人员明细</h3>
@@ -446,6 +454,8 @@
                       <th>部门</th>
                       <th>岗位</th>
                       <th>公司 / 供应商</th>
+                      <th>联系方式</th>
+                      <th>备注</th>
                       <th>等级</th>
                       <th>信任</th>
                       <th>成本</th>
@@ -1152,6 +1162,14 @@
                     <span data-i18n="personnelInput.vendor">公司 / 供应商</span>
                     <input name="vendor" type="text" value="个人 / 自由职业" />
                   </label>
+                  <label>
+                    <span data-i18n="personnelInput.contact">联系方式</span>
+                    <input name="contact" type="text" placeholder="电话 / 微信 / 邮箱" />
+                  </label>
+                  <label>
+                    <span data-i18n="personnelInput.note">备注</span>
+                    <input name="note" type="text" placeholder="合同状态 / 到组时间" />
+                  </label>
                   <label class="rating-field">
                     <span data-i18n="personnelInput.companyGrade">公司等级</span>
                     <select name="companyGrade">
@@ -1250,6 +1268,14 @@
                     <label>
                       <span>经纪公司 / 供应商</span>
                       <input name="vendor" type="text" value="个人 / 自由职业" />
+                    </label>
+                    <label>
+                      <span>联系方式</span>
+                      <input name="contact" type="text" placeholder="经纪 / 本人联系方式" />
+                    </label>
+                    <label>
+                      <span>备注</span>
+                      <input name="note" type="text" placeholder="档期 / 合同 / 特殊要求" />
                     </label>
                     <label class="rating-field">
                       <span>演员等级</span>
@@ -1579,6 +1605,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=fundflow-readable-1"></script>
+    <script src="./app.js?v=personnel-ui-1"></script>
   </body>
 </html>
