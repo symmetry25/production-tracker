@@ -1746,6 +1746,16 @@ function productionDetailTypeLabel(key) {
   }[key] || "生产";
 }
 
+function productionDetailDisplayLabel(detail) {
+  const categoryLabel = productionDetailTypeLabel(productionDetailCategoryKey(detail));
+  const vendor = String(detail?.vendor || detail?.label || categoryLabel).trim();
+  if (productionDetailCategoryKey(detail) === "vehicles") return `${vendor} · 车辆`;
+  if (productionDetailCategoryKey(detail) === "rooms") return `${vendor} · 酒店/房间`;
+  if (productionDetailCategoryKey(detail) === "locationFee") return `${vendor} · 场地`;
+  if (productionDetailCategoryKey(detail) === "meals") return `${vendor} · 餐食`;
+  return String(detail?.label || vendor || categoryLabel).trim();
+}
+
 function normalizeProductionDetailRows(sheet, options = {}) {
   const useFallback = options.fallback !== false;
   const rawDetails = Array.isArray(sheet?.productionDetails) ? sheet.productionDetails : [];
@@ -2103,6 +2113,7 @@ function applyChartFrameState(id) {
   document.querySelectorAll(`[data-chart-frame="${id}"]`).forEach((frame) => {
     frame.classList.toggle("chart-fullscreen-frame", state.fullscreen);
     frame.dataset.chartZoom = String(Math.round(state.zoom * 100));
+    if (state.fullscreen) frame.dataset.centered = "false";
   });
   document.body.classList.toggle("chart-fullscreen-active", Array.from(chartViewState.values()).some((item) => item.fullscreen));
   updateChartToolbar(id);
@@ -2120,9 +2131,15 @@ function setChartFullscreen(id, fullscreen) {
     });
   }
   state.fullscreen = fullscreen;
+  if (fullscreen && id === "fundFlowLargeChart" && state.zoom < 1.15) {
+    state.zoom = 1.15;
+  }
   applyChartFrameState(id);
   hideChartTooltip(document.querySelector(`#${id}`));
-  requestAnimationFrame(() => redrawChartById(id));
+  requestAnimationFrame(() => {
+    redrawChartById(id);
+    if (fullscreen) centerChartFrame(id);
+  });
 }
 
 function setChartZoom(id, nextZoom) {
@@ -2130,7 +2147,21 @@ function setChartZoom(id, nextZoom) {
   state.zoom = clampChartZoom(nextZoom);
   applyChartFrameState(id);
   hideChartTooltip(document.querySelector(`#${id}`));
-  requestAnimationFrame(() => redrawChartById(id));
+  requestAnimationFrame(() => {
+    redrawChartById(id);
+    if (state.fullscreen) centerChartFrame(id);
+  });
+}
+
+function centerChartFrame(id) {
+  const frame = document.querySelector(`[data-chart-frame="${id}"]`);
+  const canvas = document.querySelector(`#${id}`);
+  if (!frame || !canvas || frame.dataset.centered === "true") return;
+  requestAnimationFrame(() => {
+    frame.scrollLeft = Math.max(0, (canvas.offsetWidth - frame.clientWidth) / 2);
+    frame.scrollTop = Math.max(0, (canvas.offsetHeight - frame.clientHeight) / 2);
+    frame.dataset.centered = "true";
+  });
 }
 
 function chartControlButton({ action, id, label, title, svg }) {
@@ -2190,10 +2221,15 @@ function resizeCanvas(canvas) {
   const framePadding = parent.classList.contains("chart-fullscreen-frame") ? 34 : 36;
   const zoom = viewState.zoom || 1;
   const baseWidth = Math.max(minWidth, Math.floor(rect.width - framePadding));
-  const targetWidth = Math.max(minWidth, Math.floor(baseWidth * zoom));
+  const fullscreenMultiplier = viewState.fullscreen && canvas.id === "fundFlowLargeChart" ? 1.68 : viewState.fullscreen ? 1.22 : 1;
+  const targetWidth = Math.max(minWidth, Math.floor(baseWidth * zoom * fullscreenMultiplier));
   const ratio = window.devicePixelRatio || 1;
   const baseHeight = isCompactViewport && chartMobileHeights[canvas.id] ? chartMobileHeights[canvas.id] : chartHeights[canvas.id] || 260;
-  const fullscreenHeight = viewState.fullscreen ? Math.max(baseHeight, window.innerHeight - 188) : baseHeight;
+  const fullscreenHeight = viewState.fullscreen
+    ? canvas.id === "fundFlowLargeChart"
+      ? Math.max(baseHeight, window.innerHeight * 1.35)
+      : Math.max(baseHeight, window.innerHeight - 188)
+    : baseHeight;
   const cssHeight = Math.round(fullscreenHeight * zoom);
   canvas.style.width = `${targetWidth}px`;
   canvas.style.height = `${cssHeight}px`;
@@ -2352,6 +2388,9 @@ function setupChartViewControls() {
     if (!frame.querySelector(".chart-view-toolbar")) {
       frame.insertAdjacentHTML("afterbegin", chartToolbarMarkup(id));
     }
+    if (!frame.querySelector(".chart-pan-hint")) {
+      frame.insertAdjacentHTML("beforeend", '<div class="chart-pan-hint" aria-hidden="true">拖动画布查看全部节点</div>');
+    }
     applyChartFrameState(id);
   });
 
@@ -2377,6 +2416,38 @@ function setupChartViewControls() {
       if (!state.fullscreen) return;
       setChartFullscreen(id, false);
     });
+  });
+
+  document.querySelectorAll("[data-chart-frame]").forEach((frame) => {
+    let pointerId = null;
+    let startX = 0;
+    let startY = 0;
+    let startScrollLeft = 0;
+    let startScrollTop = 0;
+    frame.addEventListener("pointerdown", (event) => {
+      if (event.target.closest(".chart-view-toolbar")) return;
+      if (event.button !== 0) return;
+      pointerId = event.pointerId;
+      startX = event.clientX;
+      startY = event.clientY;
+      startScrollLeft = frame.scrollLeft;
+      startScrollTop = frame.scrollTop;
+      frame.classList.add("is-panning");
+      frame.setPointerCapture(pointerId);
+    });
+    frame.addEventListener("pointermove", (event) => {
+      if (pointerId !== event.pointerId) return;
+      frame.scrollLeft = startScrollLeft - (event.clientX - startX);
+      frame.scrollTop = startScrollTop - (event.clientY - startY);
+    });
+    const endPan = (event) => {
+      if (pointerId !== event.pointerId) return;
+      frame.classList.remove("is-panning");
+      frame.releasePointerCapture(pointerId);
+      pointerId = null;
+    };
+    frame.addEventListener("pointerup", endPan);
+    frame.addEventListener("pointercancel", endPan);
   });
 }
 
@@ -2717,8 +2788,10 @@ function departmentFlowDetailRows(departmentId) {
     .forEach((person) => {
       const activeDays = Math.min(person.days, project.currentDay);
       const value = person.dayRate * activeDays + (person.allowance * activeDays) / Math.max(person.days, 1);
-      const label = person.vendor || "个人 / 自由职业";
-      addFlowDetail(detailMap, `labor:${label}`, label, value, activeCategoryColor("labor"), "人员", person.name || personRoleDisplay(person));
+      const role = personRoleDisplay(person);
+      const vendor = person.vendor || "个人 / 自由职业";
+      const label = `${person.name || "未命名"} · ${role}`;
+      addFlowDetail(detailMap, `labor:${person.id || `${departmentId}:${person.name}:${role}`}`, label, value, activeCategoryColor("labor"), "人员", `${vendor} · ${activeDays}/${person.days} 天`);
     });
   equipment
     .filter((item) => item.dept === departmentId)
@@ -2732,8 +2805,9 @@ function departmentFlowDetailRows(departmentId) {
     if (!sheet.departments.includes(departmentId) || sheet.departments.length === 0) return;
     const factor = 1 / sheet.departments.length;
     normalizeProductionDetailRows(sheet).forEach((detail) => {
-      const key = `production:${detail.category}:${detail.vendor || detail.label}`;
-      addFlowDetail(detailMap, key, detail.vendor || detail.label, detail.value * factor, activeCategoryColor("production"), detail.type || "生产", sheet.title);
+      const label = productionDetailDisplayLabel(detail);
+      const key = `production:${detail.category}:${label}:${sheet.day || sheet.code || sheet.title}`;
+      addFlowDetail(detailMap, key, label, detail.value * factor, activeCategoryColor("production"), detail.type || "生产", `${sheet.title}${detail.meta && detail.meta !== sheet.title ? ` · ${detail.meta}` : ""}`);
     });
   });
   return Array.from(detailMap.values()).sort((a, b) => b.value - a.value);
@@ -2788,8 +2862,10 @@ function fundFlowData() {
     const activeDays = Math.min(person.days, project.currentDay);
     const value = person.dayRate * activeDays + (person.allowance * activeDays) / Math.max(person.days, 1);
     unclassifiedBreakdown.labor += value;
-    const label = person.vendor || "个人 / 自由职业";
-    addFlowDetail(unclassifiedDetails, `labor:${label}`, label, value, activeCategoryColor("labor"), "人员", person.name || personRoleDisplay(person));
+    const role = personRoleDisplay(person);
+    const vendor = person.vendor || "个人 / 自由职业";
+    const label = `${person.name || "未命名"} · ${role}`;
+    addFlowDetail(unclassifiedDetails, `labor:${person.id || `unclassified:${person.name}:${role}`}`, label, value, activeCategoryColor("labor"), "人员", `${vendor} · ${activeDays}/${person.days} 天`);
   });
   equipment.forEach((item) => {
     if (visibleDepartmentIds.has(item.dept)) return;
@@ -2802,8 +2878,9 @@ function fundFlowData() {
   completedSheets().forEach((sheet) => {
     const addUnclassifiedProduction = () => {
       normalizeProductionDetailRows(sheet).forEach((detail) => {
-        const key = `production:${detail.category}:${detail.vendor || detail.label}`;
-        addFlowDetail(unclassifiedDetails, key, detail.vendor || detail.label, detail.value, activeCategoryColor("production"), detail.type || "生产", sheet.title);
+        const label = productionDetailDisplayLabel(detail);
+        const key = `production:${detail.category}:${label}:${sheet.day || sheet.code || sheet.title}`;
+        addFlowDetail(unclassifiedDetails, key, label, detail.value, activeCategoryColor("production"), detail.type || "生产", `${sheet.title}${detail.meta && detail.meta !== sheet.title ? ` · ${detail.meta}` : ""}`);
       });
     };
     if (sheet.departments.length === 0) {
@@ -3480,14 +3557,14 @@ function drawFundFlowChart() {
   const canvas = document.querySelector("#fundFlowChart");
   if (!canvas) return;
   const state = getChartViewState(canvas.id);
-  drawFundFlowChartOnCanvas(canvas, { compactThreshold: 560, detailLimit: state.fullscreen ? 16 : 8, readablePreview: true });
+  drawFundFlowChartOnCanvas(canvas, { compactThreshold: 560, detailLimit: state.fullscreen ? 28 : 8, readablePreview: true });
 }
 
 function drawFundFlowLargeChart() {
   const canvas = document.querySelector("#fundFlowLargeChart");
   if (!canvas) return;
   const state = getChartViewState(canvas.id);
-  drawFundFlowChartOnCanvas(canvas, { compactThreshold: 760, detailLimit: state.fullscreen ? 42 : 28, large: true });
+  drawFundFlowChartOnCanvas(canvas, { compactThreshold: 760, detailLimit: state.fullscreen ? 78 : 36, large: true });
 }
 
 function drawFundFlowChartOnCanvas(canvas, options = {}) {
@@ -3556,17 +3633,17 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
   const compact = width < 760;
   const roomy = large || fullscreen || width > 1180;
   const left = roomy ? 42 : compact ? 22 : 34;
-  const sourceW = roomy ? 150 : compact ? 104 : 128;
-  const midX = roomy ? Math.max(left + sourceW + 92, width * 0.2) : compact ? Math.max(156, width * 0.25) : Math.max(196, width * 0.24);
-  const midW = roomy ? Math.min(200, Math.max(172, width * 0.13)) : compact ? 116 : 164;
-  const usageX = roomy ? Math.max(midX + midW + 118, width * 0.46) : compact ? Math.max(midX + midW + 36, width * 0.5) : Math.max(midX + midW + 74, width * 0.5);
-  const usageW = roomy ? 154 : compact ? 104 : 136;
-  const detailX = roomy ? Math.max(usageX + usageW + 112, width - 340) : compact ? Math.max(usageX + usageW + 34, width - 148) : width - 248;
-  const detailW = roomy ? Math.min(280, width - detailX - 48) : compact ? 132 : 196;
+  const sourceW = fullscreen ? 164 : roomy ? 150 : compact ? 104 : 128;
+  const midX = fullscreen ? Math.max(left + sourceW + 150, width * 0.18) : roomy ? Math.max(left + sourceW + 92, width * 0.2) : compact ? Math.max(156, width * 0.25) : Math.max(196, width * 0.24);
+  const midW = fullscreen ? Math.min(230, Math.max(190, width * 0.12)) : roomy ? Math.min(200, Math.max(172, width * 0.13)) : compact ? 116 : 164;
+  const usageX = fullscreen ? Math.max(midX + midW + 190, width * 0.46) : roomy ? Math.max(midX + midW + 118, width * 0.46) : compact ? Math.max(midX + midW + 36, width * 0.5) : Math.max(midX + midW + 74, width * 0.5);
+  const usageW = fullscreen ? 180 : roomy ? 154 : compact ? 104 : 136;
+  const detailX = fullscreen ? Math.max(usageX + usageW + 180, width - 430) : roomy ? Math.max(usageX + usageW + 112, width - 340) : compact ? Math.max(usageX + usageW + 34, width - 148) : width - 248;
+  const detailW = fullscreen ? Math.min(360, width - detailX - 58) : roomy ? Math.min(280, width - detailX - 48) : compact ? 132 : 196;
   const top = roomy ? 62 : 44;
   const bottom = height - (roomy ? 70 : 56);
   const usableH = Math.max(120, bottom - top);
-  const gap = roomy ? 7 : compact ? 7 : 8;
+  const gap = fullscreen ? 6 : roomy ? 7 : compact ? 7 : 8;
   const sourceTotal = data.sourceTotal || data.allocatedTotal || data.usageTotal;
   const unclassifiedAllocationRows = data.usageRows
     .filter((row) => row.unclassified)
@@ -3599,7 +3676,7 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
         ]
       : []),
   ];
-  const visibleAllocationRows = aggregateFundRows(allocationRows, "nodeValue", roomy ? (fullscreen ? 22 : 16) : compact ? 8 : readablePreview ? 7 : 10, `其他${unitLabel}`);
+  const visibleAllocationRows = aggregateFundRows(allocationRows, "nodeValue", roomy ? (fullscreen ? 24 : 16) : compact ? 8 : readablePreview ? 7 : 10, `其他${unitLabel}`);
   const allocationNodes = positionedFlowNodes(
     visibleAllocationRows,
     "nodeValue",
@@ -3617,7 +3694,7 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
     usageW,
     top + 20,
     Math.max(80, usableH - 40),
-    compact ? 14 : 18,
+    fullscreen ? 28 : compact ? 14 : 18,
     (row) => row.color || semanticColor("muted"),
   );
   const detailNodes = positionedFlowNodes(
@@ -3627,7 +3704,7 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
     detailW,
     top,
     usableH,
-    compact ? 7 : 8,
+    fullscreen ? 5 : compact ? 7 : 8,
     (row) => row.color || classifyFundDetail(row).color || semanticColor("muted"),
   );
 
@@ -3685,7 +3762,7 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
     if (!canDrawDirectDepartmentDetails) return;
     const visibleRowDetails = rowDetails.filter((detail) => visibleDetailKeys.has(detail.key));
     const maxDetail = Math.max(...visibleRowDetails.map((detail) => detail.value), 1);
-    visibleRowDetails.slice(0, fullscreen ? 10 : 6).forEach((detail, detailIndex) => {
+    visibleRowDetails.slice(0, fullscreen ? 18 : 6).forEach((detail, detailIndex) => {
       const detailNode = detailNodes.find((item) => item.row.key === detail.key);
       if (!detailNode) return;
       const lineW = Math.max(1.6, (detail.value / maxDetail) * Math.min(node.h * 0.22, 8));
@@ -3697,9 +3774,9 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
   });
 
   detailNodes.forEach((node) => {
-    const maxLabelLength = roomy ? 20 : readablePreview ? 12 : compact ? 9 : 18;
+    const maxLabelLength = fullscreen ? 28 : roomy ? 20 : readablePreview ? 12 : compact ? 9 : 18;
     const label = node.row.label.length > maxLabelLength ? `${node.row.label.slice(0, maxLabelLength)}...` : node.row.label;
-    drawFundNode(ctx, { ...node, label, valueText: readablePreview ? compactMoney(node.row.value) : `${compactMoney(node.row.value)} · ${percentText(node.row.value / Math.max(detailTotal, 1))}` }, node.color, { labelSize: readablePreview ? 10.5 : compact ? 10.5 : 11, valueSize: 10 });
+    drawFundNode(ctx, { ...node, label, valueText: readablePreview ? compactMoney(node.row.value) : `${compactMoney(node.row.value)} · ${percentText(node.row.value / Math.max(detailTotal, 1))}` }, node.color, { labelSize: fullscreen ? 10.5 : readablePreview ? 10.5 : compact ? 10.5 : 11, valueSize: 10 });
     addChartHit(canvas, rectHit(node.x, node.y, node.w, node.h, makeChartTooltip(node.row.label, [`类型：${node.row.type || "明细"}`, `金额：${money.format(node.row.value)}`, node.row.meta ? `来源：${node.row.meta}` : "", detailTotal > 0 ? `占明细：${percentText(node.row.value / detailTotal)}` : ""])));
   });
 
@@ -3719,7 +3796,7 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
   drawText(ctx, "用途", usageX + usageW / 2, 22, { size: 12, weight: 900, color: semanticColor("muted"), align: "center" });
   drawText(ctx, "公司 / 明细", detailX + detailW / 2, 22, { size: 12, weight: 900, color: semanticColor("muted"), align: "center" });
   if (roomy) {
-    drawText(ctx, `显示 ${visibleAllocationRows.length} 个${unitLabel} · ${detailRows.length} 个去向 · 可用缩放和全屏查看`, width / 2, height - 26, { size: 11, weight: 800, color: semanticColor("muted"), align: "center" });
+    drawText(ctx, `显示 ${visibleAllocationRows.length} 个${unitLabel} · ${detailRows.length} 个去向 · 可缩放，拖动画布查看个人 / 职位 / 车辆 / 酒店 / 场地`, width / 2, height - 26, { size: 11, weight: 800, color: semanticColor("muted"), align: "center" });
   }
   if (large) {
     renderFundFlowDetailTable();

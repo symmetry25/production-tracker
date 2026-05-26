@@ -624,6 +624,15 @@ main {
     linear-gradient(180deg, rgba(255, 253, 248, 0.92), rgba(255, 250, 240, 0.78)),
     var(--surface);
   border-radius: 8px;
+  cursor: grab;
+  overscroll-behavior: contain;
+  touch-action: none;
+  user-select: none;
+}
+
+.chart-canvas-frame.is-panning,
+.fund-flow-canvas-frame.is-panning {
+  cursor: grabbing;
 }
 
 .chart-canvas-frame canvas,
@@ -649,6 +658,14 @@ main {
     linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(245, 242, 234, 0.98)),
     var(--surface-strong);
   box-shadow: 0 26px 70px rgba(28, 25, 20, 0.26);
+}
+
+.fund-flow-canvas-frame.chart-fullscreen-frame {
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(245, 242, 234, 0.96)),
+    repeating-linear-gradient(90deg, rgba(35, 35, 35, 0.035) 0 1px, transparent 1px 36px),
+    repeating-linear-gradient(180deg, rgba(35, 35, 35, 0.03) 0 1px, transparent 1px 36px),
+    var(--surface-strong);
 }
 
 .chart-view-toolbar {
@@ -719,6 +736,23 @@ main {
     inset 0 1px 0 rgba(255, 255, 255, 0.42);
 }
 
+.chart-pan-hint {
+  position: sticky;
+  left: 16px;
+  bottom: 12px;
+  z-index: 2;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: rgba(255, 253, 248, 0.9);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  pointer-events: none;
+}
+
 :root.dark-mode .chart-canvas-frame,
 :root.dark-mode .fund-flow-canvas-frame {
   background:
@@ -734,9 +768,21 @@ main {
   box-shadow: 0 26px 70px rgba(0, 0, 0, 0.48);
 }
 
+:root.dark-mode .fund-flow-canvas-frame.chart-fullscreen-frame {
+  background:
+    linear-gradient(180deg, rgba(24, 29, 34, 0.98), rgba(17, 20, 24, 0.98)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 36px),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 36px),
+    var(--surface-strong);
+}
+
 :root.dark-mode .chart-tool-button,
 :root.dark-mode .chart-zoom-readout {
   background: rgba(24, 29, 34, 0.94);
+}
+
+:root.dark-mode .chart-pan-hint {
+  background: rgba(24, 29, 34, 0.9);
 }
 
 :root.dark-mode .chart-tool-button:hover,
