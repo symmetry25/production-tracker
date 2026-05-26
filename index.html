@@ -13,7 +13,7 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=layout-polish-2" />
+    <link rel="stylesheet" href="./styles.css?v=fundflow-readable-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -592,7 +592,10 @@
                 <h3>资金流向图</h3>
                 <span id="fundFlowInsight">总预算 → 部门 → 用途</span>
               </div>
-              <canvas id="fundFlowChart" width="960" height="500" aria-label="资金流向桑基图"></canvas>
+              <div class="fund-flow-readable" id="fundFlowReadable" aria-live="polite"></div>
+              <div class="fund-flow-canvas-frame">
+                <canvas id="fundFlowChart" width="960" height="500" aria-label="资金流向桑基图"></canvas>
+              </div>
               <div class="fund-flow-summary" id="fundFlowSummary"></div>
             </article>
             <article class="panel roster-panel">
@@ -630,7 +633,10 @@
                   </button>
                 </div>
               </div>
-              <canvas id="fundFlowLargeChart" width="1280" height="760" aria-label="完整版资金流向桑基图"></canvas>
+              <div class="fund-flow-readable large" id="fundFlowLargeReadable" aria-live="polite"></div>
+              <div class="fund-flow-canvas-frame large">
+                <canvas id="fundFlowLargeChart" width="1280" height="760" aria-label="完整版资金流向桑基图"></canvas>
+              </div>
               <div class="fund-flow-summary" id="fundFlowLargeSummary"></div>
             </article>
 
@@ -1573,6 +1579,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=layout-polish-2"></script>
+    <script src="./app.js?v=fundflow-readable-1"></script>
   </body>
 </html>

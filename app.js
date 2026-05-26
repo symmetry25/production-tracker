@@ -2638,13 +2638,14 @@ function drawFundNode(ctx, node, color, options = {}) {
   ctx.fillStyle = color;
   roundRect(ctx, node.x, node.y, node.w, node.h, options.radius || 9);
   ctx.fill();
-  drawText(ctx, node.label, node.x + 10, node.y + Math.min(22, node.h / 2), {
+  const canShowValue = Boolean(node.valueText) && node.h >= 36;
+  drawText(ctx, node.label, node.x + 10, canShowValue ? node.y + 20 : node.y + node.h / 2 + 4, {
     color: "#fff",
     size: options.labelSize || 12,
     weight: 900,
   });
-  if (node.valueText) {
-    drawText(ctx, node.valueText, node.x + 10, node.y + Math.min(node.h - 8, 42), {
+  if (canShowValue) {
+    drawText(ctx, node.valueText, node.x + 10, node.y + Math.min(node.h - 8, 40), {
       color: "#fff",
       size: options.valueSize || 11,
       weight: 800,
@@ -2767,6 +2768,179 @@ function fundFlowDetailRows(limit = 80) {
     .filter((row) => row.value > 0)
     .sort((a, b) => b.value - a.value)
     .slice(0, limit);
+}
+
+function fundFlowReadableData(limit = 8) {
+  const data = fundFlowData();
+  const usageRows = data.usageRows.length > 0 ? data.usageRows : data.budgetRows;
+  const usedTotal = Math.max(data.usageTotal, usageRows.reduce((sum, row) => sum + (Number(row.used) || 0), 0));
+  const sourceTotal = Math.max(data.sourceTotal || 0, project.budget || 0, data.allocatedTotal, usedTotal);
+  const budgetLabel = budgetBudgetLabel();
+  const unitLabel = budgetUnitLabel();
+  const unclassifiedUsed = data.usageRows.filter((row) => row.unclassified).reduce((sum, row) => sum + row.used, 0);
+  const unallocated = Math.max(0, sourceTotal - data.allocatedTotal - unclassifiedUsed);
+  const overAllocated = Math.max(0, data.allocatedTotal - Math.max(project.budget || 0, usedTotal));
+  const statusLabel = unclassifiedUsed > 0 ? "有未归类开销" : overAllocated > 0 ? "预算超分配" : unallocated > 0 ? "仍有未分配" : "预算平衡";
+  const statusValue = unclassifiedUsed > 0 ? unclassifiedUsed : overAllocated > 0 ? overAllocated : unallocated;
+  const departmentRows = usageRows
+    .map((row, index) => {
+      const budget = Number(row.budget) || 0;
+      const used = Number(row.used) || 0;
+      return {
+        ...row,
+        color: row.color || activeDepartmentColor(row.department, index),
+        rate: budget > 0 ? used / budget : usedTotal > 0 ? used / usedTotal : 0,
+        share: usedTotal > 0 ? used / usedTotal : 0,
+      };
+    })
+    .sort((a, b) => Math.max(b.used, b.budget) - Math.max(a.used, a.budget))
+    .slice(0, limit);
+  const usageBreakdown = [
+    { key: "labor", label: "人员", value: usageRows.reduce((sum, row) => sum + (row.breakdown?.labor || 0), 0), color: activeCategoryColor("labor") },
+    { key: "equipment", label: "器材", value: usageRows.reduce((sum, row) => sum + (row.breakdown?.equipment || 0), 0), color: activeCategoryColor("equipment") },
+    { key: "production", label: isCustomInputMode() ? "外部费用" : "生产 / 通告", value: usageRows.reduce((sum, row) => sum + (row.breakdown?.production || 0), 0), color: activeCategoryColor("production") },
+  ]
+    .filter((row) => row.value > 0)
+    .map((row) => ({ ...row, share: usedTotal > 0 ? row.value / usedTotal : 0 }))
+    .sort((a, b) => b.value - a.value);
+  const detailRows = fundFlowDetailRows(limit + 4);
+  const supplierCount = new Set(fundFlowDetailRows(240).map((row) => row.label)).size;
+  const cards = [
+    { label: "总预算口径", value: money.format(project.budget || sourceTotal || 0), meta: project.title || "当前项目" },
+    { label: `${budgetLabel}合计`, value: money.format(data.allocatedTotal), meta: `${data.budgetRows.length} 个${unitLabel}` },
+    { label: "实际已用", value: money.format(usedTotal), meta: sourceTotal > 0 ? `消耗 ${percentText(usedTotal / sourceTotal)}` : "等待开销" },
+    { label: statusLabel, value: statusValue > 0 ? money.format(statusValue) : "平衡", meta: supplierCount > 0 ? `${supplierCount} 个公司 / 个人 / 明细` : "暂无去向明细" },
+  ];
+  return { ...data, sourceTotal, usedTotal, unallocated, overAllocated, unclassifiedUsed, statusLabel, cards, departmentRows, usageBreakdown, detailRows, supplierCount, budgetLabel, unitLabel };
+}
+
+function fundFlowBarRow({ label, value, subLabel = "", share = 0, color = semanticColor("teal"), meta = "" }) {
+  const width = Math.max(2, Math.min(100, share * 100));
+  return `
+    <div class="fund-flow-bar-row">
+      <div class="fund-flow-row-head">
+        <strong>${escapeHtml(label)}</strong>
+        <span>${money.format(value)}</span>
+      </div>
+      <div class="fund-flow-row-meta">
+        <span>${escapeHtml(subLabel)}</span>
+        <b>${escapeHtml(meta || percentText(share))}</b>
+      </div>
+      <div class="fund-flow-track" aria-hidden="true">
+        <i style="width:${width}%; background:${color}"></i>
+      </div>
+    </div>
+  `;
+}
+
+function renderFundFlowReadablePanel(selector, options = {}) {
+  const container = document.querySelector(selector);
+  if (!container) return;
+  const large = Boolean(options.large);
+  const limit = options.limit || (large ? 12 : 7);
+  const data = fundFlowReadableData(limit);
+  const hasData = data.budgetRows.length > 0 || data.usageRows.length > 0;
+  if (!hasData || data.sourceTotal <= 0) {
+    container.innerHTML = `
+      <div class="fund-flow-readable-empty">
+        <strong>暂无资金流向数据</strong>
+        <span>录入总预算、${escapeHtml(data.budgetLabel)}、人员、器材或通告单后，这里会显示可读版资金流向。</span>
+      </div>
+    `;
+    return;
+  }
+
+  const departmentList =
+    data.departmentRows.length > 0
+      ? data.departmentRows
+          .map((row) =>
+            fundFlowBarRow({
+              label: row.department?.name || "未归类",
+              value: row.used || row.budget,
+              subLabel: `${data.budgetLabel} ${money.format(row.budget)} · 已用 ${percentText(row.rate)}`,
+              share: Math.max(row.share, row.budget > 0 && data.allocatedTotal > 0 ? row.budget / data.allocatedTotal : 0),
+              color: row.color,
+              meta: `占已用 ${percentText(row.share)}`,
+            }),
+          )
+          .join("")
+      : `<div class="fund-flow-readable-empty small">暂无${escapeHtml(data.unitLabel)}开销</div>`;
+  const usageList =
+    data.usageBreakdown.length > 0
+      ? data.usageBreakdown
+          .map((row) =>
+            fundFlowBarRow({
+              label: row.label,
+              value: row.value,
+              subLabel: "按实际已用统计",
+              share: row.share,
+              color: row.color,
+              meta: percentText(row.share),
+            }),
+          )
+          .join("")
+      : `<div class="fund-flow-readable-empty small">暂无用途分类</div>`;
+  const detailList =
+    data.detailRows.length > 0
+      ? data.detailRows
+          .map(
+            (row, index) => `
+              <div class="fund-flow-detail-card">
+                <span>${String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <strong>${escapeHtml(row.label)}</strong>
+                  <small>${escapeHtml(row.department)} · ${escapeHtml(row.type)}${row.meta ? ` · ${escapeHtml(row.meta)}` : ""}</small>
+                </div>
+                <b>${money.format(row.value)}</b>
+              </div>
+            `,
+          )
+          .join("")
+      : `<div class="fund-flow-readable-empty small">暂无公司 / 个人 / 明细</div>`;
+
+  container.innerHTML = `
+    <div class="fund-flow-kpis">
+      ${data.cards
+        .map(
+          (card) => `
+            <div class="fund-flow-kpi">
+              <span>${escapeHtml(card.label)}</span>
+              <strong>${escapeHtml(card.value)}</strong>
+              <small>${escapeHtml(card.meta)}</small>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+    <div class="fund-flow-readable-grid">
+      <section class="fund-flow-readable-card">
+        <div class="fund-flow-card-head">
+          <strong>${escapeHtml(data.unitLabel)}预算与已用</strong>
+          <span>${data.departmentRows.length} 项</span>
+        </div>
+        <div class="fund-flow-bar-list">${departmentList}</div>
+      </section>
+      <section class="fund-flow-readable-card">
+        <div class="fund-flow-card-head">
+          <strong>用途构成</strong>
+          <span>人员 / 器材 / 生产</span>
+        </div>
+        <div class="fund-flow-bar-list">${usageList}</div>
+      </section>
+      <section class="fund-flow-readable-card fund-flow-readable-card-wide">
+        <div class="fund-flow-card-head">
+          <strong>公司 / 个人 / 明细去向</strong>
+          <span>Top ${Math.min(data.detailRows.length, limit + 4)}</span>
+        </div>
+        <div class="fund-flow-detail-cards">${detailList}</div>
+      </section>
+    </div>
+  `;
+}
+
+function renderFundFlowReadablePanels() {
+  renderFundFlowReadablePanel("#fundFlowReadable", { limit: 6 });
+  renderFundFlowReadablePanel("#fundFlowLargeReadable", { large: true, limit: 12 });
 }
 
 function renderFundFlowDetailTable() {
@@ -3065,7 +3239,7 @@ function renderAuditModule() {
 function drawFundFlowChart() {
   const canvas = document.querySelector("#fundFlowChart");
   if (!canvas) return;
-  drawFundFlowChartOnCanvas(canvas, { compactThreshold: 560, detailLimit: 12 });
+  drawFundFlowChartOnCanvas(canvas, { compactThreshold: 560, detailLimit: 6, readablePreview: true });
 }
 
 function drawFundFlowLargeChart() {
@@ -3081,7 +3255,8 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
 
   const data = fundFlowData();
   const large = Boolean(options.large);
-  const detailLimit = options.detailLimit || (large ? 22 : 12);
+  const readablePreview = Boolean(options.readablePreview);
+  const detailLimit = options.detailLimit || (large ? 18 : readablePreview ? 6 : 12);
   const insight = document.querySelector(large ? "#fundFlowLargeInsight" : "#fundFlowInsight");
   const summary = document.querySelector(large ? "#fundFlowLargeSummary" : "#fundFlowSummary");
   const hasFlowData = data.budgetRows.length > 0 || data.usageRows.length > 0;
@@ -3136,13 +3311,13 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
 
   const compact = width < 760;
   const left = large ? 42 : compact ? 22 : 36;
-  const sourceW = large ? 138 : compact ? 104 : 124;
-  const midX = large ? Math.max(230, width * 0.22) : compact ? Math.max(156, width * 0.25) : Math.max(190, width * 0.25);
-  const midW = large ? 158 : compact ? 116 : 140;
-  const usageX = large ? Math.max(midX + midW + 82, width * 0.49) : compact ? Math.max(midX + midW + 36, width * 0.5) : Math.max(midX + midW + 60, width * 0.52);
-  const usageW = large ? 136 : compact ? 104 : 122;
-  const detailX = large ? width - 290 : compact ? Math.max(usageX + usageW + 34, width - 148) : width - 220;
-  const detailW = large ? 230 : compact ? 132 : 168;
+  const sourceW = large ? 152 : compact ? 104 : 132;
+  const midX = large ? Math.max(248, width * 0.21) : compact ? Math.max(156, width * 0.25) : Math.max(198, width * 0.24);
+  const midW = large ? 184 : compact ? 116 : 168;
+  const usageX = large ? Math.max(midX + midW + 104, width * 0.48) : compact ? Math.max(midX + midW + 36, width * 0.5) : Math.max(midX + midW + 78, width * 0.5);
+  const usageW = large ? 154 : compact ? 104 : 138;
+  const detailX = large ? width - 320 : compact ? Math.max(usageX + usageW + 34, width - 148) : width - 250;
+  const detailW = large ? 250 : compact ? 132 : 198;
   const top = large ? 56 : 44;
   const bottom = height - (large ? 64 : 56);
   const usableH = Math.max(120, bottom - top);
@@ -3179,7 +3354,7 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
         ]
       : []),
   ];
-  const visibleAllocationRows = aggregateFundRows(allocationRows, "nodeValue", large ? 16 : compact ? 8 : 11, `其他${unitLabel}`);
+  const visibleAllocationRows = aggregateFundRows(allocationRows, "nodeValue", large ? 14 : compact ? 8 : readablePreview ? 7 : 10, `其他${unitLabel}`);
   const allocationNodes = positionedFlowNodes(
     visibleAllocationRows,
     "nodeValue",
@@ -3231,7 +3406,7 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
   allocationNodes.forEach((node) => {
     const row = node.row;
     const label = compact && row.department.name.length > 7 ? `${row.department.name.slice(0, 7)}...` : row.department.name;
-    drawFundNode(ctx, { ...node, label, valueText: row.unallocated ? compactMoney(row.budget) : `${compactMoney(row.budget)} / ${compactMoney(row.used)}` }, node.color);
+    drawFundNode(ctx, { ...node, label, valueText: readablePreview ? compactMoney(row.used || row.budget) : row.unallocated ? compactMoney(row.budget) : `${compactMoney(row.budget)} / ${compactMoney(row.used)}` }, node.color, { labelSize: readablePreview ? 11 : 12, valueSize: readablePreview ? 10 : 11 });
     addChartHit(canvas, rectHit(node.x, node.y, node.w, node.h, makeChartTooltip(row.department.name, [row.unallocated ? `未分配：${money.format(row.budget)}` : `${budgetLabel}：${money.format(row.budget)}`, row.unallocated ? "" : `实际已用：${money.format(row.used)}`, row.unallocated ? "" : `预算使用率：${percentText(row.budget > 0 ? row.used / row.budget : 0)}`])));
   });
 
@@ -3262,8 +3437,9 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
   });
 
   detailNodes.forEach((node) => {
-    const label = compact && node.row.label.length > 9 ? `${node.row.label.slice(0, 9)}...` : node.row.label;
-    drawFundNode(ctx, { ...node, label, valueText: `${compactMoney(node.row.value)} · ${node.row.type || "明细"}` }, node.color, { labelSize: compact ? 10.5 : 11, valueSize: 10 });
+    const maxLabelLength = readablePreview ? 12 : compact ? 9 : 18;
+    const label = node.row.label.length > maxLabelLength ? `${node.row.label.slice(0, maxLabelLength)}...` : node.row.label;
+    drawFundNode(ctx, { ...node, label, valueText: readablePreview ? compactMoney(node.row.value) : `${compactMoney(node.row.value)} · ${node.row.type || "明细"}` }, node.color, { labelSize: readablePreview ? 10.5 : compact ? 10.5 : 11, valueSize: 10 });
     addChartHit(canvas, rectHit(node.x, node.y, node.w, node.h, makeChartTooltip(node.row.label, [`类型：${node.row.type || "明细"}`, `金额：${money.format(node.row.value)}`, node.row.meta ? `来源：${node.row.meta}` : "", detailTotal > 0 ? `占明细：${percentText(node.row.value / detailTotal)}` : ""])));
   });
 
@@ -6806,6 +6982,7 @@ function refreshAll(options = {}) {
   renderAnalysisVisualControls();
   renderAnalysisVisualSummary();
   renderFundFlowDetailTable();
+  renderFundFlowReadablePanels();
   renderModeSpecificUi();
   applyDisplaySettings();
   canvasRegistry.forEach((draw) => draw());
