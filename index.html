@@ -1,0 +1,1578 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>制片管理看板</title>
+    <script>
+      (function () {
+        try {
+          var settings = JSON.parse(localStorage.getItem("crewProductionDisplaySettingsV1") || "{}");
+          if (settings.darkMode) document.documentElement.classList.add("dark-mode");
+          if (settings.colorBlindMode) document.documentElement.classList.add("colorblind-mode");
+        } catch (error) {}
+      })();
+    </script>
+    <link rel="stylesheet" href="./styles.css?v=layout-polish-2" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="topbar-main">
+          <div class="brand-lockup">
+            <div class="brand-mark" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div>
+              <p class="eyebrow">Crew Budget & Call Sheet</p>
+              <h1 data-i18n="app.title">制片管理看板</h1>
+            </div>
+          </div>
+          <div class="project-summary">
+            <span id="projectTitle">项目</span>
+            <span id="projectMeta">载入中</span>
+          </div>
+        </div>
+        <div class="topbar-tools">
+          <div class="project-manager" aria-label="项目管理">
+            <label>
+              <span data-i18n="project.current">当前项目</span>
+              <select id="projectLibrarySelect"></select>
+              <small id="projectLibraryStatus">本机保存</small>
+            </label>
+            <button class="icon-button ghost" id="newProject" type="button" aria-label="新建项目">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M12 5v14m-7-7h14" />
+              </svg>
+              <span data-i18n="project.new">新建</span>
+            </button>
+            <button class="icon-button primary" id="saveProjectSnapshot" type="button" aria-label="保存当前项目">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+                <path d="M17 21v-8H7v8M7 3v5h8" />
+              </svg>
+              <span data-i18n="project.save">保存</span>
+            </button>
+            <button class="icon-button ghost" id="renameProject" type="button" aria-label="重命名当前项目">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="m12 20 8-8-4-4-8 8-2 6 6-2ZM14 6l4 4" />
+              </svg>
+              <span data-i18n="project.rename">命名</span>
+            </button>
+            <button class="icon-button danger" id="deleteProject" type="button" aria-label="删除当前项目">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M3 6h18M9 6V4h6v2M6 6l1 14h10l1-14M10 11v6M14 11v6" />
+              </svg>
+              <span data-i18n="project.delete">删除</span>
+            </button>
+            <button class="icon-button ghost" id="refreshProject" type="button" aria-label="刷新当前项目">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M4 12a8 8 0 0 1 13.65-5.65L20 8V3m0 5h-5m5 4a8 8 0 0 1-13.65 5.65L4 16v5m0-5h5" />
+              </svg>
+              <span data-i18n="project.refresh">刷新</span>
+            </button>
+          </div>
+          <div class="top-actions">
+            <button class="icon-button mode-toggle" id="toggleColorBlindMode" type="button" aria-label="切换色盲模式" aria-pressed="false">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <span>色盲</span>
+            </button>
+            <button class="icon-button mode-toggle" id="toggleDarkMode" type="button" aria-label="切换黑夜模式" aria-pressed="false">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M21 12.8A8.2 8.2 0 0 1 11.2 3 7 7 0 1 0 21 12.8Z" />
+              </svg>
+              <span>黑夜</span>
+            </button>
+            <button class="icon-button mode-toggle" id="toggleLanguageMode" type="button" data-language-toggle aria-label="切换中英文" aria-pressed="false">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M4 5h7M7.5 5v2m2.5 0c-.8 2.6-2.8 4.8-5 6m1.5-4c1 1.5 2.4 2.8 4.5 4" />
+                <path d="M14 19 17 11l3 8M15.2 16h3.6" />
+              </svg>
+              <span data-language-label>中文</span>
+            </button>
+            <button class="icon-button" id="printSnapshot" type="button" aria-label="导出快照">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
+              </svg>
+              <span data-i18n="action.export">导出</span>
+            </button>
+            <button class="icon-button primary" id="focusToday" type="button" aria-label="查看今日通告">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M8 2v4m8-4v4M4 10h16M6 4h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+              </svg>
+              <span id="focusTodayLabel" data-i18n="action.todayCallsheet">今日通告</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="kpi-grid" aria-label="项目关键指标">
+          <article class="metric-card">
+            <span>总预算</span>
+            <strong id="totalBudget">--</strong>
+            <small>项目可用资金</small>
+          </article>
+          <article class="metric-card accent-red">
+            <span>已用预算</span>
+            <strong id="spentBudget">--</strong>
+            <small id="spentPercent">--</small>
+          </article>
+          <article class="metric-card accent-green">
+            <span>剩余预算</span>
+            <strong id="remainingBudget">--</strong>
+            <small id="remainingHint">--</small>
+          </article>
+          <article class="metric-card accent-blue">
+            <span id="progressMetricLabel">拍摄进度</span>
+            <strong id="shootProgress">--</strong>
+            <small id="sceneProgress">--</small>
+          </article>
+        </section>
+
+        <nav class="view-tabs" aria-label="看板视图" role="tablist">
+          <button class="tab-button active" type="button" data-view="overview" role="tab" aria-selected="true">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 13h6V4H4v9Zm10 7h6V4h-6v16ZM4 20h6v-3H4v3Z" />
+            </svg>
+            <span data-i18n="nav.overview">总览</span>
+          </button>
+          <button class="tab-button" type="button" data-view="analysis" role="tab" aria-selected="false">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 19V5m0 14h16M8 16V9m5 7V6m5 10v-4" />
+              <path d="m7 5 3 3 4-5 4 6" />
+            </svg>
+            <span data-i18n="nav.analysis">分析</span>
+          </button>
+          <button class="tab-button" type="button" data-view="personnel" role="tab" aria-selected="false">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <span data-i18n="nav.personnel">人员</span>
+          </button>
+          <button class="tab-button" type="button" data-view="equipment" role="tab" aria-selected="false">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" />
+              <circle cx="12" cy="13" r="3" />
+            </svg>
+            <span data-i18n="nav.equipment">器材</span>
+          </button>
+          <button class="tab-button" type="button" data-view="callsheet" role="tab" aria-selected="false">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M8 2v4m8-4v4M4 10h16M6 4h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+            </svg>
+            <span data-i18n="nav.callsheet">通告单</span>
+          </button>
+          <button class="tab-button" type="button" data-view="budget" role="tab" aria-selected="false">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 19V5m0 14h16M8 16V9m5 7V6m5 10v-4" />
+            </svg>
+            <span data-i18n="nav.budget">预算</span>
+          </button>
+          <button class="tab-button" type="button" data-view="fundflow" role="tab" aria-selected="false">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 6h5c4 0 4 5 8 5h3" />
+              <path d="M4 18h5c4 0 4-5 8-5h3" />
+              <path d="m17 8 3 3-3 3" />
+            </svg>
+            <span data-i18n="nav.fundflow">资金流</span>
+          </button>
+          <button class="tab-button" type="button" data-view="audit" role="tab" aria-selected="false">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M9 11 11 13 15 9" />
+              <path d="M8 3h8l2 3v14H6V6l2-3Z" />
+              <path d="M9 17h6" />
+            </svg>
+            <span data-i18n="nav.audit">审查</span>
+          </button>
+          <button class="tab-button" type="button" data-view="progress" role="tab" aria-selected="false">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="m4 13 4 4L20 5M4 6h8M4 20h16" />
+            </svg>
+            <span data-i18n="nav.progress">进度</span>
+          </button>
+          <button class="tab-button" type="button" data-view="visuals" role="tab" aria-selected="false">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 19V5m0 14h16M8 15l3-4 3 2 4-6" />
+            </svg>
+            <span data-i18n="nav.visuals">图表</span>
+          </button>
+          <button class="tab-button" type="button" data-view="input" role="tab" aria-selected="false">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M12 5v14m-7-7h14M5 19h14" />
+            </svg>
+            <span data-i18n="nav.input">录入</span>
+          </button>
+        </nav>
+
+        <section class="view active" id="overview" aria-labelledby="overviewTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Overview</p>
+              <h2 id="overviewTitle">今日预算与拍摄状态</h2>
+            </div>
+            <div class="status-pill" id="riskBadge">计算中</div>
+          </div>
+
+          <div class="overview-layout">
+            <article class="panel chart-panel">
+              <div class="panel-heading">
+                <h3>预算消耗 / 完成进度</h3>
+                <span id="budgetRatioLabel">--</span>
+              </div>
+              <canvas id="budgetDonut" width="320" height="270" aria-label="预算消耗和完成进度环形图"></canvas>
+              <div class="comparison-metrics" id="budgetProgressMetrics"></div>
+            </article>
+
+            <article class="panel chart-panel wide">
+              <div class="panel-heading">
+                <h3 id="dailyCostTitle">每日成本趋势</h3>
+                <span id="dailyCostHint">按通告单估算</span>
+              </div>
+              <canvas id="dailyCostChart" width="720" height="260" aria-label="每日成本折线图"></canvas>
+            </article>
+
+            <article class="panel chart-panel">
+              <div class="panel-heading">
+                <h3 id="departmentChartTitle">部门花费</h3>
+                <span id="departmentChartHint">Top 6</span>
+              </div>
+              <canvas id="departmentChart" width="360" height="270" aria-label="部门费用柱状图"></canvas>
+            </article>
+
+            <article class="panel department-share-panel">
+              <div class="panel-heading">
+                <h3 id="overviewDepartmentShareTitle">部门费用占比</h3>
+                <span id="overviewDepartmentShareInsight">按当前已用成本</span>
+              </div>
+              <div class="department-share-stack" id="overviewDepartmentShareStack"></div>
+              <div class="department-share-list" id="overviewDepartmentShareList"></div>
+            </article>
+
+            <article class="panel today-panel">
+              <div class="panel-heading">
+                <h3 id="todayPanelTitle">今日通告</h3>
+                <span id="todayCode">--</span>
+              </div>
+              <div id="todayCallsheet" class="today-callout"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="analysis" aria-labelledby="analysisTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Executive Report</p>
+              <h2 id="analysisTitle">监制分析报告</h2>
+            </div>
+            <div class="status-pill" id="analysisHealthBadge">计算中</div>
+          </div>
+
+          <div class="analysis-layout">
+            <article class="panel analysis-summary-panel">
+              <div class="panel-heading">
+                <h3>经营摘要</h3>
+                <span>给监制 / 制片厂</span>
+              </div>
+              <p class="analysis-narrative" id="analysisNarrative">正在生成项目摘要。</p>
+              <div class="analysis-metrics" id="analysisReportMetrics"></div>
+            </article>
+
+            <article class="panel analysis-forecast-panel">
+              <div class="panel-heading">
+                <h3>完片预测</h3>
+                <span>按当前消耗推算</span>
+              </div>
+              <div class="analysis-forecast-list" id="analysisForecastList"></div>
+            </article>
+
+            <article class="panel analysis-visual-panel">
+              <div class="panel-heading">
+                <h3>可视化数据分析</h3>
+                <span id="analysisVisualInsight">切换数据主题与图表</span>
+              </div>
+              <div class="visual-toolbar">
+                <label class="select-field">
+                  <span>分析主题</span>
+                  <select id="analysisVisualDataset">
+                    <option value="customProgress">自定义进度</option>
+                    <option value="daily">每日成本</option>
+                    <option value="departments">部门偏差</option>
+                    <option value="departmentBudget">部门预算</option>
+                    <option value="personnelShare">人员占比</option>
+                    <option value="categories">费用构成</option>
+                    <option value="ratings">等级与信任</option>
+                  </select>
+                </label>
+                <div class="chart-type-tabs" id="analysisVisualChartTypes" role="toolbar" aria-label="分析图表类型">
+                  <button class="chart-type-tab active" type="button" data-chart="bar">柱状图</button>
+                </div>
+              </div>
+              <div class="chart-type-library" id="analysisVisualChartLibrary" aria-label="分析图表类型库"></div>
+              <canvas id="analysisVisualChart" width="900" height="360" aria-label="分析可视化图表"></canvas>
+              <div class="visual-summary" id="analysisVisualSummary"></div>
+            </article>
+
+            <article class="panel analysis-share-panel">
+              <div class="panel-heading">
+                <h3>部门费用占比</h3>
+                <span id="analysisDepartmentShareInsight">按当前已用成本</span>
+              </div>
+              <div class="department-share-stack" id="analysisDepartmentShareStack"></div>
+              <div class="department-share-list" id="analysisDepartmentShareList"></div>
+            </article>
+
+            <article class="panel analysis-report-panel">
+              <div class="panel-heading report-heading">
+                <div>
+                  <h3>专业制片报告</h3>
+                  <span id="professionalReportStatus">基于当前数据自动生成</span>
+                </div>
+                <div class="report-actions">
+                  <button class="icon-button" id="refreshProfessionalReport" type="button">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M21 12a9 9 0 0 1-15.5 6.2L3 16m0 0v5h5M3 12A9 9 0 0 1 18.5 5.8L21 8m0 0V3h-5" />
+                    </svg>
+                    <span>本地报告</span>
+                  </button>
+                  <button class="icon-button primary" id="generateAiProfessionalReport" type="button">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 3 9.5 9.5 3 12l6.5 2.5L12 21l2.5-6.5L21 12l-6.5-2.5Z" />
+                    </svg>
+                    <span>AI 专业报告</span>
+                  </button>
+                  <button class="icon-button" id="copyProfessionalReport" type="button">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M8 8h10v13H8z" />
+                      <path d="M6 16H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                    <span>复制</span>
+                  </button>
+                </div>
+              </div>
+              <div class="professional-report" id="professionalReport"></div>
+            </article>
+
+            <article class="panel analysis-wide">
+              <div class="panel-heading">
+                <h3>部门偏差</h3>
+                <span>预算 / 已用 / 风险</span>
+              </div>
+              <div class="table-wrap">
+                <table class="analysis-table">
+                  <thead>
+                    <tr>
+                      <th>部门</th>
+                      <th>预算</th>
+                      <th>已用</th>
+                      <th>偏差</th>
+                      <th>状态</th>
+                    </tr>
+                  </thead>
+                  <tbody id="analysisDepartmentTable"></tbody>
+                </table>
+              </div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-heading">
+                <h3>风险快报</h3>
+                <span>需要复核的点</span>
+              </div>
+              <div class="analysis-risk-list" id="analysisRiskBrief"></div>
+            </article>
+
+            <article class="panel analysis-wide">
+              <div class="panel-heading">
+                <h3>制片建议</h3>
+                <span>下一步动作</span>
+              </div>
+              <div class="analysis-recommendations" id="analysisRecommendations"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="personnel" aria-labelledby="personnelTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Personnel</p>
+              <h2 id="personnelTitle">人员管理</h2>
+            </div>
+            <div class="status-pill" id="personnelModuleBadge">计算中</div>
+          </div>
+
+          <div class="module-layout">
+            <article class="panel module-wide">
+              <div class="panel-heading">
+                <h3>人员总览</h3>
+                <span>人工成本 / 等级 / 信任</span>
+              </div>
+              <div class="module-summary-grid" id="personnelSummaryMetrics"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-heading">
+                <h3>部门人员</h3>
+                <span>按分组汇总</span>
+              </div>
+              <div class="module-list" id="personnelDepartmentList"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-heading">
+                <h3>人员风险</h3>
+                <span>报价与信任</span>
+              </div>
+              <div class="module-risk-list" id="personnelRiskList"></div>
+            </article>
+
+            <article class="panel module-full">
+              <div class="panel-heading">
+                <h3>人员明细</h3>
+                <span>公司 / 供应商 / 岗位</span>
+              </div>
+              <div class="table-wrap">
+                <table class="module-table">
+                  <thead>
+                    <tr>
+                      <th>姓名</th>
+                      <th>部门</th>
+                      <th>岗位</th>
+                      <th>公司 / 供应商</th>
+                      <th>等级</th>
+                      <th>信任</th>
+                      <th>成本</th>
+                      <th>状态</th>
+                    </tr>
+                  </thead>
+                  <tbody id="personnelTable"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="equipment" aria-labelledby="equipmentTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Equipment</p>
+              <h2 id="equipmentTitle">器材管理</h2>
+            </div>
+            <div class="status-pill" id="equipmentModuleBadge">计算中</div>
+          </div>
+
+          <div class="module-layout">
+            <article class="panel module-wide">
+              <div class="panel-heading">
+                <h3>器材总览</h3>
+                <span>租赁 / 押金 / 供应商</span>
+              </div>
+              <div class="module-summary-grid" id="equipmentSummaryMetrics"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-heading">
+                <h3>部门器材</h3>
+                <span>按分组汇总</span>
+              </div>
+              <div class="module-list" id="equipmentDepartmentList"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-heading">
+                <h3>器材风险</h3>
+                <span>供应商与报价</span>
+              </div>
+              <div class="module-risk-list" id="equipmentRiskList"></div>
+            </article>
+
+            <article class="panel module-full">
+              <div class="panel-heading">
+                <h3>器材明细</h3>
+                <span>日租 / 使用天数 / 押金</span>
+              </div>
+              <div class="table-wrap">
+                <table class="module-table">
+                  <thead>
+                    <tr>
+                      <th>器材</th>
+                      <th>部门</th>
+                      <th>公司 / 供应商</th>
+                      <th>公司等级</th>
+                      <th>日租</th>
+                      <th>天数</th>
+                      <th>押金</th>
+                      <th>总额</th>
+                      <th>状态</th>
+                    </tr>
+                  </thead>
+                  <tbody id="equipmentTable"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="callsheet" aria-labelledby="callsheetTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Call Sheet</p>
+              <h2 id="callsheetTitle">每日通告单</h2>
+            </div>
+            <label class="select-field">
+              <span id="callsheetSelectLabel">拍摄日</span>
+              <select id="callsheetSelect"></select>
+            </label>
+          </div>
+
+          <div class="callsheet-grid">
+            <article class="panel callsheet-detail">
+              <div id="callsheetDetail"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-heading">
+                <h3 id="dailyBarsTitle">按天成本</h3>
+                <span id="dailyBarsHint">预计支出</span>
+              </div>
+              <div id="dailyBars" class="daily-bars"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="budget" aria-labelledby="budgetTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Budget</p>
+              <h2 id="budgetTitle">预算拆分</h2>
+            </div>
+            <div class="mini-legend" id="categoryLegend"></div>
+          </div>
+
+          <div class="budget-layout">
+            <article class="panel">
+              <div class="panel-heading">
+                <h3 id="budgetTableTitle">部门预算表</h3>
+                <span id="budgetTableHint">预算 / 已用 / 剩余</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th id="budgetTableNameHeader">部门</th>
+                      <th>预算</th>
+                      <th>已用</th>
+                      <th>状态</th>
+                    </tr>
+                  </thead>
+                  <tbody id="departmentTable"></tbody>
+                </table>
+              </div>
+            </article>
+            <article class="panel chart-panel">
+              <div class="panel-heading">
+                <h3 id="budgetShareTitle">预算占比图</h3>
+                <span id="budgetShareInsight">部门预算百分比</span>
+              </div>
+              <div class="chart-type-tabs budget-chart-tabs" id="budgetShareChartTypes" role="toolbar" aria-label="预算占比图类型">
+                <button class="chart-type-tab active" type="button" data-chart="donut">环形图</button>
+                <button class="chart-type-tab" type="button" data-chart="pie">饼图</button>
+                <button class="chart-type-tab" type="button" data-chart="rose">玫瑰图</button>
+              </div>
+              <canvas id="categoryChart" width="420" height="360" aria-label="部门预算占比图"></canvas>
+            </article>
+            <article class="panel chart-panel fund-flow-panel">
+              <div class="panel-heading">
+                <h3>资金流向图</h3>
+                <span id="fundFlowInsight">总预算 → 部门 → 用途</span>
+              </div>
+              <canvas id="fundFlowChart" width="960" height="500" aria-label="资金流向桑基图"></canvas>
+              <div class="fund-flow-summary" id="fundFlowSummary"></div>
+            </article>
+            <article class="panel roster-panel">
+              <div class="panel-heading">
+                <h3>等级与信任审查</h3>
+                <span>报价合理性</span>
+              </div>
+              <div id="resourceList" class="resource-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="fundflow" aria-labelledby="fundflowTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Fund Flow</p>
+              <h2 id="fundflowTitle">资金流向总图</h2>
+            </div>
+            <div class="status-pill" id="fundFlowPageBadge">部门 / 用途 / 公司明细</div>
+          </div>
+
+          <div class="fund-flow-page-layout">
+            <article class="panel chart-panel fund-flow-expanded-panel">
+              <div class="panel-heading report-heading">
+                <div>
+                  <h3>完整版资金流向</h3>
+                  <span id="fundFlowLargeInsight">总预算 → 部门 → 用途 → 公司 / 个人 / 明细</span>
+                </div>
+                <div class="report-actions">
+                  <button class="icon-button primary" type="button" data-load-full-demo>
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 3 9.5 9.5 3 12l6.5 2.5L12 21l2.5-6.5L21 12l-6.5-2.5Z" />
+                    </svg>
+                    <span>载入完整版</span>
+                  </button>
+                </div>
+              </div>
+              <canvas id="fundFlowLargeChart" width="1280" height="760" aria-label="完整版资金流向桑基图"></canvas>
+              <div class="fund-flow-summary" id="fundFlowLargeSummary"></div>
+            </article>
+
+            <article class="panel fund-flow-detail-panel">
+              <div class="panel-heading">
+                <h3>公司 / 个人 / 明细清单</h3>
+                <span id="fundFlowDetailInsight">按金额排序</span>
+              </div>
+              <div class="table-wrap">
+                <table class="fund-flow-detail-table">
+                  <thead>
+                    <tr>
+                      <th>部门</th>
+                      <th>用途</th>
+                      <th>公司 / 个人 / 明细</th>
+                      <th>来源</th>
+                      <th>金额</th>
+                      <th>占比</th>
+                    </tr>
+                  </thead>
+                  <tbody id="fundFlowDetailTable"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="audit" aria-labelledby="auditTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Audit</p>
+              <h2 id="auditTitle">费用审查</h2>
+            </div>
+            <div class="status-pill" id="auditHealthBadge">自动审查</div>
+          </div>
+
+          <div class="audit-layout">
+            <article class="panel audit-summary-panel">
+              <div class="panel-heading">
+                <h3>审查概览</h3>
+                <span id="auditCoverage">等待数据</span>
+              </div>
+              <div class="module-summary-grid" id="auditSummaryCards"></div>
+            </article>
+
+            <article class="panel audit-filter-panel">
+              <div class="panel-heading">
+                <h3>风险筛选</h3>
+                <span>按风险级别查看</span>
+              </div>
+              <div class="chart-type-tabs" id="auditFilterTabs" role="toolbar" aria-label="费用审查筛选">
+                <button class="chart-type-tab active" type="button" data-filter="all">全部</button>
+                <button class="chart-type-tab" type="button" data-filter="high">高风险</button>
+                <button class="chart-type-tab" type="button" data-filter="medium">待复核</button>
+              </div>
+            </article>
+
+            <article class="panel audit-rules-panel">
+              <div class="panel-heading">
+                <h3>审查规则</h3>
+                <span>预算 / 凭证 / 信任</span>
+              </div>
+              <div class="audit-rule-list" id="auditRuleList"></div>
+            </article>
+
+            <article class="panel audit-wide">
+              <div class="panel-heading">
+                <h3>费用风险清单</h3>
+                <span id="auditListStatus">按风险排序</span>
+              </div>
+              <div class="table-wrap">
+                <table class="audit-table">
+                  <thead>
+                    <tr>
+                      <th>风险</th>
+                      <th>项目</th>
+                      <th>来源</th>
+                      <th>金额</th>
+                      <th>审查意见</th>
+                      <th>凭证</th>
+                    </tr>
+                  </thead>
+                  <tbody id="auditTableBody"></tbody>
+                </table>
+              </div>
+            </article>
+
+            <article class="panel audit-brief-panel">
+              <div class="panel-heading">
+                <h3>审计摘要</h3>
+                <span>给监制 / 制片厂</span>
+              </div>
+              <div class="audit-brief" id="auditBrief"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="progress" aria-labelledby="progressTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Progress</p>
+              <h2 id="progressTitle">项目进度</h2>
+            </div>
+            <div class="progress-chips" id="progressChips"></div>
+          </div>
+
+          <div class="progress-layout">
+            <article class="panel chart-panel">
+              <div class="panel-heading">
+                <h3>进度对比</h3>
+                <span>完成率 vs 预算率</span>
+              </div>
+              <canvas id="progressChart" width="460" height="260" aria-label="进度对比图表"></canvas>
+            </article>
+            <article class="panel scene-panel">
+              <div class="panel-heading">
+                <h3 id="progressListTitle">场次追踪</h3>
+                <span id="progressListHint">已拍 / 待拍 / 风险</span>
+              </div>
+              <div id="sceneList" class="scene-list"></div>
+            </article>
+            <article class="panel risk-panel">
+              <div class="panel-heading">
+                <h3>风险预估</h3>
+                <span>延期与超支</span>
+              </div>
+              <div id="riskList" class="risk-list"></div>
+            </article>
+            <article class="panel chart-panel progress-edit-panel">
+              <div class="panel-heading">
+                <h3>剪辑进度</h3>
+                <span id="editProgressInsight">已完成场次 / 未完成场次</span>
+              </div>
+              <canvas id="editProgressChart" width="960" height="360" aria-label="剪辑进度与完成场次图表"></canvas>
+              <div class="edit-progress-summary" id="editProgressSummary"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="visuals" aria-labelledby="visualsTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Visualization</p>
+              <h2 id="visualsTitle">可视化切换器</h2>
+            </div>
+            <div class="status-pill" id="visualModeBadge">实时切换</div>
+          </div>
+
+          <div class="chart-guide">
+            <article class="panel visual-switcher-panel">
+              <div class="panel-heading">
+                <h3>数据观察台</h3>
+                <span id="visualInsight">选择一个图表类型</span>
+              </div>
+              <div class="visual-toolbar">
+                <label class="select-field">
+                  <span>数据主题</span>
+                  <select id="visualDataset">
+                    <option value="customProgress">自定义进度</option>
+                    <option value="daily">每日成本</option>
+                    <option value="departments">部门花费</option>
+                    <option value="departmentBudget">部门预算</option>
+                    <option value="personnelShare">人员占比</option>
+                    <option value="categories">费用构成</option>
+                    <option value="ratings">等级与信任</option>
+                  </select>
+                </label>
+                <div class="chart-type-tabs" id="visualChartTypes" role="toolbar" aria-label="图表类型">
+                  <button class="chart-type-tab active" type="button" data-chart="line">折线图</button>
+                  <button class="chart-type-tab" type="button" data-chart="area">面积图</button>
+                  <button class="chart-type-tab" type="button" data-chart="bar">柱状图</button>
+                  <button class="chart-type-tab" type="button" data-chart="waterfall">瀑布图</button>
+                </div>
+              </div>
+              <div class="chart-type-library" id="visualChartLibrary" aria-label="图表类型库"></div>
+              <canvas id="visualExplorerChart" width="900" height="360" aria-label="可切换数据图表"></canvas>
+              <div class="visual-summary" id="visualSummary"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="input" aria-labelledby="inputTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Input</p>
+              <h2 id="inputTitle" data-i18n="input.title">录入端</h2>
+            </div>
+            <div class="status-pill" id="formStatus">待录入</div>
+          </div>
+
+          <div class="input-layout">
+            <article class="panel form-panel input-preferences-panel">
+              <div class="panel-heading">
+                <h3 data-i18n="preferences.title">录入偏好</h3>
+                <span data-i18n="preferences.subtitle">自定义选择、语言和评分</span>
+              </div>
+              <div class="data-form">
+                <div class="preference-grid">
+                  <label>
+                    <span data-i18n="preferences.language">界面语言</span>
+                    <button class="icon-button language-switch-button" type="button" data-language-toggle aria-pressed="false">
+                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                        <path d="M4 5h7M7.5 5v2m2.5 0c-.8 2.6-2.8 4.8-5 6m1.5-4c1 1.5 2.4 2.8 4.5 4" />
+                        <path d="M14 19 17 11l3 8M15.2 16h3.6" />
+                      </svg>
+                      <span data-language-label>中文</span>
+                    </button>
+                  </label>
+                  <label class="input-mode-field">
+                    <span data-i18n="preferences.inputMode">录入模式</span>
+                    <div class="segmented-control" role="group" aria-label="录入模式">
+                      <button class="segment-button" type="button" data-input-mode="template" aria-pressed="true">
+                        <span data-i18n="preferences.templateMode">电影模板</span>
+                      </button>
+                      <button class="segment-button" type="button" data-input-mode="custom" aria-pressed="false">
+                        <span data-i18n="preferences.customMode">完全自定义</span>
+                      </button>
+                    </div>
+                    <small id="inputModeHint" data-i18n="preferences.inputModeHintTemplate">保留电影部门和岗位，也可追加自定义。</small>
+                  </label>
+                  <label>
+                    <span data-i18n="preferences.departmentName">部门名称</span>
+                    <input id="customDepartmentName" type="text" placeholder="例如：航拍组 / Drone Unit" data-i18n-placeholder="preferences.departmentPlaceholder" />
+                  </label>
+                  <label>
+                    <span data-i18n="preferences.departmentBudget">部门预算</span>
+                    <input id="customDepartmentBudget" type="number" min="0" step="1000" placeholder="0" />
+                  </label>
+                  <label>
+                    <span data-i18n="preferences.roleDepartment">岗位所属部门</span>
+                    <select id="customRoleDepartment"></select>
+                  </label>
+                  <label>
+                    <span data-i18n="preferences.roleName">自定义岗位</span>
+                    <input id="customRoleName" type="text" placeholder="例如：航拍组长 / Drone Lead" data-i18n-placeholder="preferences.rolePlaceholder" />
+                  </label>
+                </div>
+                <div class="form-actions">
+                  <button class="icon-button" id="addCustomDepartment" type="button">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 5v14m-7-7h14" />
+                      <path d="M4 19h16" />
+                    </svg>
+                    <span data-i18n="preferences.addDepartment">保存部门</span>
+                  </button>
+                  <button class="icon-button primary" id="addCustomRole" type="button">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 5v14m-7-7h14" />
+                    </svg>
+                    <span data-i18n="preferences.addRole">保存岗位</span>
+                  </button>
+                </div>
+                <div class="custom-role-list" id="customRoleList"></div>
+              </div>
+            </article>
+
+            <article class="panel form-panel import-panel">
+              <div class="panel-heading">
+                <h3 data-i18n="import.title">Excel / CSV 批量导入</h3>
+                <span data-i18n="import.subtitle">人员、器材、场次、通告单</span>
+              </div>
+              <div class="import-grid">
+                <div class="import-card">
+                  <div class="data-form">
+                    <div class="form-grid four">
+                      <label>
+                        <span>表格文件</span>
+                        <input id="spreadsheetFile" type="file" accept=".xlsx,.xls,.csv,.tsv" />
+                      </label>
+                      <label>
+                        <span>工作表</span>
+                        <select id="spreadsheetSheetSelect" disabled>
+                          <option value="">自动读取</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>导入类型</span>
+                        <select id="spreadsheetTarget">
+                          <option value="auto">自动识别</option>
+                          <option value="person">人员开销</option>
+                          <option value="equipment">器材开销</option>
+                          <option value="scene">场次进度</option>
+                          <option value="callsheet">通告单</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>导入方式</span>
+                        <select id="spreadsheetMode">
+                          <option value="append">追加到当前项目</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div class="form-actions">
+                      <button class="icon-button primary" id="readSpreadsheet" type="button">
+                        <svg aria-hidden="true" viewBox="0 0 24 24">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                          <path d="M14 2v6h6M8 13h8M8 17h5" />
+                        </svg>
+                        <span>读取表格</span>
+                      </button>
+                      <button class="icon-button" id="aiMapSpreadsheet" type="button">
+                        <svg aria-hidden="true" viewBox="0 0 24 24">
+                          <path d="M12 3 9.5 9.5 3 12l6.5 2.5L12 21l2.5-6.5L21 12l-6.5-2.5Z" />
+                        </svg>
+                        <span>AI 识别字段</span>
+                      </button>
+                      <button class="icon-button primary" id="confirmSpreadsheetImport" type="button">
+                        <svg aria-hidden="true" viewBox="0 0 24 24">
+                          <path d="m20 6-11 11-5-5" />
+                        </svg>
+                        <span>确认导入</span>
+                      </button>
+                    </div>
+                    <div class="import-status" id="spreadsheetImportStatus">请选择表格文件。</div>
+                  </div>
+                  <div class="import-preview">
+                    <div class="import-preview-head">
+                      <strong>识别预览</strong>
+                      <span id="spreadsheetPreviewStats">暂无数据</span>
+                    </div>
+                    <div class="table-wrap">
+                      <table class="import-preview-table">
+                        <thead id="spreadsheetPreviewHead"></thead>
+                        <tbody id="spreadsheetPreviewBody"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="import-side">
+                  <div class="import-card ai-card">
+                    <div class="panel-heading compact-heading">
+                      <h3>AI 接口</h3>
+                      <span>用于识别不标准表头</span>
+                    </div>
+                    <div class="data-form">
+                      <div class="form-grid two">
+                        <label>
+                          <span>服务商</span>
+                          <select id="aiProvider">
+                            <option value="openai">OpenAI</option>
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="qwen">通义千问</option>
+                            <option value="doubao">豆包 / 火山方舟</option>
+                            <option value="moonshot">Kimi / Moonshot</option>
+                            <option value="zhipu">智谱 GLM</option>
+                            <option value="gemini">Gemini</option>
+                            <option value="claude">Claude</option>
+                            <option value="custom">自定义 / 代理</option>
+                          </select>
+                        </label>
+                        <label>
+                          <span>模型</span>
+                          <input id="aiModel" type="text" placeholder="例如 gpt-5-mini / qwen-plus" />
+                        </label>
+                        <label class="full-field">
+                          <span>接口地址</span>
+                          <input id="aiBaseUrl" type="url" placeholder="https://api.example.com/v1/chat/completions" />
+                        </label>
+                        <label class="full-field">
+                          <span>API Key</span>
+                          <input id="aiApiKey" type="password" placeholder="仅保存在当前浏览器会话" />
+                        </label>
+                      </div>
+                      <div class="form-actions">
+                        <button class="icon-button" id="saveAiConfig" type="button">
+                          <svg aria-hidden="true" viewBox="0 0 24 24">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+                          </svg>
+                          <span>保存会话配置</span>
+                        </button>
+                        <button class="icon-button" id="testAiConfig" type="button">
+                          <svg aria-hidden="true" viewBox="0 0 24 24">
+                            <path d="m5 12 5 5L20 7" />
+                          </svg>
+                          <span>测试接口</span>
+                        </button>
+                      </div>
+                      <div class="import-status" id="aiConfigStatus">建议生产环境使用后端代理，避免在前端暴露密钥。</div>
+                    </div>
+                  </div>
+
+                  <div class="import-card handwriting-card">
+                    <div class="panel-heading compact-heading">
+                      <h3>手写单据识别</h3>
+                      <span>拍照单、签收单、临时费用</span>
+                    </div>
+                    <div class="data-form">
+                      <div class="form-grid two">
+                        <label>
+                          <span>单据照片</span>
+                          <input id="handwrittenFile" type="file" accept="image/*" />
+                        </label>
+                        <label>
+                          <span>识别类型</span>
+                          <select id="handwrittenTarget">
+                            <option value="auto">自动识别</option>
+                            <option value="person">人员开销</option>
+                            <option value="equipment">器材开销</option>
+                            <option value="scene">场次进度</option>
+                            <option value="callsheet">通告单</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div class="handwriting-preview" id="handwritingPreview">等待照片</div>
+                      <div class="form-actions">
+                        <button class="icon-button primary" id="recognizeHandwritten" type="button">
+                          <svg aria-hidden="true" viewBox="0 0 24 24">
+                            <path d="M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M21 15v4a2 2 0 0 1-2 2h-4M3 9V5a2 2 0 0 1 2-2h4" />
+                            <path d="M8 12h8M8 16h5M8 8h8" />
+                          </svg>
+                          <span>识别单据</span>
+                        </button>
+                      </div>
+                      <div class="import-status" id="handwritingStatus">请选择单据照片。</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel form-panel input-summary-panel">
+              <div class="panel-heading">
+                <h3 data-i18n="projectParams.title">项目参数</h3>
+                <span data-i18n="projectParams.subtitle">实时重算</span>
+              </div>
+              <form class="data-form" id="projectForm">
+                <div class="form-grid two">
+                  <label>
+                    <span data-i18n="projectParams.name">项目名</span>
+                    <input name="title" type="text" required />
+                  </label>
+                  <label>
+                    <span data-i18n="projectParams.budget">总预算</span>
+                    <input name="budget" type="number" min="0" step="1000" required />
+                  </label>
+                  <label>
+                    <span data-i18n="projectParams.currentDay">当前天数</span>
+                    <input name="currentDay" type="number" min="1" step="1" required />
+                  </label>
+                  <label>
+                    <span data-i18n="projectParams.plannedDays">计划天数</span>
+                    <input name="plannedDays" type="number" min="1" step="1" required />
+                  </label>
+                  <label class="film-project-field">
+                    <span data-i18n="projectParams.totalScenes">总场次</span>
+                    <input name="totalScenes" type="number" min="1" step="1" required />
+                  </label>
+                  <label class="film-project-field">
+                    <span data-i18n="projectParams.totalPages">总页数</span>
+                    <input name="totalPages" type="number" min="1" step="1" required />
+                  </label>
+                </div>
+                <div class="budget-allocation">
+                  <div class="budget-allocation-head">
+                    <div>
+                      <strong id="budgetAllocationTitle">组别预算</strong>
+                      <span id="budgetAllocationHint">按部门拆分总预算</span>
+                    </div>
+                    <span id="budgetAllocationStatus">待计算</span>
+                  </div>
+                  <div class="department-budget-grid" id="departmentBudgetInputs"></div>
+                </div>
+                <div class="form-actions">
+                  <button class="icon-button primary" type="submit">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+                      <path d="M17 21v-8H7v8M7 3v5h8" />
+                    </svg>
+                    <span>保存项目</span>
+                  </button>
+                  <button class="icon-button ghost" id="resetData" type="button">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M3 12a9 9 0 1 0 3-6.7M3 4v6h6" />
+                    </svg>
+                    <span>重置样例</span>
+                  </button>
+                  <button class="icon-button" type="button" data-load-full-demo>
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 3 9.5 9.5 3 12l6.5 2.5L12 21l2.5-6.5L21 12l-6.5-2.5Z" />
+                    </svg>
+                    <span>完整版测试</span>
+                  </button>
+                </div>
+              </form>
+              <div class="input-stats" id="inputStats"></div>
+            </article>
+
+            <article class="panel form-panel personnel-panel">
+              <div class="panel-heading">
+                <h3 data-i18n="personnelInput.title">人员开销</h3>
+                <span data-i18n="personnelInput.subtitle">人工成本</span>
+              </div>
+              <form class="data-form" id="personForm">
+                <div class="form-grid two">
+                  <label>
+                    <span data-i18n="personnelInput.name">姓名</span>
+                    <input name="name" type="text" required />
+                  </label>
+                  <label>
+                    <span data-i18n="personnelInput.department">部门</span>
+                    <select name="dept" class="department-select"></select>
+                  </label>
+                  <label>
+                    <span data-i18n="personnelInput.rolePreset">分组岗位</span>
+                    <select name="rolePreset" id="personRolePreset"></select>
+                  </label>
+                  <label>
+                    <span data-i18n="personnelInput.role">职位</span>
+                    <input name="role" type="text" required />
+                  </label>
+                  <label>
+                    <span data-i18n="personnelInput.vendor">公司 / 供应商</span>
+                    <input name="vendor" type="text" value="个人 / 自由职业" />
+                  </label>
+                  <label class="rating-field">
+                    <span data-i18n="personnelInput.companyGrade">公司等级</span>
+                    <select name="companyGrade">
+                      <option value="none">无</option>
+                      <option value="A">A 级</option>
+                      <option value="B">B 级</option>
+                      <option value="C">C 级</option>
+                      <option value="D" selected>D 级</option>
+                      <option value="E">E 级</option>
+                      <option value="F">F 级</option>
+                      <option value="G">G 级</option>
+                    </select>
+                  </label>
+                  <label class="rating-field">
+                    <span data-i18n="personnelInput.personGrade">人员等级</span>
+                    <select name="grade">
+                      <option value="none">无</option>
+                      <option value="A">A 级</option>
+                      <option value="B">B 级</option>
+                      <option value="C">C 级</option>
+                      <option value="D" selected>D 级</option>
+                      <option value="E">E 级</option>
+                      <option value="F">F 级</option>
+                      <option value="G">G 级</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span data-i18n="personnelInput.dayRate">日薪</span>
+                    <input name="dayRate" type="number" min="0" step="100" required />
+                  </label>
+                  <label>
+                    <span data-i18n="personnelInput.days">工作天数</span>
+                    <input name="days" type="number" min="1" step="1" required />
+                  </label>
+                  <label>
+                    <span data-i18n="personnelInput.allowance">补贴</span>
+                    <input name="allowance" type="number" min="0" step="100" value="0" />
+                  </label>
+                  <label class="rating-field">
+                    <span data-i18n="personnelInput.trust">信任评分</span>
+                    <input name="trust" type="number" min="0" max="100" step="1" value="75" />
+                  </label>
+                </div>
+                <div class="form-actions">
+                  <button class="icon-button primary" type="submit">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 5v14m-7-7h14" />
+                    </svg>
+                    <span data-i18n="personnelInput.addPerson">加入人员</span>
+                  </button>
+                  <button class="icon-button" id="exportPersonnelExcel" type="button">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
+                    </svg>
+                    <span data-i18n="personnelInput.export">导出人员表</span>
+                  </button>
+                  <button class="icon-button rating-toggle-button" id="ratingEnabledButton" type="button" aria-pressed="true">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 3v18M6 7h12M8 7l-3 6h6L8 7Zm8 0-3 6h6l-3-6Z" />
+                    </svg>
+                    <span data-i18n="preferences.rating">等级评分</span>
+                    <strong id="ratingEnabledLabel">已开启</strong>
+                  </button>
+                </div>
+              </form>
+              <div class="actor-budget-panel film-only-panel">
+                <div class="actor-budget-head">
+                  <div>
+                    <strong>演员预算</strong>
+                    <span>主演、配角、群演、替身单独录入</span>
+                  </div>
+                  <span id="actorBudgetStatus">0 位演员</span>
+                </div>
+                <form class="data-form" id="actorForm">
+                  <div class="form-grid four">
+                    <label>
+                      <span>演员姓名</span>
+                      <input name="name" type="text" required />
+                    </label>
+                    <label>
+                      <span>角色 / 身份</span>
+                      <input name="characterName" type="text" placeholder="女主 / 母亲 / 群演" required />
+                    </label>
+                    <label>
+                      <span>演员类型</span>
+                      <select name="actorKind">
+                        <option value="主演">主演</option>
+                        <option value="配角">配角</option>
+                        <option value="特约演员">特约演员</option>
+                        <option value="群众演员">群众演员</option>
+                        <option value="文替">文替</option>
+                        <option value="身替">身替</option>
+                        <option value="特技替身">特技替身</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>经纪公司 / 供应商</span>
+                      <input name="vendor" type="text" value="个人 / 自由职业" />
+                    </label>
+                    <label class="rating-field">
+                      <span>演员等级</span>
+                      <select name="grade">
+                        <option value="none">无</option>
+                        <option value="A">A 级</option>
+                        <option value="B">B 级</option>
+                        <option value="C" selected>C 级</option>
+                        <option value="D">D 级</option>
+                        <option value="E">E 级</option>
+                        <option value="F">F 级</option>
+                        <option value="G">G 级</option>
+                      </select>
+                    </label>
+                    <label class="rating-field">
+                      <span>公司等级</span>
+                      <select name="companyGrade">
+                        <option value="none">无</option>
+                        <option value="A">A 级</option>
+                        <option value="B">B 级</option>
+                        <option value="C">C 级</option>
+                        <option value="D" selected>D 级</option>
+                        <option value="E">E 级</option>
+                        <option value="F">F 级</option>
+                        <option value="G">G 级</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>日片酬</span>
+                      <input name="dayRate" type="number" min="0" step="100" required />
+                    </label>
+                    <label>
+                      <span>拍摄天数</span>
+                      <input name="days" type="number" min="1" step="1" required />
+                    </label>
+                    <label>
+                      <span>补贴 / 经纪费</span>
+                      <input name="allowance" type="number" min="0" step="100" value="0" />
+                    </label>
+                    <label class="rating-field">
+                      <span>信任评分</span>
+                      <input name="trust" type="number" min="0" max="100" step="1" value="75" />
+                    </label>
+                  </div>
+                  <div class="form-actions">
+                    <button class="icon-button primary" type="submit">
+                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                        <path d="M12 5v14m-7-7h14" />
+                      </svg>
+                      <span>加入演员</span>
+                    </button>
+                  </div>
+                </form>
+                <div class="actor-budget-summary" id="actorBudgetSummary"></div>
+                <div class="actor-budget-list" id="actorBudgetList"></div>
+              </div>
+              <div class="person-feedback" id="personFeedback" aria-live="polite">
+                <div class="person-feedback-head">
+                  <div>
+                    <strong id="personFeedbackTitle">录入预览</strong>
+                    <span id="personFeedbackStatus">待录入</span>
+                  </div>
+                  <span id="personFeedbackDept">未选择部门</span>
+                </div>
+                <div class="person-feedback-grid">
+                  <div>
+                    <span>预计成本</span>
+                    <strong id="personPreviewTotal">¥0</strong>
+                  </div>
+                  <div>
+                    <span>报价状态</span>
+                    <strong id="personPreviewFit">待填写</strong>
+                  </div>
+                  <div class="rating-field">
+                    <span>信任评分</span>
+                    <strong id="personPreviewTrust">75</strong>
+                  </div>
+                  <div class="rating-field">
+                    <span>等级</span>
+                    <strong id="personPreviewGrades">人D / 司D</strong>
+                  </div>
+                </div>
+                <div class="person-last-save" id="personLastSave">等待保存人员</div>
+              </div>
+              <div class="personnel-layer">
+                <div class="personnel-layer-heading">
+                  <div>
+                    <strong>已保存人员</strong>
+                    <span>按分组与岗位分层</span>
+                  </div>
+                  <span id="personnelLayerCount">0 人</span>
+                </div>
+                <div class="personnel-layer-list" id="personnelLayerList"></div>
+              </div>
+            </article>
+
+            <article class="panel form-panel">
+              <div class="panel-heading">
+                <h3>器材开销</h3>
+                <span>租赁与固定项</span>
+              </div>
+              <form class="data-form" id="equipmentForm">
+                <div class="form-grid two">
+                  <label>
+                    <span>器材名</span>
+                    <input name="name" type="text" required />
+                  </label>
+                  <label>
+                    <span>部门</span>
+                    <select name="dept" class="department-select"></select>
+                  </label>
+                  <label>
+                    <span>公司 / 供应商</span>
+                    <input name="vendor" type="text" value="未登记公司" />
+                  </label>
+                  <label class="rating-field">
+                    <span>公司等级</span>
+                    <select name="companyGrade">
+                      <option value="none">无</option>
+                      <option value="A">A 级</option>
+                      <option value="B">B 级</option>
+                      <option value="C">C 级</option>
+                      <option value="D" selected>D 级</option>
+                      <option value="E">E 级</option>
+                      <option value="F">F 级</option>
+                      <option value="G">G 级</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>日租</span>
+                    <input name="daily" type="number" min="0" step="100" required />
+                  </label>
+                  <label>
+                    <span>使用天数</span>
+                    <input name="days" type="number" min="1" step="1" required />
+                  </label>
+                  <label class="full-field">
+                    <span>押金 / 固定费用</span>
+                    <input name="deposit" type="number" min="0" step="100" value="0" />
+                  </label>
+                  <label class="rating-field">
+                    <span>信任评分</span>
+                    <input name="trust" type="number" min="0" max="100" step="1" value="75" />
+                  </label>
+                </div>
+                <div class="form-actions">
+                  <button class="icon-button primary" type="submit">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 5v14m-7-7h14" />
+                    </svg>
+                    <span>加入器材</span>
+                  </button>
+                </div>
+              </form>
+            </article>
+
+            <article class="panel form-panel film-only-panel">
+              <div class="panel-heading">
+                <h3>场次进度</h3>
+                <span>拍摄段落</span>
+              </div>
+              <form class="data-form" id="sceneForm">
+                <div class="form-grid two">
+                  <label>
+                    <span>场次编号</span>
+                    <input name="code" type="text" placeholder="65-68" required />
+                  </label>
+                  <label>
+                    <span>页数</span>
+                    <input name="pages" type="number" min="1" step="1" required />
+                  </label>
+                  <label>
+                    <span>标题</span>
+                    <input name="title" type="text" required />
+                  </label>
+                  <label>
+                    <span>地点</span>
+                    <input name="location" type="text" required />
+                  </label>
+                  <label>
+                    <span>状态</span>
+                    <select name="status">
+                      <option value="scheduled">待拍</option>
+                      <option value="done">已拍</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>风险</span>
+                    <select name="risk">
+                      <option value="ok">正常</option>
+                      <option value="note">关注</option>
+                      <option value="warning">风险</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="form-actions">
+                  <button class="icon-button primary" type="submit">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 5v14m-7-7h14" />
+                    </svg>
+                    <span>加入场次</span>
+                  </button>
+                </div>
+              </form>
+            </article>
+
+            <article class="panel form-panel custom-progress-panel">
+              <div class="panel-heading">
+                <h3>自定义进度</h3>
+                <span>完全自定义模式下使用</span>
+              </div>
+              <form class="data-form" id="customProgressForm">
+                <div class="form-grid four">
+                  <label>
+                    <span>进度名称</span>
+                    <input name="name" type="text" placeholder="剪辑 / 合同 / 搭景" required />
+                  </label>
+                  <label>
+                    <span>已完成</span>
+                    <input name="done" type="number" min="0" step="0.1" required />
+                  </label>
+                  <label>
+                    <span>目标</span>
+                    <input name="target" type="number" min="0.1" step="0.1" required />
+                  </label>
+                  <label>
+                    <span>单位</span>
+                    <input name="unit" type="text" placeholder="项 / 天 / 个 / %" value="项" />
+                  </label>
+                </div>
+                <div class="form-actions">
+                  <button class="icon-button primary" type="submit">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 5v14m-7-7h14" />
+                    </svg>
+                    <span>保存进度项</span>
+                  </button>
+                </div>
+              </form>
+              <div class="custom-progress-list" id="customProgressList"></div>
+            </article>
+
+            <article class="panel form-panel callsheet-form-panel custom-event-panel">
+              <div class="panel-heading">
+                <h3 id="callsheetFormTitle">通告单</h3>
+                <span id="callsheetFormHint">每日生产成本</span>
+              </div>
+              <form class="data-form" id="callsheetForm">
+                <div class="form-grid four">
+                  <label>
+                    <span id="callsheetDayLabel">拍摄日</span>
+                    <input name="day" type="number" min="1" step="1" required />
+                  </label>
+                  <label>
+                    <span>日期</span>
+                    <input name="date" type="date" required />
+                  </label>
+                  <label>
+                    <span id="callsheetCallTimeLabel">集合</span>
+                    <input name="callTime" type="time" required />
+                  </label>
+                  <label>
+                    <span id="callsheetWrapTimeLabel">收工</span>
+                    <input name="wrapTime" type="time" required />
+                  </label>
+                  <label>
+                    <span>标题</span>
+                    <input name="title" type="text" required />
+                  </label>
+                  <label>
+                    <span>地点</span>
+                    <input name="location" type="text" required />
+                  </label>
+                  <label>
+                    <span id="callsheetWeatherLabel">天气</span>
+                    <input name="weather" type="text" required />
+                  </label>
+                  <label>
+                    <span id="callsheetCastLabel">演员</span>
+                    <input name="cast" type="text" required />
+                  </label>
+                  <label>
+                    <span id="callsheetMealsLabel">餐食</span>
+                    <input name="meals" type="number" min="0" step="1" value="0" />
+                  </label>
+                  <label>
+                    <span id="callsheetVehiclesLabel">车辆</span>
+                    <input name="vehicles" type="number" min="0" step="1" value="0" />
+                  </label>
+                  <label>
+                    <span id="callsheetRoomsLabel">房间</span>
+                    <input name="rooms" type="number" min="0" step="1" value="0" />
+                  </label>
+                  <label>
+                    <span id="callsheetLocationFeeLabel">场地费</span>
+                    <input name="locationFee" type="number" min="0" step="100" value="0" />
+                  </label>
+                  <label>
+                    <span>杂费</span>
+                    <input name="misc" type="number" min="0" step="100" value="0" />
+                  </label>
+                  <div class="callsheet-scene-picker full-field film-only-panel">
+                    <div class="callsheet-picker-head">
+                      <span>场次</span>
+                      <strong id="callsheetSceneSummary">未选择场次</strong>
+                    </div>
+                    <div class="callsheet-scene-grid" id="callsheetScenesInput"></div>
+                  </div>
+                </div>
+                <div class="checkbox-block">
+                  <span id="callsheetDepartmentLabel">到场部门</span>
+                  <div class="checkbox-grid" id="callsheetDepartmentsInput"></div>
+                </div>
+                <div class="form-actions">
+                  <button class="icon-button primary" type="submit">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 5v14m-7-7h14" />
+                    </svg>
+                    <span id="callsheetSubmitLabel">保存通告</span>
+                  </button>
+                </div>
+              </form>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./xlsx.full.min.js?v=0.18.5"></script>
+    <script src="./app.js?v=layout-polish-2"></script>
+  </body>
+</html>

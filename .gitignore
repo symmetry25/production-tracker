@@ -1,0 +1,19 @@
+.DS_Store
+
+# Local release packages and generated artifacts
+release/
+output/
+tmp/
+docx_work/
+docx_render_moon/
+generate_linxia_image2.sh
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+
+# Dependency folders, if the project later grows into a build app
+node_modules/
+dist/
+build/
