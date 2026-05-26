@@ -788,6 +788,12 @@ const chartMinWidths = {
   fundFlowLargeChart: { desktop: 1180, compact: 260 },
 };
 
+const chartViewState = new Map();
+const chartZoomStep = 0.15;
+const chartMinZoom = 0.7;
+const chartMaxZoom = 1.85;
+const zoomableChartIds = new Set(["analysisVisualChart", "fundFlowChart", "fundFlowLargeChart", "visualExplorerChart"]);
+
 let visualState = {
   dataset: "daily",
   chart: "line",
@@ -2063,15 +2069,132 @@ function equipmentByDepartmentRows() {
     .sort((a, b) => b.total - a.total);
 }
 
+function getChartViewState(id) {
+  if (!chartViewState.has(id)) {
+    chartViewState.set(id, { zoom: 1, fullscreen: false });
+  }
+  return chartViewState.get(id);
+}
+
+function clampChartZoom(value) {
+  return Math.max(chartMinZoom, Math.min(chartMaxZoom, Math.round(value * 100) / 100));
+}
+
+function redrawChartById(id) {
+  const draw = canvasRegistry.get(id);
+  if (draw) draw();
+}
+
+function updateChartToolbar(id) {
+  const state = getChartViewState(id);
+  document.querySelectorAll(`[data-chart-zoom-label="${id}"]`).forEach((label) => {
+    label.textContent = `${Math.round(state.zoom * 100)}%`;
+  });
+  document.querySelectorAll(`[data-chart-fullscreen="${id}"]`).forEach((button) => {
+    button.setAttribute("aria-pressed", String(state.fullscreen));
+    button.title = state.fullscreen ? "退出全屏" : "全屏查看";
+    const label = button.querySelector("span");
+    if (label) label.textContent = state.fullscreen ? "退出" : "全屏";
+  });
+}
+
+function applyChartFrameState(id) {
+  const state = getChartViewState(id);
+  document.querySelectorAll(`[data-chart-frame="${id}"]`).forEach((frame) => {
+    frame.classList.toggle("chart-fullscreen-frame", state.fullscreen);
+    frame.dataset.chartZoom = String(Math.round(state.zoom * 100));
+  });
+  document.body.classList.toggle("chart-fullscreen-active", Array.from(chartViewState.values()).some((item) => item.fullscreen));
+  updateChartToolbar(id);
+}
+
+function setChartFullscreen(id, fullscreen) {
+  const state = getChartViewState(id);
+  if (fullscreen) {
+    chartViewState.forEach((item, chartId) => {
+      if (chartId !== id && item.fullscreen) {
+        item.fullscreen = false;
+        applyChartFrameState(chartId);
+        redrawChartById(chartId);
+      }
+    });
+  }
+  state.fullscreen = fullscreen;
+  applyChartFrameState(id);
+  hideChartTooltip(document.querySelector(`#${id}`));
+  requestAnimationFrame(() => redrawChartById(id));
+}
+
+function setChartZoom(id, nextZoom) {
+  const state = getChartViewState(id);
+  state.zoom = clampChartZoom(nextZoom);
+  applyChartFrameState(id);
+  hideChartTooltip(document.querySelector(`#${id}`));
+  requestAnimationFrame(() => redrawChartById(id));
+}
+
+function chartControlButton({ action, id, label, title, svg }) {
+  const attr = action === "zoom-out" ? "data-chart-zoom-out" : action === "zoom-in" ? "data-chart-zoom-in" : action === "reset" ? "data-chart-zoom-reset" : "data-chart-fullscreen";
+  const pressed = action === "fullscreen" ? ' aria-pressed="false"' : "";
+  return `
+    <button class="chart-tool-button" type="button" ${attr}="${id}" aria-label="${title}" title="${title}"${pressed}>
+      ${svg}
+      <span>${label}</span>
+    </button>
+  `;
+}
+
+function chartToolbarMarkup(id) {
+  return `
+    <div class="chart-view-toolbar" role="toolbar" aria-label="图表视图控制">
+      ${chartControlButton({
+        action: "zoom-out",
+        id,
+        label: "缩小",
+        title: "缩小图表",
+        svg: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12h14" /></svg>',
+      })}
+      <span class="chart-zoom-readout" data-chart-zoom-label="${id}">100%</span>
+      ${chartControlButton({
+        action: "reset",
+        id,
+        label: "重置",
+        title: "重置为 100%",
+        svg: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4v6h6" /><path d="M20 20v-6h-6" /><path d="M20 9A8 8 0 0 0 6.3 5.7L4 8" /><path d="M4 15a8 8 0 0 0 13.7 3.3L20 16" /></svg>',
+      })}
+      ${chartControlButton({
+        action: "zoom-in",
+        id,
+        label: "放大",
+        title: "放大图表",
+        svg: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14" /><path d="M5 12h14" /></svg>',
+      })}
+      ${chartControlButton({
+        action: "fullscreen",
+        id,
+        label: "全屏",
+        title: "全屏查看",
+        svg: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3H3v5" /><path d="M16 3h5v5" /><path d="M21 16v5h-5" /><path d="M3 16v5h5" /></svg>',
+      })}
+    </div>
+  `;
+}
+
 function resizeCanvas(canvas) {
   const parent = canvas.parentElement;
   const rect = parent.getBoundingClientRect();
   const isCompactViewport = window.innerWidth <= 720;
+  const viewState = getChartViewState(canvas.id);
   const minWidthSetting = chartMinWidths[canvas.id] || 260;
   const minWidth = typeof minWidthSetting === "object" ? (isCompactViewport ? minWidthSetting.compact : minWidthSetting.desktop) : minWidthSetting;
-  const targetWidth = Math.max(minWidth, Math.floor(rect.width - 36));
+  const framePadding = parent.classList.contains("chart-fullscreen-frame") ? 34 : 36;
+  const zoom = viewState.zoom || 1;
+  const baseWidth = Math.max(minWidth, Math.floor(rect.width - framePadding));
+  const targetWidth = Math.max(minWidth, Math.floor(baseWidth * zoom));
   const ratio = window.devicePixelRatio || 1;
-  const cssHeight = isCompactViewport && chartMobileHeights[canvas.id] ? chartMobileHeights[canvas.id] : chartHeights[canvas.id] || 260;
+  const baseHeight = isCompactViewport && chartMobileHeights[canvas.id] ? chartMobileHeights[canvas.id] : chartHeights[canvas.id] || 260;
+  const fullscreenHeight = viewState.fullscreen ? Math.max(baseHeight, window.innerHeight - 188) : baseHeight;
+  const cssHeight = Math.round(fullscreenHeight * zoom);
   canvas.style.width = `${targetWidth}px`;
   canvas.style.height = `${cssHeight}px`;
   canvas.width = Math.round(targetWidth * ratio);
@@ -2082,8 +2205,10 @@ function resizeCanvas(canvas) {
 }
 
 function registerChart(id, draw) {
+  getChartViewState(id);
   canvasRegistry.set(id, draw);
   draw();
+  updateChartToolbar(id);
 }
 
 function resetChartHits(canvas) {
@@ -2219,6 +2344,42 @@ function setupChartTooltips() {
   });
 }
 
+function setupChartViewControls() {
+  document.querySelectorAll("[data-chart-frame]").forEach((frame) => {
+    const id = frame.dataset.chartFrame;
+    if (!id || !zoomableChartIds.has(id)) return;
+    getChartViewState(id);
+    if (!frame.querySelector(".chart-view-toolbar")) {
+      frame.insertAdjacentHTML("afterbegin", chartToolbarMarkup(id));
+    }
+    applyChartFrameState(id);
+  });
+
+  document.addEventListener("click", (event) => {
+    const zoomOut = event.target.closest("[data-chart-zoom-out]");
+    const zoomIn = event.target.closest("[data-chart-zoom-in]");
+    const zoomReset = event.target.closest("[data-chart-zoom-reset]");
+    const fullscreen = event.target.closest("[data-chart-fullscreen]");
+    const button = zoomOut || zoomIn || zoomReset || fullscreen;
+    if (!button) return;
+    const id = button.dataset.chartZoomOut || button.dataset.chartZoomIn || button.dataset.chartZoomReset || button.dataset.chartFullscreen;
+    if (!id || !zoomableChartIds.has(id)) return;
+    const state = getChartViewState(id);
+    if (zoomOut) setChartZoom(id, state.zoom - chartZoomStep);
+    if (zoomIn) setChartZoom(id, state.zoom + chartZoomStep);
+    if (zoomReset) setChartZoom(id, 1);
+    if (fullscreen) setChartFullscreen(id, !state.fullscreen);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    chartViewState.forEach((state, id) => {
+      if (!state.fullscreen) return;
+      setChartFullscreen(id, false);
+    });
+  });
+}
+
 function clearChart(ctx, width, height) {
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = semanticColor("surface");
@@ -2252,6 +2413,19 @@ function drawText(ctx, text, x, y, options = {}) {
   ctx.textAlign = options.align || "left";
   ctx.textBaseline = options.baseline || "alphabetic";
   ctx.fillText(text, x, y);
+}
+
+function fitCanvasText(ctx, text, maxWidth) {
+  const value = String(text || "");
+  if (ctx.measureText(value).width <= maxWidth) return value;
+  let low = 0;
+  let high = value.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (ctx.measureText(`${value.slice(0, mid)}...`).width <= maxWidth) low = mid;
+    else high = mid - 1;
+  }
+  return `${value.slice(0, Math.max(1, low))}...`;
 }
 
 function drawChartPanelTitle(ctx, title, subtitle, x = 18, y = 20) {
@@ -2699,15 +2873,21 @@ function drawFundNode(ctx, node, color, options = {}) {
   roundRect(ctx, node.x, node.y, node.w, node.h, options.radius || 9);
   ctx.fill();
   const canShowValue = Boolean(node.valueText) && node.h >= 36;
-  drawText(ctx, node.label, node.x + 10, canShowValue ? node.y + 20 : node.y + node.h / 2 + 4, {
+  const labelSize = options.labelSize || 12;
+  const valueSize = options.valueSize || 11;
+  ctx.font = `${options.weight || 900} ${labelSize}px Inter, PingFang SC, sans-serif`;
+  const label = fitCanvasText(ctx, node.label, node.w - 20);
+  drawText(ctx, label, node.x + 10, canShowValue ? node.y + 20 : node.y + node.h / 2 + 4, {
     color: "#fff",
-    size: options.labelSize || 12,
+    size: labelSize,
     weight: 900,
   });
   if (canShowValue) {
-    drawText(ctx, node.valueText, node.x + 10, node.y + Math.min(node.h - 8, 40), {
+    ctx.font = `800 ${valueSize}px Inter, PingFang SC, sans-serif`;
+    const valueText = fitCanvasText(ctx, node.valueText, node.w - 20);
+    drawText(ctx, valueText, node.x + 10, node.y + Math.min(node.h - 8, 40), {
       color: "#fff",
-      size: options.valueSize || 11,
+      size: valueSize,
       weight: 800,
     });
   }
@@ -3299,13 +3479,15 @@ function renderAuditModule() {
 function drawFundFlowChart() {
   const canvas = document.querySelector("#fundFlowChart");
   if (!canvas) return;
-  drawFundFlowChartOnCanvas(canvas, { compactThreshold: 560, detailLimit: 6, readablePreview: true });
+  const state = getChartViewState(canvas.id);
+  drawFundFlowChartOnCanvas(canvas, { compactThreshold: 560, detailLimit: state.fullscreen ? 16 : 8, readablePreview: true });
 }
 
 function drawFundFlowLargeChart() {
   const canvas = document.querySelector("#fundFlowLargeChart");
   if (!canvas) return;
-  drawFundFlowChartOnCanvas(canvas, { compactThreshold: 760, detailLimit: 22, large: true });
+  const state = getChartViewState(canvas.id);
+  drawFundFlowChartOnCanvas(canvas, { compactThreshold: 760, detailLimit: state.fullscreen ? 42 : 28, large: true });
 }
 
 function drawFundFlowChartOnCanvas(canvas, options = {}) {
@@ -3315,6 +3497,8 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
 
   const data = fundFlowData();
   const large = Boolean(options.large);
+  const viewState = getChartViewState(canvas.id);
+  const fullscreen = Boolean(viewState.fullscreen);
   const readablePreview = Boolean(options.readablePreview);
   const detailLimit = options.detailLimit || (large ? 18 : readablePreview ? 6 : 12);
   const insight = document.querySelector(large ? "#fundFlowLargeInsight" : "#fundFlowInsight");
@@ -3370,18 +3554,19 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
   }
 
   const compact = width < 760;
-  const left = large ? 42 : compact ? 22 : 36;
-  const sourceW = large ? 152 : compact ? 104 : 132;
-  const midX = large ? Math.max(248, width * 0.21) : compact ? Math.max(156, width * 0.25) : Math.max(198, width * 0.24);
-  const midW = large ? 184 : compact ? 116 : 168;
-  const usageX = large ? Math.max(midX + midW + 104, width * 0.48) : compact ? Math.max(midX + midW + 36, width * 0.5) : Math.max(midX + midW + 78, width * 0.5);
-  const usageW = large ? 154 : compact ? 104 : 138;
-  const detailX = large ? width - 320 : compact ? Math.max(usageX + usageW + 34, width - 148) : width - 250;
-  const detailW = large ? 250 : compact ? 132 : 198;
-  const top = large ? 56 : 44;
-  const bottom = height - (large ? 64 : 56);
+  const roomy = large || fullscreen || width > 1180;
+  const left = roomy ? 42 : compact ? 22 : 34;
+  const sourceW = roomy ? 150 : compact ? 104 : 128;
+  const midX = roomy ? Math.max(left + sourceW + 92, width * 0.2) : compact ? Math.max(156, width * 0.25) : Math.max(196, width * 0.24);
+  const midW = roomy ? Math.min(200, Math.max(172, width * 0.13)) : compact ? 116 : 164;
+  const usageX = roomy ? Math.max(midX + midW + 118, width * 0.46) : compact ? Math.max(midX + midW + 36, width * 0.5) : Math.max(midX + midW + 74, width * 0.5);
+  const usageW = roomy ? 154 : compact ? 104 : 136;
+  const detailX = roomy ? Math.max(usageX + usageW + 112, width - 340) : compact ? Math.max(usageX + usageW + 34, width - 148) : width - 248;
+  const detailW = roomy ? Math.min(280, width - detailX - 48) : compact ? 132 : 196;
+  const top = roomy ? 62 : 44;
+  const bottom = height - (roomy ? 70 : 56);
   const usableH = Math.max(120, bottom - top);
-  const gap = large ? 8 : compact ? 7 : 8;
+  const gap = roomy ? 7 : compact ? 7 : 8;
   const sourceTotal = data.sourceTotal || data.allocatedTotal || data.usageTotal;
   const unclassifiedAllocationRows = data.usageRows
     .filter((row) => row.unclassified)
@@ -3414,7 +3599,7 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
         ]
       : []),
   ];
-  const visibleAllocationRows = aggregateFundRows(allocationRows, "nodeValue", large ? 14 : compact ? 8 : readablePreview ? 7 : 10, `其他${unitLabel}`);
+  const visibleAllocationRows = aggregateFundRows(allocationRows, "nodeValue", roomy ? (fullscreen ? 22 : 16) : compact ? 8 : readablePreview ? 7 : 10, `其他${unitLabel}`);
   const allocationNodes = positionedFlowNodes(
     visibleAllocationRows,
     "nodeValue",
@@ -3472,13 +3657,16 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
 
   const sinkTotal = Math.max(sinkRows.reduce((sum, row) => sum + row.value, 0), 1);
   sinkNodes.forEach((node) => {
-    drawFundNode(ctx, { ...node, label: node.row.label, valueText: compactMoney(node.row.value) }, node.color);
+    drawFundNode(ctx, { ...node, label: node.row.label, valueText: `${compactMoney(node.row.value)} · ${percentText(node.row.value / sinkTotal)}` }, node.color);
     addChartHit(canvas, rectHit(node.x, node.y, node.w, node.h, makeChartTooltip(`用途 · ${node.row.label}`, [`实际已用：${money.format(node.row.value)}`, `占已用：${percentText(node.row.value / sinkTotal)}`])));
   });
 
+  const visibleDetailKeys = new Set(detailNodes.map((node) => node.row.key));
+  const canDrawDirectDepartmentDetails = roomy && detailRows.length > 0;
   allocationNodes.forEach((node) => {
     const row = node.row;
     if (row.unallocated) return;
+    const rowDetails = rowUsageDetails(row);
     const usages = [
       { key: "labor", label: "人员", value: row.breakdown.labor },
       { key: "equipment", label: "器材", value: row.breakdown.equipment },
@@ -3494,12 +3682,24 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
       drawFlowLink(ctx, node.x + node.w, fromY, sinkNode.x, sinkNode.cy, lineW, sinkNode.color, 0.42);
       addChartHit(canvas, rectHit(node.x + node.w, Math.min(fromY, sinkNode.cy) - 10, Math.max(10, sinkNode.x - node.x - node.w), Math.abs(sinkNode.cy - fromY) + 20, makeChartTooltip(`${row.department.name} → ${usage.label}`, [`实际已用：${money.format(usage.value)}`])));
     });
+    if (!canDrawDirectDepartmentDetails) return;
+    const visibleRowDetails = rowDetails.filter((detail) => visibleDetailKeys.has(detail.key));
+    const maxDetail = Math.max(...visibleRowDetails.map((detail) => detail.value), 1);
+    visibleRowDetails.slice(0, fullscreen ? 10 : 6).forEach((detail, detailIndex) => {
+      const detailNode = detailNodes.find((item) => item.row.key === detail.key);
+      if (!detailNode) return;
+      const lineW = Math.max(1.6, (detail.value / maxDetail) * Math.min(node.h * 0.22, 8));
+      const offset = (detailIndex - (visibleRowDetails.length - 1) / 2) * Math.max(3, Math.min(7, lineW + 1));
+      const fromY = node.cy + offset;
+      drawFlowLink(ctx, node.x + node.w, fromY, detailNode.x, detailNode.cy, lineW, detailNode.color, 0.16);
+      addChartHit(canvas, rectHit(node.x + node.w, Math.min(fromY, detailNode.cy) - 8, Math.max(10, detailNode.x - node.x - node.w), Math.abs(detailNode.cy - fromY) + 16, makeChartTooltip(`${row.department.name} → ${detail.label}`, [`${detail.type || "明细"}：${money.format(detail.value)}`, detail.meta ? `备注：${detail.meta}` : ""])));
+    });
   });
 
   detailNodes.forEach((node) => {
-    const maxLabelLength = readablePreview ? 12 : compact ? 9 : 18;
+    const maxLabelLength = roomy ? 20 : readablePreview ? 12 : compact ? 9 : 18;
     const label = node.row.label.length > maxLabelLength ? `${node.row.label.slice(0, maxLabelLength)}...` : node.row.label;
-    drawFundNode(ctx, { ...node, label, valueText: readablePreview ? compactMoney(node.row.value) : `${compactMoney(node.row.value)} · ${node.row.type || "明细"}` }, node.color, { labelSize: readablePreview ? 10.5 : compact ? 10.5 : 11, valueSize: 10 });
+    drawFundNode(ctx, { ...node, label, valueText: readablePreview ? compactMoney(node.row.value) : `${compactMoney(node.row.value)} · ${percentText(node.row.value / Math.max(detailTotal, 1))}` }, node.color, { labelSize: readablePreview ? 10.5 : compact ? 10.5 : 11, valueSize: 10 });
     addChartHit(canvas, rectHit(node.x, node.y, node.w, node.h, makeChartTooltip(node.row.label, [`类型：${node.row.type || "明细"}`, `金额：${money.format(node.row.value)}`, node.row.meta ? `来源：${node.row.meta}` : "", detailTotal > 0 ? `占明细：${percentText(node.row.value / detailTotal)}` : ""])));
   });
 
@@ -3518,6 +3718,9 @@ function drawFundFlowChartOnCanvas(canvas, options = {}) {
   drawText(ctx, `${unitLabel}预算 / 已用`, midX + midW / 2, 22, { size: 12, weight: 900, color: semanticColor("muted"), align: "center" });
   drawText(ctx, "用途", usageX + usageW / 2, 22, { size: 12, weight: 900, color: semanticColor("muted"), align: "center" });
   drawText(ctx, "公司 / 明细", detailX + detailW / 2, 22, { size: 12, weight: 900, color: semanticColor("muted"), align: "center" });
+  if (roomy) {
+    drawText(ctx, `显示 ${visibleAllocationRows.length} 个${unitLabel} · ${detailRows.length} 个去向 · 可用缩放和全屏查看`, width / 2, height - 26, { size: 11, weight: 800, color: semanticColor("muted"), align: "center" });
+  }
   if (large) {
     renderFundFlowDetailTable();
   }
@@ -7748,6 +7951,7 @@ function init() {
   setupAuditFilters();
   setupInputPreferences();
   setupInputForms();
+  setupChartViewControls();
   renderCharts();
   setupChartTooltips();
   refreshAll();

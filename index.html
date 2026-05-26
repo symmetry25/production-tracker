@@ -316,7 +316,9 @@
                 </div>
               </div>
               <div class="chart-type-library" id="analysisVisualChartLibrary" aria-label="分析图表类型库"></div>
-              <canvas id="analysisVisualChart" width="900" height="360" aria-label="分析可视化图表"></canvas>
+              <div class="chart-canvas-frame" data-chart-frame="analysisVisualChart">
+                <canvas id="analysisVisualChart" width="900" height="360" aria-label="分析可视化图表"></canvas>
+              </div>
               <div class="visual-summary" id="analysisVisualSummary"></div>
             </article>
 
@@ -603,7 +605,7 @@
                 <span id="fundFlowInsight">总预算 → 部门 → 用途</span>
               </div>
               <div class="fund-flow-readable" id="fundFlowReadable" aria-live="polite"></div>
-              <div class="fund-flow-canvas-frame">
+              <div class="fund-flow-canvas-frame" data-chart-frame="fundFlowChart">
                 <canvas id="fundFlowChart" width="960" height="500" aria-label="资金流向桑基图"></canvas>
               </div>
               <div class="fund-flow-summary" id="fundFlowSummary"></div>
@@ -644,7 +646,7 @@
                 </div>
               </div>
               <div class="fund-flow-readable large" id="fundFlowLargeReadable" aria-live="polite"></div>
-              <div class="fund-flow-canvas-frame large">
+              <div class="fund-flow-canvas-frame large" data-chart-frame="fundFlowLargeChart">
                 <canvas id="fundFlowLargeChart" width="1280" height="760" aria-label="完整版资金流向桑基图"></canvas>
               </div>
               <div class="fund-flow-summary" id="fundFlowLargeSummary"></div>
@@ -822,7 +824,9 @@
                 </div>
               </div>
               <div class="chart-type-library" id="visualChartLibrary" aria-label="图表类型库"></div>
-              <canvas id="visualExplorerChart" width="900" height="360" aria-label="可切换数据图表"></canvas>
+              <div class="chart-canvas-frame" data-chart-frame="visualExplorerChart">
+                <canvas id="visualExplorerChart" width="900" height="360" aria-label="可切换数据图表"></canvas>
+              </div>
               <div class="visual-summary" id="visualSummary"></div>
             </article>
           </div>
@@ -1605,6 +1609,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=personnel-ui-1"></script>
+    <script src="./app.js?v=chart-zoom-flow-1"></script>
   </body>
 </html>

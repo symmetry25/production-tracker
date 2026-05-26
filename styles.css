@@ -64,6 +64,10 @@ body {
     Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+body.chart-fullscreen-active {
+  overflow: hidden;
+}
+
 body,
 button,
 input,
@@ -85,6 +89,13 @@ input {
 
 button {
   cursor: pointer;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid rgba(21, 122, 110, 0.34);
+  outline-offset: 2px;
 }
 
 .app-shell {
@@ -594,15 +605,145 @@ main {
   width: 100%;
   height: auto;
   min-height: 220px;
-  border: 1px solid var(--line);
+  border: 0;
   background: var(--surface);
-  border-radius: 8px;
+  border-radius: 7px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
 }
 
+.chart-canvas-frame,
 .fund-flow-canvas-frame {
+  position: relative;
+  min-width: 0;
   margin-top: 14px;
+  padding-top: 46px;
   overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.92), rgba(255, 250, 240, 0.78)),
+    var(--surface);
+  border-radius: 8px;
+}
+
+.chart-canvas-frame canvas,
+.fund-flow-canvas-frame canvas {
+  margin: 0 12px 12px;
+}
+
+.chart-canvas-frame canvas {
+  width: max-content;
+}
+
+.chart-canvas-frame.chart-fullscreen-frame,
+.fund-flow-canvas-frame.chart-fullscreen-frame {
+  position: fixed;
+  inset: 16px;
+  z-index: 90;
+  display: block;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  padding: 12px 16px 16px;
+  overflow: auto;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(245, 242, 234, 0.98)),
+    var(--surface-strong);
+  box-shadow: 0 26px 70px rgba(28, 25, 20, 0.26);
+}
+
+.chart-view-toolbar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  max-width: calc(100% - 20px);
+}
+
+.chart-tool-button,
+.chart-zoom-readout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  background: rgba(255, 253, 248, 0.94);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.chart-tool-button {
+  gap: 5px;
+  padding: 0 8px;
+}
+
+.chart-tool-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-tool-button:hover,
+.chart-tool-button[aria-pressed="true"] {
+  border-color: #173f52;
+  color: #fff;
+  background: #173f52;
+}
+
+.chart-zoom-readout {
+  min-width: 48px;
+  color: var(--muted);
+}
+
+.chart-fullscreen-frame .chart-view-toolbar {
+  position: sticky;
+  top: 0;
+  margin-bottom: 8px;
+  padding: 0;
+}
+
+.chart-fullscreen-frame canvas {
+  box-shadow:
+    0 18px 45px rgba(48, 42, 31, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+:root.dark-mode .chart-canvas-frame,
+:root.dark-mode .fund-flow-canvas-frame {
+  background:
+    linear-gradient(180deg, rgba(32, 38, 45, 0.94), rgba(24, 29, 34, 0.84)),
+    var(--surface);
+}
+
+:root.dark-mode .chart-canvas-frame.chart-fullscreen-frame,
+:root.dark-mode .fund-flow-canvas-frame.chart-fullscreen-frame {
+  background:
+    linear-gradient(180deg, rgba(24, 29, 34, 0.98), rgba(17, 20, 24, 0.98)),
+    var(--surface-strong);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.48);
+}
+
+:root.dark-mode .chart-tool-button,
+:root.dark-mode .chart-zoom-readout {
+  background: rgba(24, 29, 34, 0.94);
+}
+
+:root.dark-mode .chart-tool-button:hover,
+:root.dark-mode .chart-tool-button[aria-pressed="true"] {
+  border-color: var(--blue);
+  color: #061018;
+  background: var(--blue);
 }
 
 .fund-flow-canvas-frame canvas {
@@ -732,6 +873,7 @@ main {
 
 .fund-flow-page-layout {
   grid-template-columns: 1fr;
+  gap: 16px;
 }
 
 .fund-flow-expanded-panel,
@@ -740,12 +882,16 @@ main {
 }
 
 .fund-flow-expanded-panel canvas {
-  min-height: 620px;
+  min-height: 640px;
 }
 
 .fund-flow-detail-panel .table-wrap {
   max-height: 620px;
   overflow: auto;
+}
+
+.fund-flow-expanded-panel {
+  padding: 20px;
 }
 
 .analysis-layout .analysis-summary-panel,
@@ -1789,6 +1935,7 @@ td {
 .fund-flow-readable {
   display: grid;
   gap: 12px;
+  margin-bottom: 12px;
 }
 
 .fund-flow-kpis {
@@ -1801,7 +1948,9 @@ td {
 .fund-flow-readable-card,
 .fund-flow-readable-empty {
   border: 1px solid var(--line);
-  background: #fffaf0;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.92), rgba(255, 250, 240, 0.78)),
+    #fffaf0;
   border-radius: 8px;
 }
 
@@ -2142,11 +2291,10 @@ td {
 .visual-switcher-panel canvas,
 .analysis-visual-panel canvas {
   display: block;
-  width: 100%;
   min-height: 300px;
-  border: 1px solid var(--line);
+  border: 0;
   background: #fffdf8;
-  border-radius: 8px;
+  border-radius: 7px;
 }
 
 .visual-summary {
@@ -3322,6 +3470,16 @@ td {
   box-shadow: inset 0 0 0 2px #8dc7bd;
 }
 
+:root.dark-mode .fund-flow-kpi,
+:root.dark-mode .fund-flow-readable-card,
+:root.dark-mode .fund-flow-readable-empty,
+:root.dark-mode .fund-flow-summary > div,
+:root.dark-mode .visual-summary-card {
+  background:
+    linear-gradient(180deg, rgba(32, 38, 45, 0.92), rgba(24, 29, 34, 0.84)),
+    var(--surface);
+}
+
 :root.dark-mode .grade-badge {
   border-color: rgba(122, 167, 255, 0.34);
   color: #c8dbff;
@@ -3730,6 +3888,21 @@ td {
 
   .chart-type-tab {
     flex: 1 1 44%;
+  }
+
+  .chart-view-toolbar {
+    position: static;
+    justify-content: flex-start;
+    margin: 10px;
+  }
+
+  .chart-canvas-frame,
+  .fund-flow-canvas-frame {
+    padding-top: 0;
+  }
+
+  .chart-tool-button {
+    flex: 1 1 42%;
   }
 
   .form-actions .icon-button {
