@@ -5263,7 +5263,7 @@ function renderToday() {
   `;
 }
 
-function renderCallsheetSelect() {
+function renderCallsheetSelect(preferredDay = null) {
   const select = document.querySelector("#callsheetSelect");
   setText("#callsheetTitle", modeText("每日通告单", "执行记录"));
   setText("#callsheetSelectLabel", modeText("拍摄日", "记录"));
@@ -5272,7 +5272,7 @@ function renderCallsheetSelect() {
   select.innerHTML = callSheets
     .map((sheet) => `<option value="${sheet.day}">${modeText(`第 ${sheet.day} 天`, `#${sheet.day}`)} · ${sheet.title}</option>`)
     .join("");
-  const selected = callSheets.find((sheet) => sheet.day === project.currentDay) || callSheets[callSheets.length - 1];
+  const selected = callSheets.find((sheet) => sheet.day === preferredDay) || callSheets.find((sheet) => sheet.day === project.currentDay) || callSheets[callSheets.length - 1];
   if (selected) {
     select.value = String(selected.day);
   }
@@ -7313,6 +7313,198 @@ function updateCallsheetSceneSummary() {
   summary.textContent = selectedCodes.length > 0 ? `已选 ${selectedCodes.length} 段 · ${totalScenes} 场 · ${totalPages} 页` : "未选择场次";
 }
 
+function callsheetDraftFromForm(form) {
+  const day = Math.max(1, getFormNumber(form, "day"));
+  const selectedScenes = isCustomInputMode() ? [] : Array.from(form.querySelectorAll('input[name="scenes"]:checked')).map((input) => input.value);
+  const selectedDepartments = Array.from(form.querySelectorAll('input[name="departments"]:checked')).map((input) => input.value);
+  const extra = {
+    meals: getFormNumber(form, "meals"),
+    vehicles: getFormNumber(form, "vehicles"),
+    rooms: getFormNumber(form, "rooms"),
+    locationFee: getFormNumber(form, "locationFee"),
+    misc: getFormNumber(form, "misc"),
+  };
+  return {
+    day,
+    code: nextCallsheetCode(day),
+    date: form.elements.date.value,
+    title: form.elements.title.value.trim(),
+    location: form.elements.location.value.trim(),
+    weather: form.elements.weather.value.trim(),
+    callTime: form.elements.callTime.value,
+    wrapTime: form.elements.wrapTime.value,
+    scenes: selectedScenes,
+    cast: form.elements.cast.value.trim(),
+    departments: selectedDepartments,
+    extra,
+    productionDetails: Object.entries(productionCostPartsFromExtra({ extra }))
+      .filter(([, value]) => value > 0)
+      .map(([key, value]) => ({
+        key: `draft:${key}`,
+        label: productionDetailTypeLabel(key),
+        vendor: productionDetailTypeLabel(key),
+        type: productionDetailTypeLabel(key),
+        category: key,
+        value,
+        meta: "通告草稿",
+      })),
+  };
+}
+
+function callsheetNodeState(form) {
+  const draft = callsheetDraftFromForm(form);
+  const selectedScenes = scenes.filter((scene) => draft.scenes.includes(scene.code));
+  const sceneCountTotal = selectedScenes.reduce((sum, scene) => sum + sceneCount(scene.code), 0);
+  const scenePageTotal = selectedScenes.reduce((sum, scene) => sum + scene.pages, 0);
+  const departmentsInSheet = draft.departments.map((id) => getDept(id).name).filter(Boolean);
+  const extra = draft.extra;
+  const resourceTotal = extra.meals + extra.vehicles + extra.rooms + extra.locationFee + extra.misc;
+  const laborCost = dayLaborCost(draft);
+  const equipmentCost = dayEquipmentCost(draft);
+  const productionCost = dayProductionCost(draft);
+  const totalCost = laborCost + equipmentCost + productionCost;
+  const custom = isCustomInputMode();
+  const nodes = [
+    {
+      id: "basic",
+      title: custom ? "记录基础" : "基础信息",
+      meta: draft.day ? `${custom ? "记录" : "D"}${draft.day}` : "未编号",
+      complete: Boolean(draft.day && draft.date && draft.title && draft.location),
+      target: '[name="day"]',
+      summary: [draft.date || "未填日期", draft.title || "未填标题", draft.location || "未填地点"].join(" · "),
+      missing: [
+        !draft.date && "日期",
+        !draft.title && "标题",
+        !draft.location && "地点",
+      ].filter(Boolean),
+    },
+    {
+      id: "time",
+      title: custom ? "时间与状态" : "时间与条件",
+      meta: draft.callTime && draft.wrapTime ? `${draft.callTime}-${draft.wrapTime}` : "未排时间",
+      complete: Boolean(draft.callTime && draft.wrapTime && draft.weather),
+      target: '[name="callTime"]',
+      summary: `${draft.callTime || "--:--"} 到 ${draft.wrapTime || "--:--"} · ${draft.weather || (custom ? "未填状态" : "未填天气")}`,
+      missing: [
+        !draft.callTime && (custom ? "开始" : "集合"),
+        !draft.wrapTime && (custom ? "结束" : "收工"),
+        !draft.weather && (custom ? "状态" : "天气"),
+      ].filter(Boolean),
+    },
+    {
+      id: "scenes",
+      title: custom ? "执行内容" : "场景",
+      meta: custom ? "自定义模式" : `${draft.scenes.length} 段`,
+      complete: custom || draft.scenes.length > 0,
+      target: "#callsheetScenesInput",
+      summary: custom ? "自定义模式下用标题和备注描述执行内容" : draft.scenes.length > 0 ? `${draft.scenes.join("、")} · ${sceneCountTotal} 场 · ${scenePageTotal} 页` : "未选择场次",
+      missing: custom ? [] : ["场次"],
+    },
+    {
+      id: "departments",
+      title: custom ? "参与分类" : "到场部门",
+      meta: `${draft.departments.length} 项`,
+      complete: draft.departments.length > 0,
+      target: "#callsheetDepartmentsInput",
+      summary: departmentsInSheet.length > 0 ? departmentsInSheet.slice(0, 5).join("、") + (departmentsInSheet.length > 5 ? ` 等 ${departmentsInSheet.length} 项` : "") : "未选择部门",
+      missing: [custom ? "参与分类" : "到场部门"],
+    },
+    {
+      id: "cast",
+      title: custom ? "备注 / 对象" : "演员 / 备注",
+      meta: draft.cast ? "已填写" : "待补",
+      complete: Boolean(draft.cast),
+      target: '[name="cast"]',
+      summary: draft.cast || (custom ? "未填交付对象或备注" : "未填演员或备注"),
+      missing: [custom ? "备注" : "演员"],
+    },
+    {
+      id: "resources",
+      title: custom ? "外部资源" : "生产资源",
+      meta: resourceTotal > 0 ? "有资源" : "无资源",
+      complete: true,
+      target: '[name="meals"]',
+      summary: custom
+        ? `数量 ${extra.meals} · 资源 ${extra.vehicles} · 外部费用 ${money.format(extra.locationFee + extra.misc)}`
+        : `餐食 ${extra.meals} · 车辆 ${extra.vehicles} · 房间 ${extra.rooms} · 场地/杂费 ${money.format(extra.locationFee + extra.misc)}`,
+      missing: [],
+    },
+    {
+      id: "confirm",
+      title: "成本确认",
+      meta: totalCost > 0 ? money.format(totalCost) : "待估算",
+      complete: totalCost > 0 && draft.departments.length > 0,
+      target: "#callsheetForm button[type='submit']",
+      summary: `人工 ${money.format(laborCost)} · 器材 ${money.format(equipmentCost)} · 生产 ${money.format(productionCost)}`,
+      missing: totalCost > 0 ? [] : ["成本数据"],
+    },
+  ];
+  return { draft, nodes, totals: { laborCost, equipmentCost, productionCost, totalCost, sceneCountTotal, scenePageTotal } };
+}
+
+function renderCallsheetNodeBuilder() {
+  const form = document.querySelector("#callsheetForm");
+  const grid = document.querySelector("#callsheetNodeGrid");
+  const summary = document.querySelector("#callsheetNodeSummary");
+  const status = document.querySelector("#callsheetNodeStatus");
+  if (!form || !grid || !summary || !status) return;
+  const state = callsheetNodeState(form);
+  const completed = state.nodes.filter((node) => node.complete).length;
+  const canSave = state.nodes.filter((node) => node.id !== "confirm").every((node) => node.complete);
+  const statusTone = canSave ? "good" : completed >= 4 ? "warning" : "";
+  status.textContent = canSave ? "可保存" : `${completed}/${state.nodes.length} 完成`;
+  status.className = `status-pill ${statusTone}`.trim();
+  setText("#callsheetNodeTitle", modeText("节点式通告制作", "节点式执行记录"));
+  setText("#callsheetNodeHint", modeText("按基础信息、场景、部门、资源逐步确认", "按基础信息、参与分类、资源、成本逐步确认"));
+  grid.innerHTML = state.nodes
+    .map((node, index) => {
+      const tone = node.complete ? "done" : "warning";
+      const missingText = node.complete ? "完成" : `待补：${node.missing.join("、")}`;
+      return `
+        <button class="callsheet-node ${tone}" type="button" data-node="${escapeHtml(node.id)}" data-target="${escapeHtml(node.target)}" aria-label="${escapeHtml(`${node.title}，${missingText}`)}">
+          <span class="callsheet-node-index">${String(index + 1).padStart(2, "0")}</span>
+          <span class="callsheet-node-body">
+            <strong>${escapeHtml(node.title)}</strong>
+            <small>${escapeHtml(node.summary)}</small>
+          </span>
+          <span class="callsheet-node-meta">${escapeHtml(node.meta)}</span>
+        </button>
+      `;
+    })
+    .join("");
+  const draft = state.draft;
+  summary.innerHTML = `
+    <div>
+      <span>${escapeHtml(modeText("预计当日成本", "预计记录成本"))}</span>
+      <strong>${money.format(state.totals.totalCost)}</strong>
+    </div>
+    <div>
+      <span>${escapeHtml(modeText("涉及场次", "执行内容"))}</span>
+      <strong>${escapeHtml(isCustomInputMode() ? draft.title || "待填写" : `${draft.scenes.length} 段 / ${state.totals.sceneCountTotal} 场`)}</strong>
+    </div>
+    <div>
+      <span>${escapeHtml(modeText("到场部门", "参与分类"))}</span>
+      <strong>${draft.departments.length}</strong>
+    </div>
+    <div>
+      <span>${escapeHtml(modeText("资源", "外部资源"))}</span>
+      <strong>${escapeHtml(isCustomInputMode() ? `${draft.extra.meals + draft.extra.vehicles + draft.extra.rooms} 项` : `${draft.extra.meals} 餐 / ${draft.extra.vehicles} 车 / ${draft.extra.rooms} 房`)}</strong>
+    </div>
+  `;
+}
+
+function focusCallsheetNode(targetSelector) {
+  const form = document.querySelector("#callsheetForm");
+  if (!form || !targetSelector) return;
+  const target = form.querySelector(targetSelector) || document.querySelector(targetSelector);
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  const focusTarget = target.matches?.("input, select, button, textarea") ? target : target.querySelector?.("input, select, button, textarea");
+  if (focusTarget) {
+    window.setTimeout(() => focusTarget.focus({ preventScroll: true }), 260);
+  }
+}
+
 function renderProjectForm() {
   const form = document.querySelector("#projectForm");
   form.elements.title.value = project.title;
@@ -7790,8 +7982,8 @@ function refreshAll(options = {}) {
   renderProjectLibraryControls();
   renderKpis();
   renderToday();
-  renderCallsheetSelect();
   const selectedDay = options.selectedDay || Number(document.querySelector("#callsheetSelect").value) || project.currentDay;
+  renderCallsheetSelect(selectedDay);
   renderCallsheet(selectedDay);
   renderDailyBars();
   renderBudgetTables();
@@ -7817,6 +8009,7 @@ function refreshAll(options = {}) {
   renderFundFlowDetailTable();
   renderFundFlowReadablePanels();
   renderModeSpecificUi();
+  renderCallsheetNodeBuilder();
   applyDisplaySettings();
   canvasRegistry.forEach((draw) => draw());
 }
@@ -7846,6 +8039,7 @@ function setupInputForms() {
   renderActorBudget();
   renderPersonInputFeedback();
   applyAiPreset("openai");
+  renderCallsheetNodeBuilder();
   const resetLabel = document.querySelector("#resetData span");
   if (resetLabel) resetLabel.textContent = blankMode ? "清空数据" : "重置样例";
 
@@ -8116,6 +8310,15 @@ function setupInputForms() {
       option.classList.toggle("selected", event.target.checked);
     }
     updateCallsheetSceneSummary();
+    renderCallsheetNodeBuilder();
+  });
+
+  document.querySelector("#callsheetForm").addEventListener("input", renderCallsheetNodeBuilder);
+  document.querySelector("#callsheetForm").addEventListener("change", renderCallsheetNodeBuilder);
+  document.querySelector("#callsheetNodeGrid")?.addEventListener("click", (event) => {
+    const node = event.target.closest(".callsheet-node");
+    if (!node) return;
+    focusCallsheetNode(node.dataset.target);
   });
 
   document.querySelector("#equipmentForm").addEventListener("submit", (event) => {
@@ -8247,6 +8450,7 @@ function setupInputForms() {
     form.reset();
     saveData();
     refreshAll({ selectedDay: day });
+    renderCallsheetNodeBuilder();
     setFormStatus(existingIndex >= 0 ? modeText("通告单已更新", "执行记录已更新") : modeText("通告单已加入", "执行记录已加入"), "good");
   });
 

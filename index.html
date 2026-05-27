@@ -13,7 +13,7 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=desktop-ui-4" />
+    <link rel="stylesheet" href="./styles.css?v=callsheet-nodes-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -1536,6 +1536,17 @@
                 <h3 id="callsheetFormTitle">通告单</h3>
                 <span id="callsheetFormHint">每日生产成本</span>
               </div>
+              <div class="callsheet-node-board" id="callsheetNodeBoard" aria-live="polite">
+                <div class="callsheet-node-head">
+                  <div>
+                    <strong id="callsheetNodeTitle">节点式通告制作</strong>
+                    <span id="callsheetNodeHint">按基础信息、场景、部门、资源逐步确认</span>
+                  </div>
+                  <span class="status-pill" id="callsheetNodeStatus">待填写</span>
+                </div>
+                <div class="callsheet-node-grid" id="callsheetNodeGrid"></div>
+                <div class="callsheet-node-summary" id="callsheetNodeSummary"></div>
+              </div>
               <form class="data-form" id="callsheetForm">
                 <div class="form-grid four">
                   <label>
@@ -1618,6 +1629,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=infinite-canvas-ref-1"></script>
+    <script src="./app.js?v=callsheet-nodes-1"></script>
   </body>
 </html>

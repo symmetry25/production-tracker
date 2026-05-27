@@ -2768,6 +2768,184 @@ tbody tr:hover td {
   margin-top: 12px;
 }
 
+.callsheet-node-board {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  border-radius: 8px;
+}
+
+.callsheet-node-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.callsheet-node-head strong,
+.callsheet-node-head span {
+  display: block;
+}
+
+.callsheet-node-head strong {
+  font-size: 15px;
+}
+
+.callsheet-node-head span:not(.status-pill) {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.callsheet-node-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.callsheet-node {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 8px 9px;
+  min-height: 124px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--surface);
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.callsheet-node:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+.callsheet-node:focus-visible {
+  outline: 2px solid rgba(21, 122, 110, 0.28);
+  outline-offset: 2px;
+}
+
+.callsheet-node.done {
+  border-color: rgba(21, 122, 110, 0.38);
+  background: rgba(11, 117, 104, 0.06);
+}
+
+.callsheet-node.warning {
+  border-color: rgba(201, 138, 28, 0.42);
+  background: rgba(201, 138, 28, 0.06);
+}
+
+.callsheet-node-index {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--surface-raised);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.callsheet-node.done .callsheet-node-index {
+  border-color: rgba(21, 122, 110, 0.42);
+  color: var(--teal);
+  background: rgba(21, 122, 110, 0.1);
+}
+
+.callsheet-node.warning .callsheet-node-index {
+  border-color: rgba(201, 138, 28, 0.44);
+  color: var(--amber);
+  background: rgba(201, 138, 28, 0.1);
+}
+
+.callsheet-node-body {
+  min-width: 0;
+}
+
+.callsheet-node-body strong,
+.callsheet-node-body small {
+  display: block;
+}
+
+.callsheet-node-body strong {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.callsheet-node-body small {
+  display: -webkit-box;
+  min-height: 48px;
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.callsheet-node-meta {
+  grid-column: 1 / -1;
+  align-self: end;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.callsheet-node-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.callsheet-node-summary > div {
+  min-height: 58px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.callsheet-node-summary span,
+.callsheet-node-summary strong {
+  display: block;
+}
+
+.callsheet-node-summary span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.callsheet-node-summary strong {
+  min-width: 0;
+  margin-top: 5px;
+  overflow: hidden;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .custom-progress-item {
   display: grid;
   grid-template-columns: minmax(170px, 1fr) minmax(150px, 1.2fr) auto;
@@ -3702,6 +3880,9 @@ tbody tr:hover td {
 .visual-summary-card,
 .chart-type-library,
 .chart-library-card,
+.callsheet-node-board,
+.callsheet-node,
+.callsheet-node-summary > div,
 .callsheet-scene-option,
 .person-feedback,
 .person-feedback-grid > div,
@@ -3761,6 +3942,9 @@ tbody tr:hover td {
 :root.dark-mode .audit-brief-block,
 :root.dark-mode .vfx-audit-metric,
 :root.dark-mode .vfx-audit-row,
+:root.dark-mode .callsheet-node-board,
+:root.dark-mode .callsheet-node,
+:root.dark-mode .callsheet-node-summary > div,
 :root.dark-mode .callsheet-scene-option,
 :root.dark-mode .person-feedback,
 :root.dark-mode .person-feedback-grid > div,
@@ -3791,6 +3975,14 @@ tbody tr:hover td {
 
 :root.dark-mode .callsheet-scene-option.selected {
   background: rgba(53, 194, 173, 0.14);
+}
+
+:root.dark-mode .callsheet-node.done {
+  background: rgba(53, 194, 173, 0.12);
+}
+
+:root.dark-mode .callsheet-node.warning {
+  background: rgba(220, 169, 83, 0.12);
 }
 
 :root.dark-mode .personnel-person-row.recent {
@@ -4064,6 +4256,10 @@ tbody tr:hover td {
   .report-kpi-row {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .callsheet-node-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -4193,6 +4389,7 @@ tbody tr:hover td {
   .person-feedback-head,
   .actor-budget-head,
   .budget-allocation-head,
+  .callsheet-node-head,
   .callsheet-picker-head,
   .import-preview-head {
     align-items: stretch;
@@ -4326,6 +4523,8 @@ tbody tr:hover td {
   .preference-grid,
   .checkbox-grid,
 	  .callsheet-scene-grid,
+  .callsheet-node-grid,
+  .callsheet-node-summary,
 	  .person-feedback-grid,
 	  .actor-budget-summary,
 	  .visual-summary,
