@@ -603,7 +603,6 @@ main {
 .chart-panel canvas {
   display: block;
   width: 100%;
-  height: auto;
   min-height: 220px;
   border: 0;
   background: var(--surface);
@@ -616,7 +615,7 @@ main {
   position: relative;
   min-width: 0;
   margin-top: 14px;
-  padding-top: 46px;
+  padding: 12px 12px 48px;
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid var(--line);
@@ -637,7 +636,7 @@ main {
 
 .chart-canvas-frame canvas,
 .fund-flow-canvas-frame canvas {
-  margin: 0 12px 12px;
+  margin: 0;
   transform-origin: center center;
   will-change: transform;
 }
@@ -654,7 +653,7 @@ main {
   display: block;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 32px);
-  padding: 12px 16px 16px;
+  padding: 16px 16px 64px;
   overflow: auto;
   background:
     linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(245, 242, 234, 0.98)),
@@ -671,16 +670,23 @@ main {
 }
 
 .chart-view-toolbar {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 2;
+  position: sticky;
+  left: 12px;
+  bottom: 12px;
+  z-index: 4;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  gap: 4px;
   align-items: center;
-  justify-content: flex-end;
-  max-width: calc(100% - 20px);
+  justify-content: flex-start;
+  margin-top: 10px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 253, 248, 0.92);
+  border-radius: 11px;
+  box-shadow: 0 14px 30px rgba(48, 42, 31, 0.12);
+  backdrop-filter: blur(10px);
 }
 
 .chart-tool-button,
@@ -688,10 +694,12 @@ main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 30px;
+  height: 30px;
   min-height: 30px;
-  border: 1px solid var(--line-strong);
+  border: 0;
   color: var(--ink);
-  background: rgba(255, 253, 248, 0.94);
+  background: transparent;
   border-radius: 8px;
   font-size: 12px;
   font-weight: 900;
@@ -700,6 +708,11 @@ main {
 
 .chart-tool-button {
   gap: 5px;
+  padding: 0;
+}
+
+.chart-tool-button[data-chart-fullscreen] {
+  width: auto;
   padding: 0 8px;
 }
 
@@ -715,21 +728,21 @@ main {
 
 .chart-tool-button:hover,
 .chart-tool-button[aria-pressed="true"] {
-  border-color: #173f52;
   color: #fff;
   background: #173f52;
 }
 
 .chart-zoom-readout {
   min-width: 48px;
+  width: 52px;
   color: var(--muted);
 }
 
 .chart-fullscreen-frame .chart-view-toolbar {
-  position: sticky;
-  top: 0;
-  margin-bottom: 8px;
-  padding: 0;
+  position: fixed;
+  left: 32px;
+  bottom: 32px;
+  margin: 0;
 }
 
 .chart-fullscreen-frame canvas {
@@ -740,11 +753,12 @@ main {
 
 .chart-pan-hint {
   position: sticky;
-  left: 16px;
+  left: 190px;
   bottom: 12px;
-  z-index: 2;
+  z-index: 3;
   width: max-content;
   max-width: calc(100% - 32px);
+  margin-top: -40px;
   padding: 7px 10px;
   border: 1px solid var(--line);
   color: var(--muted);
@@ -780,7 +794,11 @@ main {
 
 :root.dark-mode .chart-tool-button,
 :root.dark-mode .chart-zoom-readout {
-  background: rgba(24, 29, 34, 0.94);
+  background: transparent;
+}
+
+:root.dark-mode .chart-view-toolbar {
+  background: rgba(24, 29, 34, 0.88);
 }
 
 :root.dark-mode .chart-pan-hint {
@@ -796,10 +814,12 @@ main {
 
 .fund-flow-canvas-frame canvas {
   min-width: 860px;
+  min-height: 0;
 }
 
 .fund-flow-canvas-frame.large canvas {
   min-width: 1180px;
+  min-height: 0;
 }
 
 .chart-tooltip {
@@ -930,7 +950,7 @@ main {
 }
 
 .fund-flow-expanded-panel canvas {
-  min-height: 640px;
+  min-height: 0;
 }
 
 .fund-flow-detail-panel .table-wrap {

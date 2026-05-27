@@ -853,7 +853,7 @@ const chartMinWidths = {
 
 const chartViewState = new Map();
 const chartZoomStep = 0.15;
-const chartMinZoom = 0.7;
+const chartMinZoom = 0.4;
 const chartMaxZoom = 1.85;
 const zoomableChartIds = new Set(["analysisVisualChart", "fundFlowChart", "fundFlowLargeChart", "visualExplorerChart"]);
 const canvasPanState = new Map();
@@ -2200,24 +2200,56 @@ function setChartFullscreen(id, fullscreen) {
   });
 }
 
-function setChartZoom(id, nextZoom) {
+function setChartZoom(id, nextZoom, options = {}) {
   const state = getChartViewState(id);
+  const previousZoom = state.zoom || 1;
+  const frame = document.querySelector(`[data-chart-frame="${id}"]`);
   state.zoom = clampChartZoom(nextZoom);
+  if (options.anchorEvent && frame) {
+    const pan = getCanvasPan(id);
+    const rect = frame.getBoundingClientRect();
+    const anchorX = options.anchorEvent.clientX - rect.left - pan.x;
+    const anchorY = options.anchorEvent.clientY - rect.top - pan.y;
+    const scale = previousZoom > 0 ? state.zoom / previousZoom : 1;
+    pan.x += anchorX - anchorX * scale;
+    pan.y += anchorY - anchorY * scale;
+  }
   applyChartFrameState(id);
+  applyCanvasPan(id);
   hideChartTooltip(document.querySelector(`#${id}`));
   requestAnimationFrame(() => {
     redrawChartById(id);
   });
 }
 
-function centerChartFrame(id) {
+function centerChartFrame(id, options = {}) {
   const frame = document.querySelector(`[data-chart-frame="${id}"]`);
   const canvas = document.querySelector(`#${id}`);
-  if (!frame || !canvas || frame.dataset.centered === "true") return;
+  if (!frame || !canvas || (!options.force && frame.dataset.centered === "true")) return;
   requestAnimationFrame(() => {
     frame.scrollLeft = Math.max(0, (canvas.offsetWidth - frame.clientWidth) / 2);
     frame.scrollTop = Math.max(0, (canvas.offsetHeight - frame.clientHeight) / 2);
     frame.dataset.centered = "true";
+  });
+}
+
+function fitChartToFrame(id) {
+  const frame = document.querySelector(`[data-chart-frame="${id}"]`);
+  const canvas = document.querySelector(`#${id}`);
+  if (!frame || !canvas) return;
+  const state = getChartViewState(id);
+  resetCanvasPan(id);
+  requestAnimationFrame(() => {
+    const currentZoom = state.zoom || 1;
+    const widthWithoutZoom = canvas.offsetWidth / currentZoom;
+    const heightWithoutZoom = canvas.offsetHeight / currentZoom;
+    const availableW = Math.max(260, frame.clientWidth - 44);
+    const availableH = Math.max(220, frame.clientHeight - (state.fullscreen ? 86 : 74));
+    const fitZoom = Math.min(chartMaxZoom, Math.max(chartMinZoom, Math.min(availableW / widthWithoutZoom, availableH / heightWithoutZoom)));
+    state.zoom = clampChartZoom(fitZoom);
+    applyChartFrameState(id);
+    redrawChartById(id);
+    requestAnimationFrame(() => centerChartFrame(id, { force: true }));
   });
 }
 
@@ -2242,13 +2274,23 @@ function resetCanvasPan(id) {
   applyCanvasPan(id);
 }
 
-function chartControlButton({ action, id, label, title, svg }) {
-  const attr = action === "zoom-out" ? "data-chart-zoom-out" : action === "zoom-in" ? "data-chart-zoom-in" : action === "reset" ? "data-chart-zoom-reset" : "data-chart-fullscreen";
+function chartControlButton({ action, id, label = "", title, svg }) {
+  const attr =
+    action === "zoom-out"
+      ? "data-chart-zoom-out"
+      : action === "zoom-in"
+        ? "data-chart-zoom-in"
+        : action === "reset"
+          ? "data-chart-zoom-reset"
+          : action === "fit"
+            ? "data-chart-fit"
+            : "data-chart-fullscreen";
   const pressed = action === "fullscreen" ? ' aria-pressed="false"' : "";
+  const text = label ? `<span>${label}</span>` : "";
   return `
     <button class="chart-tool-button" type="button" ${attr}="${id}" aria-label="${title}" title="${title}"${pressed}>
       ${svg}
-      <span>${label}</span>
+      ${text}
     </button>
   `;
 }
@@ -2259,24 +2301,27 @@ function chartToolbarMarkup(id) {
       ${chartControlButton({
         action: "zoom-out",
         id,
-        label: "缩小",
         title: "缩小图表",
         svg: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12h14" /></svg>',
       })}
       <span class="chart-zoom-readout" data-chart-zoom-label="${id}">100%</span>
       ${chartControlButton({
-        action: "reset",
-        id,
-        label: "重置",
-        title: "重置为 100%",
-        svg: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4v6h6" /><path d="M20 20v-6h-6" /><path d="M20 9A8 8 0 0 0 6.3 5.7L4 8" /><path d="M4 15a8 8 0 0 0 13.7 3.3L20 16" /></svg>',
-      })}
-      ${chartControlButton({
         action: "zoom-in",
         id,
-        label: "放大",
         title: "放大图表",
         svg: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14" /><path d="M5 12h14" /></svg>',
+      })}
+      ${chartControlButton({
+        action: "fit",
+        id,
+        title: "适配视图",
+        svg: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M16 3h3a2 2 0 0 1 2 2v3" /><path d="M21 16v3a2 2 0 0 1-2 2h-3" /><path d="M8 21H5a2 2 0 0 1-2-2v-3" /><path d="M8 12h8" /></svg>',
+      })}
+      ${chartControlButton({
+        action: "reset",
+        id,
+        title: "重置为 100%",
+        svg: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4v6h6" /><path d="M20 20v-6h-6" /><path d="M20 9A8 8 0 0 0 6.3 5.7L4 8" /><path d="M4 15a8 8 0 0 0 13.7 3.3L20 16" /></svg>',
       })}
       ${chartControlButton({
         action: "fullscreen",
@@ -2477,14 +2522,16 @@ function setupChartViewControls() {
     const zoomOut = event.target.closest("[data-chart-zoom-out]");
     const zoomIn = event.target.closest("[data-chart-zoom-in]");
     const zoomReset = event.target.closest("[data-chart-zoom-reset]");
+    const zoomFit = event.target.closest("[data-chart-fit]");
     const fullscreen = event.target.closest("[data-chart-fullscreen]");
-    const button = zoomOut || zoomIn || zoomReset || fullscreen;
+    const button = zoomOut || zoomIn || zoomReset || zoomFit || fullscreen;
     if (!button) return;
-    const id = button.dataset.chartZoomOut || button.dataset.chartZoomIn || button.dataset.chartZoomReset || button.dataset.chartFullscreen;
+    const id = button.dataset.chartZoomOut || button.dataset.chartZoomIn || button.dataset.chartZoomReset || button.dataset.chartFit || button.dataset.chartFullscreen;
     if (!id || !zoomableChartIds.has(id)) return;
     const state = getChartViewState(id);
     if (zoomOut) setChartZoom(id, state.zoom - chartZoomStep);
     if (zoomIn) setChartZoom(id, state.zoom + chartZoomStep);
+    if (zoomFit) fitChartToFrame(id);
     if (zoomReset) {
       resetCanvasPan(id);
       setChartZoom(id, 1);
@@ -2542,7 +2589,7 @@ function setupChartViewControls() {
         event.preventDefault();
         const state = getChartViewState(id);
         const zoomDelta = event.deltaY < 0 ? chartZoomStep : -chartZoomStep;
-        setChartZoom(id, state.zoom + zoomDelta);
+        setChartZoom(id, state.zoom + zoomDelta, { anchorEvent: event });
       },
       { passive: false },
     );
