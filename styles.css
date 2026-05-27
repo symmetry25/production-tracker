@@ -1,47 +1,47 @@
 :root {
-  --bg: #eef1ee;
-  --surface: #fbfaf5;
+  --bg: #f3f4f1;
+  --surface: #f8f8f5;
   --surface-strong: #ffffff;
-  --surface-raised: #f6f4ed;
-  --ink: #151c1b;
-  --muted: #66706c;
-  --line: #d8ddd6;
-  --line-strong: #b7c0b8;
-  --teal: #0b7568;
-  --blue: #235f8f;
-  --red: #b84835;
-  --amber: #b77a1d;
-  --green: #3f7f51;
-  --violet: #6f5b91;
-  --nav: #101817;
-  --nav-soft: #182321;
-  --control: #f7f8f4;
-  --track: #dfe5dc;
-  --shadow: 0 18px 48px rgba(27, 38, 34, 0.1);
-  --shadow-soft: 0 1px 0 rgba(255, 255, 255, 0.8), 0 14px 32px rgba(27, 38, 34, 0.08);
+  --surface-raised: #f1f2ee;
+  --ink: #1e2523;
+  --muted: #69716d;
+  --line: #d9ddd8;
+  --line-strong: #b9c0ba;
+  --teal: #167064;
+  --blue: #2e5f86;
+  --red: #a94838;
+  --amber: #9f6c22;
+  --green: #4f7652;
+  --violet: #645681;
+  --nav: #111615;
+  --nav-soft: #1b211f;
+  --control: #ffffff;
+  --track: #e2e6e0;
+  --shadow: 0 1px 3px rgba(24, 32, 29, 0.09);
+  --shadow-soft: 0 1px 2px rgba(24, 32, 29, 0.07);
 }
 
 :root.dark-mode {
-  --bg: #0d1112;
-  --surface: #151a1b;
-  --surface-strong: #1b2223;
-  --surface-raised: #202829;
-  --ink: #f4f1e8;
-  --muted: #9aa5a0;
-  --line: #293233;
-  --line-strong: #465150;
-  --teal: #48d1bd;
-  --blue: #75a7d9;
-  --red: #ff7d6b;
-  --amber: #f5bd5f;
-  --green: #8bd58f;
-  --violet: #b9a1ee;
-  --nav: #080b0c;
-  --nav-soft: #111718;
-  --control: #202829;
-  --track: #293233;
-  --shadow: 0 20px 52px rgba(0, 0, 0, 0.38);
-  --shadow-soft: 0 1px 0 rgba(255, 255, 255, 0.04), 0 16px 36px rgba(0, 0, 0, 0.28);
+  --bg: #111413;
+  --surface: #171b1a;
+  --surface-strong: #1c211f;
+  --surface-raised: #222826;
+  --ink: #f1eee6;
+  --muted: #a1aaa5;
+  --line: #303735;
+  --line-strong: #4a5350;
+  --teal: #5dc7b6;
+  --blue: #86acd0;
+  --red: #ee877a;
+  --amber: #e0b15f;
+  --green: #9bc28f;
+  --violet: #b8a8dc;
+  --nav: #0c100f;
+  --nav-soft: #151a19;
+  --control: #222826;
+  --track: #313835;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.32);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.28);
 }
 
 :root.colorblind-mode {
@@ -73,11 +73,7 @@ html {
 body {
   margin: 0;
   color: var(--ink);
-  background:
-    radial-gradient(circle at 12% 0%, rgba(11, 117, 104, 0.1), transparent 29rem),
-    radial-gradient(circle at 92% 8%, rgba(183, 122, 29, 0.12), transparent 25rem),
-    linear-gradient(180deg, rgba(238, 241, 238, 0.96), rgba(226, 231, 226, 0.96)),
-    repeating-linear-gradient(90deg, rgba(21, 28, 27, 0.035) 0 1px, transparent 1px 88px);
+  background: var(--bg);
   font-family:
     "Avenir Next", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-variant-numeric: tabular-nums;
@@ -95,11 +91,7 @@ select {
 }
 
 :root.dark-mode body {
-  background:
-    radial-gradient(circle at 8% 0%, rgba(72, 209, 189, 0.12), transparent 28rem),
-    radial-gradient(circle at 92% 12%, rgba(245, 189, 95, 0.1), transparent 24rem),
-    linear-gradient(180deg, rgba(13, 17, 18, 0.98), rgba(8, 11, 12, 0.98)),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 88px);
+  background: var(--bg);
 }
 
 button,
@@ -152,20 +144,16 @@ main {
   width: 240px;
   min-height: calc(100vh - 36px);
   margin: 0;
-  padding: 18px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(180deg, rgba(16, 24, 23, 0.98), rgba(9, 14, 14, 0.98)),
-    var(--nav);
-  border-radius: 14px;
-  box-shadow: 0 24px 70px rgba(9, 14, 14, 0.28);
+  padding: 16px 14px;
+  border: 1px solid #26302d;
+  background: var(--nav);
+  border-radius: 8px;
+  box-shadow: none;
 }
 
 :root.dark-mode .topbar {
-  background:
-    linear-gradient(180deg, rgba(17, 23, 24, 0.98), rgba(7, 10, 11, 0.98)),
-    var(--nav);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+  background: var(--nav);
+  box-shadow: none;
 }
 
 .topbar-main,
@@ -189,46 +177,41 @@ main {
   grid-template-columns: minmax(360px, 0.95fr) minmax(0, 1.05fr);
   gap: 12px;
   min-height: 0;
-  padding: 10px;
+  padding: 8px;
   border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface-strong) 92%, transparent);
-  border-radius: 14px;
+  background: var(--surface-strong);
+  border-radius: 8px;
   box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(16px);
 }
 
 .brand-lockup {
   display: grid;
-  gap: 14px;
+  gap: 10px;
   align-items: start;
   min-width: 0;
 }
 
 .brand-mark {
   display: grid;
-  grid-template-columns: repeat(3, 13px);
-  gap: 6px;
+  grid-template-columns: repeat(3, 10px);
+  gap: 5px;
   align-items: end;
-  width: 58px;
-  height: 58px;
-  padding: 11px;
+  width: 46px;
+  height: 46px;
+  padding: 9px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent),
-    #13201e;
-  border-radius: 12px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: #18201e;
+  border-radius: 6px;
+  box-shadow: none;
 }
 
 :root.dark-mode .brand-mark {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent),
-    #111718;
+  background: #131817;
 }
 
 .brand-mark span {
   display: block;
-  width: 13px;
+  width: 10px;
   border-radius: 2px 2px 0 0;
 }
 
@@ -285,21 +268,24 @@ h3 {
 
 .topbar h1 {
   color: #f8f4e8;
-  font-size: 25px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .topbar .eyebrow {
   color: rgba(248, 244, 232, 0.58);
+  font-size: 10px;
 }
 
 .project-summary {
   display: grid;
   gap: 4px;
   min-width: 0;
-  padding: 13px 14px;
+  padding: 10px 12px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.055);
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 :root.dark-mode .project-summary {
@@ -308,12 +294,13 @@ h3 {
 
 .project-summary span:first-child {
   color: #f8f4e8;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .project-summary span:last-child {
   color: rgba(248, 244, 232, 0.62);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .project-manager {
@@ -322,10 +309,10 @@ h3 {
   gap: 8px;
   align-items: end;
   min-width: 0;
-  padding: 10px;
+  padding: 8px;
   border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface-raised) 80%, transparent);
-  border-radius: 12px;
+  background: var(--surface);
+  border-radius: 8px;
 }
 
 :root.dark-mode .project-manager {
@@ -360,7 +347,7 @@ h3 {
   border: 1px solid var(--line-strong);
   color: var(--ink);
   background: var(--control);
-  border-radius: 10px;
+  border-radius: 6px;
   font: inherit;
 }
 
@@ -368,10 +355,10 @@ h3 {
   display: flex;
   gap: 8px;
   justify-content: flex-start;
-  padding: 10px;
+  padding: 8px;
   border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface-raised) 80%, transparent);
-  border-radius: 12px;
+  background: var(--surface);
+  border-radius: 8px;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
@@ -387,11 +374,11 @@ h3 {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 38px;
+  min-height: 36px;
   border: 1px solid var(--line-strong);
   color: var(--ink);
   background: var(--control);
-  border-radius: 10px;
+  border-radius: 6px;
 }
 
 .icon-button {
@@ -402,16 +389,16 @@ h3 {
 .topbar .icon-button {
   justify-content: center;
   width: auto;
-  min-height: 40px;
+  min-height: 36px;
   border-color: var(--line-strong);
   color: var(--ink);
   background: var(--control);
 }
 
 .topbar .icon-button:hover {
-  border-color: color-mix(in srgb, var(--teal) 42%, var(--line));
+  border-color: var(--teal);
   color: var(--ink);
-  background: color-mix(in srgb, var(--teal) 10%, var(--control));
+  background: var(--surface-raised);
 }
 
 .icon-button svg,
@@ -426,10 +413,10 @@ h3 {
 }
 
 .icon-button.primary {
-  border-color: rgba(72, 209, 189, 0.52);
+  border-color: var(--teal);
   color: #fff;
-  background: linear-gradient(180deg, #128477, #0b635a);
-  box-shadow: 0 10px 24px rgba(11, 117, 104, 0.22);
+  background: var(--teal);
+  box-shadow: none;
 }
 
 .icon-button.danger {
@@ -451,9 +438,9 @@ h3 {
 
 .topbar .mode-toggle[aria-pressed="true"],
 .topbar .icon-button.primary {
-  border-color: rgba(72, 209, 189, 0.64);
+  border-color: var(--teal);
   color: #ffffff;
-  background: linear-gradient(180deg, #128477, #0b635a);
+  background: var(--teal);
 }
 
 .icon-button.ghost {
@@ -464,21 +451,21 @@ main {
   max-width: 1680px;
   margin: 0 auto;
   padding-bottom: 24px;
-  padding-top: 148px;
+  padding-top: 140px;
 }
 
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 
 .metric-card,
 .panel {
   border: 1px solid var(--line);
   background: var(--surface-strong);
-  border-radius: 14px;
+  border-radius: 8px;
   box-shadow: var(--shadow-soft);
   transition:
     border-color 180ms ease,
@@ -489,30 +476,26 @@ main {
 
 .metric-card {
   position: relative;
-  min-height: 112px;
-  padding: 16px 17px 14px;
+  min-height: 88px;
+  padding: 12px 14px;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 96%, white 4%), var(--surface-raised)),
-    var(--surface-strong);
+  background: var(--surface-strong);
 }
 
 :root.dark-mode .metric-card {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-strong) 92%, white 8%), var(--surface-raised)),
-    var(--surface-strong);
+  background: var(--surface-strong);
 }
 
 .panel:hover,
 .metric-card:hover {
-  border-color: color-mix(in srgb, var(--teal) 24%, var(--line));
-  box-shadow: var(--shadow);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-soft);
 }
 
 .metric-card::before {
   position: absolute;
-  inset: auto 16px 13px 16px;
-  height: 4px;
+  inset: auto 14px 10px 14px;
+  height: 3px;
   width: auto;
   content: "";
   background: var(--teal);
@@ -541,52 +524,51 @@ main {
 
 .metric-card strong {
   display: block;
-  margin: 9px 0 6px;
-  font-size: 31px;
+  margin: 7px 0 5px;
+  font-size: 24px;
   line-height: 1;
   letter-spacing: 0;
 }
 
 .view-tabs {
   position: fixed;
-  top: 326px;
+  top: 290px;
   left: 38px;
   z-index: 35;
   display: grid;
   grid-template-columns: 1fr;
   gap: 6px;
   width: 208px;
-  max-height: calc(100vh - 358px);
+  max-height: calc(100vh - 322px);
   overflow: auto;
   margin: 0;
   padding: 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.035);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
+  background: #151a19;
+  border-radius: 8px;
   scrollbar-color: rgba(248, 244, 232, 0.48) transparent;
   scrollbar-width: thin;
 }
 
 :root.dark-mode .view-tabs {
-  background: rgba(255, 255, 255, 0.035);
+  background: #111615;
 }
 
 .tab-button {
   justify-content: flex-start;
   min-width: 0;
-  min-height: 38px;
-  padding: 0 12px;
+  min-height: 36px;
+  padding: 0 11px;
   border-color: transparent;
   color: rgba(248, 244, 232, 0.68);
   background: transparent;
 }
 
 .tab-button.active {
-  border-color: rgba(72, 209, 189, 0.32);
+  border-color: rgba(93, 199, 182, 0.32);
   color: #fff;
-  background: rgba(72, 209, 189, 0.13);
-  box-shadow: inset 3px 0 0 var(--teal);
+  background: rgba(93, 199, 182, 0.11);
+  box-shadow: inset 2px 0 0 var(--teal);
 }
 
 .tab-button:hover {
@@ -709,7 +691,7 @@ main {
 .panel {
   min-width: 0;
   padding: 18px;
-  border-radius: 14px;
+  border-radius: 8px;
 }
 
 .panel-heading {
@@ -746,8 +728,8 @@ main {
   min-height: 220px;
   border: 0;
   background: var(--surface);
-  border-radius: 11px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  border-radius: 6px;
+  box-shadow: none;
 }
 
 .chart-canvas-frame,
@@ -760,11 +742,10 @@ main {
   overflow-y: hidden;
   border: 1px solid var(--line);
   background:
-    repeating-linear-gradient(90deg, rgba(21, 28, 27, 0.035) 0 1px, transparent 1px 32px),
-    repeating-linear-gradient(180deg, rgba(21, 28, 27, 0.03) 0 1px, transparent 1px 32px),
-    linear-gradient(180deg, rgba(251, 250, 245, 0.94), rgba(246, 244, 237, 0.86)),
+    repeating-linear-gradient(90deg, rgba(30, 37, 35, 0.045) 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(180deg, rgba(30, 37, 35, 0.035) 0 1px, transparent 1px 32px),
     var(--surface);
-  border-radius: 12px;
+  border-radius: 8px;
   cursor: grab;
   overscroll-behavior: contain;
   touch-action: none;
@@ -797,18 +778,15 @@ main {
   max-height: calc(100vh - 32px);
   padding: 16px 16px 64px;
   overflow: auto;
-  background:
-    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(245, 242, 234, 0.98)),
-    var(--surface-strong);
-  border-radius: 14px;
-  box-shadow: 0 26px 70px rgba(28, 25, 20, 0.26);
+  background: var(--surface-strong);
+  border-radius: 8px;
+  box-shadow: 0 10px 32px rgba(28, 25, 20, 0.18);
 }
 
 .fund-flow-canvas-frame.chart-fullscreen-frame {
   background:
-    repeating-linear-gradient(90deg, rgba(35, 35, 35, 0.035) 0 1px, transparent 1px 36px),
-    repeating-linear-gradient(180deg, rgba(35, 35, 35, 0.03) 0 1px, transparent 1px 36px),
-    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(245, 242, 234, 0.96)),
+    repeating-linear-gradient(90deg, rgba(30, 37, 35, 0.045) 0 1px, transparent 1px 36px),
+    repeating-linear-gradient(180deg, rgba(30, 37, 35, 0.035) 0 1px, transparent 1px 36px),
     var(--surface-strong);
 }
 
@@ -826,10 +804,9 @@ main {
   margin-top: 10px;
   padding: 6px;
   border: 1px solid var(--line-strong);
-  background: rgba(251, 250, 245, 0.94);
-  border-radius: 12px;
-  box-shadow: 0 14px 30px rgba(27, 38, 34, 0.14);
-  backdrop-filter: blur(10px);
+  background: var(--surface-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
 }
 
 .chart-tool-button,
@@ -889,9 +866,7 @@ main {
 }
 
 .chart-fullscreen-frame canvas {
-  box-shadow:
-    0 18px 45px rgba(48, 42, 31, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  box-shadow: none;
 }
 
 .chart-pan-hint {
@@ -905,8 +880,8 @@ main {
   padding: 7px 10px;
   border: 1px solid var(--line);
   color: var(--muted);
-  background: rgba(251, 250, 245, 0.9);
-  border-radius: 10px;
+  background: var(--surface-strong);
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 900;
   pointer-events: none;
@@ -915,23 +890,21 @@ main {
 :root.dark-mode .chart-canvas-frame,
 :root.dark-mode .fund-flow-canvas-frame {
   background:
-    linear-gradient(180deg, rgba(32, 38, 45, 0.94), rgba(24, 29, 34, 0.84)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 32px),
     var(--surface);
 }
 
 :root.dark-mode .chart-canvas-frame.chart-fullscreen-frame,
 :root.dark-mode .fund-flow-canvas-frame.chart-fullscreen-frame {
-  background:
-    linear-gradient(180deg, rgba(24, 29, 34, 0.98), rgba(17, 20, 24, 0.98)),
-    var(--surface-strong);
-  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.48);
+  background: var(--surface-strong);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.38);
 }
 
 :root.dark-mode .fund-flow-canvas-frame.chart-fullscreen-frame {
   background:
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 36px),
-    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 36px),
-    linear-gradient(180deg, rgba(24, 29, 34, 0.98), rgba(17, 20, 24, 0.98)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 36px),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 36px),
     var(--surface-strong);
 }
 
@@ -976,7 +949,7 @@ main {
   color: var(--ink);
   background: rgba(255, 253, 248, 0.96);
   border-radius: 8px;
-  box-shadow: 0 16px 36px rgba(35, 35, 35, 0.18);
+  box-shadow: 0 8px 24px rgba(35, 35, 35, 0.14);
   font-size: 12px;
   line-height: 1.35;
   opacity: 0;
@@ -1001,8 +974,8 @@ main {
 }
 
 :root.dark-mode .chart-tooltip {
-  background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.42);
+  background: var(--surface-strong);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
 }
 
 .comparison-metrics {
@@ -1575,10 +1548,8 @@ main {
   gap: 7px;
   padding: 14px;
   border: 1px solid var(--line);
-  background:
-    linear-gradient(135deg, rgba(11, 117, 104, 0.1), rgba(183, 122, 29, 0.08)),
-    var(--surface-raised);
-  border-radius: 12px;
+  background: var(--surface-raised);
+  border-radius: 8px;
 }
 
 .report-cover h4 {
@@ -1691,7 +1662,7 @@ main {
   padding: 12px;
   border: 1px solid var(--line);
   background: var(--surface-raised);
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .personnel-profile-card.recent {
@@ -2085,7 +2056,7 @@ td {
 }
 
 tbody tr:hover td {
-  background: color-mix(in srgb, var(--teal) 7%, var(--surface-strong));
+  background: var(--surface-raised);
 }
 
 .status-text {
@@ -2306,10 +2277,8 @@ tbody tr:hover td {
 .fund-flow-readable-card,
 .fund-flow-readable-empty {
   border: 1px solid var(--line);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(246, 244, 237, 0.86)),
-    var(--surface-raised);
-  border-radius: 12px;
+  background: var(--surface-raised);
+  border-radius: 8px;
 }
 
 .fund-flow-kpi {
@@ -2569,7 +2538,7 @@ tbody tr:hover td {
   padding: 12px;
   border: 1px solid var(--line);
   background: var(--surface-raised);
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .chart-library-group {
@@ -2944,7 +2913,7 @@ tbody tr:hover td {
   padding: 14px;
   border: 1px solid var(--line);
   background: var(--surface-raised);
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .handwriting-card {
@@ -2952,7 +2921,7 @@ tbody tr:hover td {
   padding: 14px;
   border: 1px solid var(--line);
   background: rgba(11, 117, 104, 0.06);
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .compact-heading {
@@ -3044,7 +3013,7 @@ tbody tr:hover td {
   padding: 12px;
   border: 1px solid var(--line);
   background: rgba(11, 117, 104, 0.06);
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .person-feedback-head {
@@ -3319,7 +3288,7 @@ tbody tr:hover td {
   padding: 14px;
   border: 1px solid var(--line);
   background: var(--surface-raised);
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .actor-budget-head,
@@ -3710,6 +3679,68 @@ tbody tr:hover td {
   font-size: 13px;
 }
 
+.comparison-metric,
+.analysis-metric,
+.analysis-forecast-item,
+.analysis-risk-item,
+.analysis-recommendation,
+.audit-rule-item,
+.audit-brief-block,
+.vfx-audit-metric,
+.vfx-audit-row,
+.department-share-stack,
+.department-share-empty,
+.report-section,
+.report-kpi,
+.personnel-profile-card,
+.personnel-avatar,
+.module-summary-card,
+.module-bar-row,
+.module-risk-item,
+.stat-box,
+.call-block,
+.visual-summary-card,
+.chart-type-library,
+.chart-library-card,
+.callsheet-scene-option,
+.person-feedback,
+.person-feedback-grid > div,
+.person-last-save,
+.actor-budget-panel,
+.actor-budget-card,
+.actor-budget-row,
+.actor-budget-empty,
+.segmented-control,
+.custom-role-group,
+.custom-role-empty,
+.custom-progress-item,
+.ai-card,
+.handwriting-card,
+.import-status,
+.checkbox-grid label,
+.input-stat,
+.department-budget-field,
+.personnel-layer-block,
+.personnel-role-row,
+.personnel-person-row.recent,
+.personnel-layer-empty,
+.fund-flow-kpi,
+.fund-flow-readable-card,
+.fund-flow-readable-empty,
+.fund-flow-summary > div,
+.fund-flow-detail-card {
+  border-radius: 8px;
+}
+
+.grade-badge,
+.risk-icon,
+.chart-tool-button,
+.chart-zoom-readout,
+.chart-library-card i,
+.person-delete-button {
+  border-radius: 6px;
+}
+
 :root.dark-mode .comparison-metric,
 :root.dark-mode .analysis-metric,
 :root.dark-mode .analysis-forecast-item,
@@ -3835,9 +3866,7 @@ tbody tr:hover td {
 :root.dark-mode .fund-flow-readable-empty,
 :root.dark-mode .fund-flow-summary > div,
 :root.dark-mode .visual-summary-card {
-  background:
-    linear-gradient(180deg, rgba(32, 38, 45, 0.92), rgba(24, 29, 34, 0.84)),
-    var(--surface);
+  background: var(--surface-raised);
 }
 
 :root.dark-mode .grade-badge {
@@ -3857,7 +3886,7 @@ tbody tr:hover td {
   }
 
   main {
-    padding-top: 216px;
+    padding-top: 198px;
   }
 
   .project-manager {
@@ -4044,7 +4073,7 @@ tbody tr:hover td {
 
   .topbar {
     padding: 12px;
-    border-radius: 12px;
+    border-radius: 8px;
   }
 
   .topbar-main {
