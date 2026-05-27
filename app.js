@@ -570,6 +570,8 @@ function applyFullDemoData(options = {}) {
     { id: "full-demo-progress-contracts", name: "合同归档", done: 18, target: 24, unit: "份" },
     { id: "full-demo-progress-invoices", name: "发票回收", done: 9, target: 18, unit: "张" },
     { id: "full-demo-progress-location", name: "场地审批", done: 7, target: 9, unit: "处" },
+    { id: "full-demo-progress-vfx-shots", name: "VFX 镜头交付", done: 18, target: 42, unit: "镜头" },
+    { id: "full-demo-progress-vfx-color", name: "调色版本验收", done: 1, target: 4, unit: "版" },
   ];
   currentProjectId = keepProjectId ? previousProjectId : `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   lastSavedPersonId = "";
@@ -3480,9 +3482,139 @@ function auditRules() {
     { id: "rate_mismatch", label: "等级不匹配", detail: "人员/供应商报价偏离 A-G 级参考区间，需确认市场价。", severity: "medium" },
     { id: "trust_low", label: "信任偏低", detail: "信任评分低于 65 的人员或供应商，建议补充合同与历史合作记录。", severity: "medium" },
     { id: "missing_evidence", label: "凭证不足", detail: "金额较高但缺少合同、发票、报价单或审批说明的项目需要补证。", severity: "high" },
+    { id: "vfx_progress", label: "VFX 交付偏差", detail: "VFX 供应商付款或已用比例明显快于交付进度时，需要复核镜头清单、版本验收和付款节点。", severity: "high" },
     { id: "callsheet_jump", label: "通告突增", detail: "单日通告总成本明显高于平均值，重点检查夜戏、转场和住宿。", severity: "medium" },
   ];
   return isRatingEnabled() ? rules : rules.filter((rule) => !["rate_mismatch", "trust_low"].includes(rule.id));
+}
+
+function isVfxRelatedItem(item = {}) {
+  const text = [item.dept, item.name, item.role, item.vendor, item.label, item.status].filter(Boolean).join(" ");
+  return item.dept === "vfx_color" || /vfx|visual effects|特效|视觉|合成|调色|预视觉/i.test(text);
+}
+
+function isVfxProgressRow(row = {}) {
+  const text = [row.name, row.label, row.status].filter(Boolean).join(" ");
+  return /vfx|visual effects|特效|视觉|合成|调色|预视觉|镜头|版本/i.test(text);
+}
+
+function currentPersonCost(person) {
+  const activeDays = Math.min(Number(person.days) || 0, Number(project.currentDay) || 0);
+  return (Number(person.dayRate) || 0) * activeDays + ((Number(person.allowance) || 0) * activeDays) / Math.max(Number(person.days) || 1, 1);
+}
+
+function currentEquipmentCost(item) {
+  const activeDays = Math.min(Number(item.days) || 0, Number(project.currentDay) || 0);
+  return (Number(item.daily) || 0) * activeDays + (Number(item.deposit) || 0);
+}
+
+function averageNumbers(values, fallback = 0) {
+  const usable = values.map((value) => Number(value)).filter((value) => Number.isFinite(value));
+  if (usable.length === 0) return fallback;
+  return usable.reduce((sum, value) => sum + value, 0) / usable.length;
+}
+
+function riskFromVfxAuditRow(row) {
+  if (!row) return "medium";
+  if (row.progressMissing || row.gap > 0.22 || row.trust < 65) return "high";
+  if (row.gap > 0.12 || row.progressRate < 0.5 || row.trust < 75) return "medium";
+  return "ok";
+}
+
+function vfxRiskText(row) {
+  if (row.progressMissing) return "缺进度";
+  if (row.gap > 0.22) return "付款快于交付";
+  if (row.trust < 65) return "低信任";
+  if (row.gap > 0.12) return "进度偏慢";
+  if (row.progressRate < 0.5) return "待追踪";
+  return "稳定";
+}
+
+function vfxActionText(row) {
+  if (row.progressMissing) return "补 VFX 镜头表、版本验收单和付款节点";
+  if (row.gap > 0.22) return "暂停下一笔付款，先验收交付版本";
+  if (row.trust < 65) return "补历史合作记录与替代报价";
+  if (row.gap > 0.12) return "要求供应商更新每周交付里程碑";
+  return "按节点留存镜头清单和验收记录";
+}
+
+function vfxSupplierAuditRows() {
+  const vendorMap = new Map();
+  const progressRows = customProgressRows().filter(isVfxProgressRow);
+  const fallbackProgress = Math.min(Math.max((Number(project.currentDay) || 0) / Math.max(Number(project.plannedDays) || 1, 1), 0), 1);
+  const overallProgress = progressRows.length > 0 ? averageNumbers(progressRows.map((row) => row.rate), fallbackProgress) : fallbackProgress;
+  const progressMissing = progressRows.length === 0;
+
+  const ensureVendor = (vendorName) => {
+    const vendor = String(vendorName || "未登记 VFX 供应商").trim() || "未登记 VFX 供应商";
+    if (!vendorMap.has(vendor)) {
+      vendorMap.set(vendor, {
+        vendor,
+        departments: new Set(),
+        people: [],
+        equipment: [],
+        contractAmount: 0,
+        usedAmount: 0,
+        trustValues: [],
+        grades: new Set(),
+        companyGrades: new Set(),
+      });
+    }
+    return vendorMap.get(vendor);
+  };
+
+  people.filter(isVfxRelatedItem).forEach((person) => {
+    const row = ensureVendor(person.vendor || "个人 / 自由职业");
+    row.people.push(person);
+    row.departments.add(getDept(person.dept).name);
+    row.contractAmount += personTotal(person);
+    row.usedAmount += currentPersonCost(person);
+    row.trustValues.push(normalizeTrust(person.trust));
+    row.grades.add(gradeLabel(person.grade));
+    row.companyGrades.add(gradeLabel(person.companyGrade, "公司"));
+  });
+
+  equipment.filter(isVfxRelatedItem).forEach((item) => {
+    const row = ensureVendor(item.vendor || "未登记公司");
+    row.equipment.push(item);
+    row.departments.add(getDept(item.dept).name);
+    row.contractAmount += equipmentTotal(item);
+    row.usedAmount += currentEquipmentCost(item);
+    row.trustValues.push(normalizeTrust(item.trust));
+    row.companyGrades.add(gradeLabel(item.companyGrade, "公司"));
+  });
+
+  return Array.from(vendorMap.values())
+    .map((row) => {
+      const paymentRate = row.contractAmount > 0 ? Math.min(row.usedAmount / row.contractAmount, 1) : 0;
+      const vendorProgressRows = progressRows.filter((progressRow) => {
+        const text = `${progressRow.name} ${progressRow.label}`.toLowerCase();
+        return text.includes(row.vendor.toLowerCase()) || isVfxProgressRow(progressRow);
+      });
+      const progressRate = vendorProgressRows.length > 0 ? averageNumbers(vendorProgressRows.map((progressRow) => progressRow.rate), overallProgress) : overallProgress;
+      const trust = Math.round(averageNumbers(row.trustValues, 75));
+      const gap = paymentRate - progressRate;
+      const normalized = {
+        ...row,
+        departments: Array.from(row.departments),
+        grades: Array.from(row.grades).filter(Boolean),
+        companyGrades: Array.from(row.companyGrades).filter(Boolean),
+        paymentRate,
+        progressRate,
+        progressMissing,
+        progressRows: vendorProgressRows,
+        trust,
+        gap,
+      };
+      normalized.risk = riskFromVfxAuditRow(normalized);
+      normalized.status = vfxRiskText(normalized);
+      normalized.action = vfxActionText(normalized);
+      return normalized;
+    })
+    .sort((a, b) => {
+      const riskWeight = { high: 3, medium: 2, ok: 1 };
+      return (riskWeight[b.risk] || 0) - (riskWeight[a.risk] || 0) || b.contractAmount - a.contractAmount;
+    });
 }
 
 function auditReferenceItems() {
@@ -3593,7 +3725,22 @@ function auditReferenceItems() {
     }
   }
 
-  return items.sort((a, b) => b.amount - a.amount);
+  vfxSupplierAuditRows().forEach((row) => {
+    if (row.risk === "ok" && row.gap <= 0.12) return;
+    items.push({
+      kind: "VFX 供应商",
+      name: row.vendor,
+      source: `${row.departments.join(" / ") || "调色/VFX组"} · 交付进度`,
+      amount: row.contractAmount,
+      status: row.status,
+      risk: row.risk === "ok" ? "medium" : row.risk,
+      evidence: row.progressMissing ? "需补镜头表 / 验收单 / 付款节点" : "需核镜头表 / 版本验收 / 付款节点",
+      reason: `已用 ${percentText(row.paymentRate)}，交付 ${percentText(row.progressRate)}，信任 ${row.trust}`,
+    });
+  });
+
+  const riskWeight = { high: 3, medium: 2, low: 1 };
+  return items.sort((a, b) => (riskWeight[b.risk] || 0) - (riskWeight[a.risk] || 0) || b.amount - a.amount);
 }
 
 function auditSummaryData() {
@@ -3626,9 +3773,11 @@ function auditSummaryData() {
               : 0
             : rule.id === "missing_evidence"
               ? items.filter((item) => /需补|缺/.test(item.evidence)).length
-              : rule.id === "callsheet_jump"
-                ? items.filter((item) => item.kind === "通告单").length
-                : 0,
+              : rule.id === "vfx_progress"
+                ? vfxSupplierAuditRows().filter((row) => row.risk !== "ok" || row.gap > 0.12).length
+                : rule.id === "callsheet_jump"
+                  ? items.filter((item) => item.kind === "通告单").length
+                  : 0,
   }));
 
   return {
@@ -3648,6 +3797,73 @@ function auditRiskLabel(risk) {
   if (risk === "high") return "高风险";
   if (risk === "medium") return "待复核";
   return "提示";
+}
+
+function renderVfxSupplierAudit() {
+  const status = document.querySelector("#vfxAuditStatus");
+  const summary = document.querySelector("#vfxAuditSummary");
+  const list = document.querySelector("#vfxSupplierAudit");
+  if (!status || !summary || !list) return;
+
+  const rows = vfxSupplierAuditRows();
+  const totalContract = rows.reduce((sum, row) => sum + row.contractAmount, 0);
+  const totalUsed = rows.reduce((sum, row) => sum + row.usedAmount, 0);
+  const averageProgress = rows.length > 0 ? averageNumbers(rows.map((row) => row.progressRate), 0) : 0;
+  const riskCount = rows.filter((row) => row.risk !== "ok").length;
+
+  status.textContent = rows.length > 0 ? `${rows.length} 个供应商 · ${riskCount} 项需复核` : "暂无 VFX 供应商";
+  summary.innerHTML = `
+    <div class="vfx-audit-metric"><span>合同金额</span><strong>${money.format(totalContract)}</strong></div>
+    <div class="vfx-audit-metric"><span>已用金额</span><strong>${money.format(totalUsed)}</strong></div>
+    <div class="vfx-audit-metric"><span>交付进度</span><strong>${percentText(averageProgress)}</strong></div>
+    <div class="vfx-audit-metric"><span>复核项</span><strong>${riskCount}</strong></div>
+  `;
+
+  if (rows.length === 0) {
+    list.innerHTML = `<div class="audit-empty">暂无 VFX / 调色 / 合成供应商。录入 VFX 人员、器材或自定义进度后会显示审查结果。</div>`;
+    return;
+  }
+
+  list.innerHTML = rows
+    .map((row) => {
+      const gradeText = [...row.grades, ...row.companyGrades].join(" / ") || "未评级";
+      const progressLabel = row.progressMissing ? "缺少明确 VFX 进度，暂按项目进度估算" : `${row.progressRows.length} 项进度指标`;
+      const peopleNames = row.people.map((person) => person.name).filter(Boolean).join("、") || "无人员";
+      const equipmentNames = row.equipment.map((item) => item.name).filter(Boolean).join("、") || "无器材";
+      return `
+        <div class="vfx-audit-row ${row.risk}">
+          <div class="vfx-audit-row-head">
+            <div>
+              <strong>${escapeHtml(row.vendor)}</strong>
+              <span>${escapeHtml(row.departments.join(" / ") || "调色/VFX组")} · ${escapeHtml(gradeText)}</span>
+            </div>
+            <span class="status-text ${row.risk === "high" ? "over" : row.risk === "medium" ? "tight" : "ok"}">${escapeHtml(row.status)}</span>
+          </div>
+          <div class="vfx-audit-bars">
+            <div>
+              <div class="vfx-audit-bar-label"><span>交付进度</span><strong>${percentText(row.progressRate)}</strong></div>
+              <div class="vfx-progress-track"><span style="width: ${Math.round(row.progressRate * 100)}%"></span></div>
+            </div>
+            <div>
+              <div class="vfx-audit-bar-label"><span>已用比例</span><strong>${percentText(row.paymentRate)}</strong></div>
+              <div class="vfx-progress-track used"><span style="width: ${Math.round(row.paymentRate * 100)}%"></span></div>
+            </div>
+          </div>
+          <div class="vfx-audit-meta">
+            <span>合同 ${money.format(row.contractAmount)}</span>
+            <span>已用 ${money.format(row.usedAmount)}</span>
+            <span>信任 ${row.trust}</span>
+            <span>${escapeHtml(progressLabel)}</span>
+          </div>
+          <div class="vfx-audit-detail">
+            <span>人员：${escapeHtml(peopleNames)}</span>
+            <span>器材：${escapeHtml(equipmentNames)}</span>
+          </div>
+          <p>${escapeHtml(row.action)}</p>
+        </div>
+      `;
+    })
+    .join("");
 }
 
 function renderAuditModule() {
@@ -3731,6 +3947,7 @@ function renderAuditModule() {
       <p>${data.noEvidenceCount > 0 ? "先补合同、发票、报价单，再确认付款节点。" : "维持当前预算节奏，重点盯住通告单和高额部门。"}</p>
     </div>
   `;
+  renderVfxSupplierAudit();
 }
 
 function drawFundFlowChart() {

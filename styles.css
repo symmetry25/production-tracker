@@ -920,6 +920,10 @@ main {
   grid-column: span 2;
 }
 
+.audit-vfx-panel {
+  grid-column: span 3;
+}
+
 .audit-wide,
 .audit-brief-panel {
   grid-column: span 3;
@@ -999,6 +1003,10 @@ main {
 
 .audit-layout .audit-rules-panel {
   grid-column: span 2;
+}
+
+.audit-layout .audit-vfx-panel {
+  grid-column: span 3;
 }
 
 .audit-layout .audit-brief-panel,
@@ -1149,6 +1157,149 @@ main {
   padding: 12px 0;
   color: var(--muted);
   text-align: center;
+}
+
+.vfx-audit-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.vfx-audit-metric,
+.vfx-audit-row {
+  border: 1px solid var(--line);
+  background: #fffaf0;
+  border-radius: 8px;
+}
+
+.vfx-audit-metric {
+  min-height: 74px;
+  padding: 10px;
+}
+
+.vfx-audit-metric span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.vfx-audit-metric strong {
+  display: block;
+  margin-top: 7px;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.vfx-audit-list {
+  display: grid;
+  gap: 9px;
+}
+
+.vfx-audit-row {
+  padding: 12px;
+}
+
+.vfx-audit-row.high {
+  border-left: 4px solid var(--red);
+}
+
+.vfx-audit-row.medium {
+  border-left: 4px solid var(--amber);
+}
+
+.vfx-audit-row.ok {
+  border-left: 4px solid var(--green);
+}
+
+.vfx-audit-row-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 10px;
+}
+
+.vfx-audit-row-head strong,
+.vfx-audit-row-head span {
+  display: block;
+}
+
+.vfx-audit-row-head strong {
+  font-size: 15px;
+}
+
+.vfx-audit-row-head div > span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.vfx-audit-bars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.vfx-audit-bar-label,
+.vfx-audit-meta,
+.vfx-audit-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vfx-audit-bar-label {
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.vfx-audit-bar-label strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.vfx-progress-track {
+  height: 9px;
+  overflow: hidden;
+  background: var(--track);
+  border-radius: 999px;
+}
+
+.vfx-progress-track span {
+  display: block;
+  height: 100%;
+  background: var(--blue);
+  border-radius: inherit;
+}
+
+.vfx-progress-track.used span {
+  background: var(--amber);
+}
+
+.vfx-audit-meta,
+.vfx-audit-detail {
+  justify-content: flex-start;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.vfx-audit-detail {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.vfx-audit-row p {
+  margin: 9px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .view-tabs {
@@ -3438,6 +3589,8 @@ td {
 :root.dark-mode .edit-progress-card,
 :root.dark-mode .audit-rule-item,
 :root.dark-mode .audit-brief-block,
+:root.dark-mode .vfx-audit-metric,
+:root.dark-mode .vfx-audit-row,
 :root.dark-mode .callsheet-scene-option,
 :root.dark-mode .person-feedback,
 :root.dark-mode .person-feedback-grid > div,
@@ -3602,6 +3755,7 @@ td {
   .audit-summary-panel,
   .audit-filter-panel,
   .audit-rules-panel,
+  .audit-vfx-panel,
   .audit-wide,
   .audit-brief-panel,
   .module-wide,
@@ -3670,6 +3824,7 @@ td {
   .analysis-forecast-list,
   .report-section-grid,
   .module-summary-grid,
+  .vfx-audit-summary,
   .personnel-card-grid,
   .fund-flow-summary,
   .audit-brief,
@@ -3741,6 +3896,7 @@ td {
   .audit-summary-panel,
   .audit-filter-panel,
   .audit-rules-panel,
+  .audit-vfx-panel,
   .audit-wide,
   .audit-brief-panel,
   .module-wide,
@@ -3783,6 +3939,7 @@ td {
   .audit-layout .audit-summary-panel,
   .audit-layout .audit-filter-panel,
   .audit-layout .audit-rules-panel,
+  .audit-layout .audit-vfx-panel,
   .audit-layout .audit-brief-panel,
   .audit-layout .audit-wide {
     grid-column: 1 / -1;
@@ -3798,6 +3955,7 @@ td {
   .audit-layout .audit-summary-panel,
   .audit-layout .audit-filter-panel,
   .audit-layout .audit-rules-panel,
+  .audit-layout .audit-vfx-panel,
   .audit-layout .audit-brief-panel,
   .audit-layout .audit-wide {
     min-height: auto;
@@ -3869,6 +4027,8 @@ td {
   .report-section-grid,
   .report-kpi-row,
   .module-summary-grid,
+  .vfx-audit-summary,
+  .vfx-audit-bars,
   .fund-flow-summary,
   .fund-flow-kpis,
   .fund-flow-readable-grid,
