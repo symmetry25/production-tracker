@@ -17,11 +17,12 @@
 
 ## Product And UI Skills
 
-从 `awesome-claude-code-skills` 清单中选定以下 3 个作为本项目补充规范：
+从 `awesome-claude-code-skills` 和 `nexu-io/open-design` 清单中选定以下补充规范：
 
 - `web-design-guidelines`：用于页面布局、图表、电脑屏幕体验、按钮密度、表格可读性和视觉层级检查。
 - `product-marketing`：用于商业定位、目标用户、卖点、竞品、LinkedIn/朋友圈介绍、融资表达。
 - `context7`：用于查询最新技术文档，尤其是 AI API、Netlify、GitHub、前端框架和第三方库。
+- `taste-skill`：用于降低通用 AI UI 味道，控制视觉密度、动效强度和设计变化度，让后台界面更像专业制片工具。
 
 ## Default Development Rules
 
@@ -43,5 +44,6 @@
 - “用 diagnose 查这个 bug”
 - “用 tdd 做这个计算逻辑”
 - “用 web-design-guidelines 审查当前页面”
+- “用 taste-skill 去掉 AI 排版味道”
 - “用 product-marketing 帮我写商业介绍”
 - “用 context7 查最新 API 文档”
