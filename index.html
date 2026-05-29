@@ -13,7 +13,7 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=callsheet-nodes-1" />
+    <link rel="stylesheet" href="./styles.css?v=producer-workspace-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -222,6 +222,39 @@
           </div>
 
           <div class="overview-layout">
+            <article class="panel producer-workspace-panel">
+              <div class="panel-heading producer-workspace-heading">
+                <div>
+                  <h3 id="producerWorkspaceTitle">Producer Main Workspace</h3>
+                  <span id="producerWorkspaceHint">今日决策、数据台账、AI 录入与报告出口</span>
+                </div>
+                <div class="status-pill" id="producerWorkspaceBadge">载入中</div>
+              </div>
+              <div class="producer-workspace" id="producerWorkspace">
+                <section class="producer-column producer-decisions" aria-labelledby="producerDecisionTitle">
+                  <div class="producer-column-head">
+                    <span>01</span>
+                    <h4 id="producerDecisionTitle">今日要处理</h4>
+                  </div>
+                  <div class="producer-decision-list" id="producerDecisionList"></div>
+                </section>
+                <section class="producer-column producer-data-center" aria-labelledby="producerDataTitle">
+                  <div class="producer-column-head">
+                    <span>02</span>
+                    <h4 id="producerDataTitle">制片数据中心</h4>
+                  </div>
+                  <div class="producer-data-list" id="producerDataCenter"></div>
+                </section>
+                <section class="producer-column producer-actions" aria-labelledby="producerActionTitle">
+                  <div class="producer-column-head">
+                    <span>03</span>
+                    <h4 id="producerActionTitle">快捷动作</h4>
+                  </div>
+                  <div class="producer-action-list" id="producerActionRail"></div>
+                </section>
+              </div>
+            </article>
+
             <article class="panel chart-panel">
               <div class="panel-heading">
                 <h3>预算消耗 / 完成进度</h3>
@@ -1629,6 +1662,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=callsheet-nodes-1"></script>
+    <script src="./app.js?v=producer-workspace-1"></script>
   </body>
 </html>

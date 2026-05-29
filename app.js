@@ -5263,6 +5263,249 @@ function renderToday() {
   `;
 }
 
+function producerWorkspaceData() {
+  const metrics = analysisMetrics();
+  const audit = auditSummaryData();
+  const flow = fundFlowReadableData(8);
+  const progress = activeProgressStats();
+  const today = callSheets.find((sheet) => sheet.day === project.currentDay) || callSheets[callSheets.length - 1] || null;
+  const completed = completedSheets();
+  const spentRate = project.budget > 0 ? metrics.spent / project.budget : 0;
+  const progressRate = progress.rate || 0;
+  const budgetGap = spentRate - progressRate;
+  const topDept = departmentAnalysisRows()[0];
+  const vfxRows = vfxSupplierAuditRows();
+  const vfxRiskCount = vfxRows.filter((row) => row.risk !== "ok" || row.gap > 0.12).length;
+  const missingVendorCount =
+    people.filter((person) => !person.vendor || person.vendor === "个人 / 自由职业").length +
+    equipment.filter((item) => !item.vendor || item.vendor === "未登记公司").length;
+  const decisions = [];
+
+  if (audit.topItem) {
+    decisions.push({
+      tone: audit.topItem.risk === "high" ? "warning" : "note",
+      title: `${auditRiskLabel(audit.topItem.risk)} · ${audit.topItem.name}`,
+      detail: `${audit.topItem.kind} / ${audit.topItem.reason}`,
+      amount: money.format(audit.topItem.amount),
+      source: audit.topItem.source,
+      target: "audit",
+    });
+  }
+  if (project.budget > 0 && metrics.variance > 0) {
+    decisions.push({
+      tone: "warning",
+      title: "完片成本预测超预算",
+      detail: `按当前日均成本推算，预计超出 ${money.format(metrics.variance)}。`,
+      amount: money.format(metrics.projectedFinal),
+      source: "监制分析报告",
+      target: "analysis",
+    });
+  } else if (project.budget > 0 && budgetGap > 0.06) {
+    decisions.push({
+      tone: budgetGap > 0.12 ? "warning" : "note",
+      title: "预算消耗快于完成进度",
+      detail: `预算 ${percentText(spentRate)}，完成 ${percentText(progressRate)}，相差 ${Math.round(Math.abs(budgetGap) * 100)} 个点。`,
+      amount: money.format(metrics.spent),
+      source: "预算 / 进度",
+      target: "analysis",
+    });
+  }
+  if (topDept && topDept.rate > 0.82) {
+    decisions.push({
+      tone: topDept.rate > 1 ? "warning" : "note",
+      title: `${topDept.department.name}预算${topDept.rate > 1 ? "已超支" : "接近上限"}`,
+      detail: `已用 ${money.format(topDept.used)} / 预算 ${money.format(topDept.department.budget)}。`,
+      amount: percentText(topDept.rate),
+      source: budgetBudgetLabel(),
+      target: "budget",
+    });
+  }
+  if (today) {
+    const averageDayCost = completed.length > 0 ? completed.reduce((sum, sheet) => sum + dayTotal(sheet), 0) / completed.length : dayTotal(today);
+    const todayTotal = dayTotal(today);
+    if (todayTotal > Math.max(averageDayCost * 1.18, project.budget * 0.04)) {
+      decisions.push({
+        tone: "note",
+        title: `${modeText("今日通告", "当前记录")}成本偏高`,
+        detail: `${today.title} · ${today.location}，人工 ${money.format(dayLaborCost(today))}，器材 ${money.format(dayEquipmentCost(today))}。`,
+        amount: money.format(todayTotal),
+        source: today.code,
+        target: "callsheet",
+      });
+    }
+  }
+  if (vfxRiskCount > 0) {
+    decisions.push({
+      tone: "warning",
+      title: "VFX / 调色供应商需复核",
+      detail: `${vfxRiskCount} 个供应商付款、进度或信任评分需要检查。`,
+      amount: money.format(vfxRows.reduce((sum, row) => sum + row.contractAmount, 0)),
+      source: "VFX 进度审查",
+      target: "audit",
+    });
+  }
+  if (flow.unclassifiedUsed > 0 || flow.overAllocated > 0 || flow.unallocated > 0) {
+    decisions.push({
+      tone: flow.unclassifiedUsed > 0 || flow.overAllocated > 0 ? "warning" : "note",
+      title: flow.statusLabel,
+      detail: `资金口径：${flow.budgetLabel} ${money.format(flow.allocatedTotal)}，已用 ${money.format(flow.usedTotal)}。`,
+      amount: money.format(flow.unclassifiedUsed || flow.overAllocated || flow.unallocated),
+      source: "资金流向",
+      target: "fundflow",
+    });
+  }
+  if (decisions.length === 0) {
+    decisions.push({
+      tone: "good",
+      title: "今日无明显阻塞",
+      detail: "预算、进度、审计和资金流向暂未出现高优先级风险。",
+      amount: `${Math.round(progressRate * 100)}%`,
+      source: "主工作区",
+      target: "analysis",
+    });
+  }
+
+  const dataTables = [
+    {
+      title: "人员 / 演员表",
+      count: `${people.length} 条`,
+      metric: money.format(people.reduce((sum, person) => sum + personTotal(person), 0)),
+      detail: `${people.filter(isActorPerson).length} 位演员 · ${new Set(people.map((person) => person.vendor || "个人 / 自由职业")).size} 个公司/个体`,
+      progress: Math.min(1, people.length / 24),
+      views: ["表格", "分层", "占比", "Excel"],
+      target: "personnel",
+    },
+    {
+      title: "器材 / 供应商",
+      count: `${equipment.length} 条`,
+      metric: money.format(equipment.reduce((sum, item) => sum + equipmentTotal(item), 0)),
+      detail: `${new Set(equipment.map((item) => item.vendor || "未登记公司")).size} 个供应商 · ${equipment.filter((item) => item.daily > 0).length} 项日租`,
+      progress: Math.min(1, equipment.length / 18),
+      views: ["表格", "供应商", "预算", "审查"],
+      target: "equipment",
+    },
+    {
+      title: modeText("通告单 / 日成本", "执行记录 / 成本"),
+      count: `${callSheets.length} 张`,
+      metric: today ? money.format(dayTotal(today)) : "暂无",
+      detail: today ? `${today.code} · ${today.title}` : modeText("等待新增通告", "等待新增记录"),
+      progress: Math.min(1, callSheets.length / Math.max(project.plannedDays || 1, 1)),
+      views: ["节点", "日历", "成本", "资源"],
+      target: "callsheet",
+    },
+    {
+      title: "资金流向",
+      count: `${flow.supplierCount} 个去向`,
+      metric: money.format(flow.usedTotal),
+      detail: `${flow.budgetLabel} ${money.format(flow.allocatedTotal)} · ${flow.statusLabel}`,
+      progress: flow.sourceTotal > 0 ? Math.min(1, flow.usedTotal / flow.sourceTotal) : 0,
+      views: ["桑基", "明细", "供应商", "审计"],
+      target: "fundflow",
+    },
+    {
+      title: "审计 / 风险",
+      count: `${audit.items.length} 项`,
+      metric: `${audit.highRiskCount} 高风险`,
+      detail: `${audit.noEvidenceCount} 项缺凭证 · 覆盖 ${percentText(audit.coverage)}`,
+      progress: audit.items.length > 0 ? Math.min(1, audit.reviewedAmount / Math.max(project.budget || audit.reviewedAmount, 1)) : 0,
+      views: ["规则", "凭证", "VFX", "清单"],
+      target: "audit",
+    },
+    {
+      title: "AI / Excel 录入",
+      count: missingVendorCount > 0 ? `${missingVendorCount} 项待补` : "可导入",
+      metric: "API / OCR",
+      detail: "Excel 识别、手写单识别、主流 AI API 接口配置",
+      progress: missingVendorCount > 0 ? 0.55 : 0.82,
+      views: ["Excel", "手写", "API", "映射"],
+      target: "input",
+    },
+  ];
+
+  const quickActions = [
+    { icon: "＋", label: modeText("新建通告", "新建记录"), detail: "节点式录入", target: "input", focus: "callsheetForm" },
+    { icon: "⇥", label: "导入 Excel / 手写单", detail: "AI 识别录入", target: "input", focus: "spreadsheetFile" },
+    { icon: "￥", label: "查看资金流向", detail: "公司、个人、车辆、酒店、场地", target: "fundflow" },
+    { icon: "✓", label: "费用审查", detail: "等级、信任、凭证、VFX", target: "audit" },
+    { icon: "↗", label: "生成监制报告", detail: "预算、风险、建议", target: "analysis" },
+  ];
+
+  return { decisions: decisions.slice(0, 5), dataTables, quickActions, metrics, audit, flow, progress };
+}
+
+function renderProducerWorkspace() {
+  const container = document.querySelector("#producerWorkspace");
+  const decisionList = document.querySelector("#producerDecisionList");
+  const dataCenter = document.querySelector("#producerDataCenter");
+  const actionRail = document.querySelector("#producerActionRail");
+  const badge = document.querySelector("#producerWorkspaceBadge");
+  if (!container || !decisionList || !dataCenter || !actionRail || !badge) return;
+
+  const data = producerWorkspaceData();
+  const riskCount = data.decisions.filter((item) => item.tone === "warning").length;
+  const noteCount = data.decisions.filter((item) => item.tone === "note").length;
+  badge.textContent = riskCount > 0 ? `${riskCount} 项优先处理` : noteCount > 0 ? `${noteCount} 项待关注` : "状态稳定";
+  badge.className = `status-pill ${riskCount > 0 ? "warning" : noteCount > 0 ? "note" : "good"}`;
+
+  decisionList.innerHTML =
+    data.decisions.length > 0
+      ? data.decisions
+          .map(
+            (item) => `
+              <button class="producer-decision-row ${item.tone}" type="button" data-workspace-view="${escapeHtml(item.target)}">
+                <span class="producer-decision-body">
+                  <span class="producer-row-top">
+                    <strong>${escapeHtml(item.title)}</strong>
+                    <span>${escapeHtml(item.amount)}</span>
+                  </span>
+                  <p>${escapeHtml(item.detail)}</p>
+                  <span class="producer-row-meta">
+                    <span>${escapeHtml(item.source)}</span>
+                    <span>${item.tone === "warning" ? "立刻处理" : item.tone === "note" ? "本日复核" : "持续观察"}</span>
+                  </span>
+                </span>
+              </button>
+            `,
+          )
+          .join("")
+      : `<div class="producer-empty">暂无需要处理的事项。</div>`;
+
+  dataCenter.innerHTML = data.dataTables
+    .map(
+      (item) => `
+        <button class="producer-data-row" type="button" data-workspace-view="${escapeHtml(item.target)}">
+          <span class="producer-data-top">
+            <strong>${escapeHtml(item.title)}</strong>
+            <span>${escapeHtml(item.count)}</span>
+          </span>
+          <p>${escapeHtml(item.detail)}</p>
+          <span class="producer-data-progress" aria-hidden="true" style="--value:${Math.round(Math.max(0, Math.min(item.progress, 1)) * 100)}%">
+            <span></span>
+          </span>
+          <span class="producer-data-meta">
+            <span>${escapeHtml(item.metric)}</span>
+            ${item.views.map((view) => `<span>${escapeHtml(view)}</span>`).join("")}
+          </span>
+        </button>
+      `,
+    )
+    .join("");
+
+  actionRail.innerHTML = data.quickActions
+    .map(
+      (item) => `
+        <button class="producer-action-button" type="button" data-workspace-view="${escapeHtml(item.target)}" ${item.focus ? `data-workspace-focus="${escapeHtml(item.focus)}"` : ""}>
+          <i aria-hidden="true">${escapeHtml(item.icon)}</i>
+          <span>
+            <strong>${escapeHtml(item.label)}</strong>
+            <span>${escapeHtml(item.detail)}</span>
+          </span>
+        </button>
+      `,
+    )
+    .join("");
+}
+
 function renderCallsheetSelect(preferredDay = null) {
   const select = document.querySelector("#callsheetSelect");
   setText("#callsheetTitle", modeText("每日通告单", "执行记录"));
@@ -7982,6 +8225,7 @@ function refreshAll(options = {}) {
   renderProjectLibraryControls();
   renderKpis();
   renderToday();
+  renderProducerWorkspace();
   const selectedDay = options.selectedDay || Number(document.querySelector("#callsheetSelect").value) || project.currentDay;
   renderCallsheetSelect(selectedDay);
   renderCallsheet(selectedDay);
@@ -8509,6 +8753,29 @@ function setupTabs() {
   });
 }
 
+function focusWorkspaceTarget(targetId) {
+  if (!targetId) return;
+  const target = document.querySelector(`#${CSS.escape(targetId)}`);
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  const focusTarget = target.matches?.("input, select, textarea, button") ? target : target.querySelector?.("input, select, textarea, button");
+  if (focusTarget) {
+    window.setTimeout(() => focusTarget.focus({ preventScroll: true }), 260);
+  }
+}
+
+function setupProducerWorkspace() {
+  const workspace = document.querySelector("#producerWorkspace");
+  if (!workspace) return;
+  workspace.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-workspace-view]");
+    if (!target) return;
+    const view = target.dataset.workspaceView;
+    document.querySelector(`.tab-button[data-view="${CSS.escape(view)}"]`)?.click();
+    window.setTimeout(() => focusWorkspaceTarget(target.dataset.workspaceFocus), 120);
+  });
+}
+
 function setupActions() {
   document.querySelector("#projectLibrarySelect").addEventListener("change", (event) => {
     const snapshot = projectLibrary.find((item) => item.id === event.target.value);
@@ -8657,6 +8924,7 @@ function init() {
   loadProjectLibrary();
   loadSavedData();
   setupTabs();
+  setupProducerWorkspace();
   setupActions();
   setupVisualExplorer();
   setupAnalysisVisual();
