@@ -573,6 +573,7 @@ function applyFullDemoData(options = {}) {
     { id: "full-demo-progress-vfx-shots", name: "VFX 镜头交付", done: 18, target: 42, unit: "镜头" },
     { id: "full-demo-progress-vfx-color", name: "调色版本验收", done: 1, target: 4, unit: "版" },
   ];
+  workLogs = [];
   currentProjectId = keepProjectId ? previousProjectId : `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   lastSavedPersonId = "";
   lastPersonFeedback = null;
@@ -590,6 +591,7 @@ let equipment = blankMode ? [] : clone(defaultEquipment);
 let scenes = blankMode ? [] : clone(defaultScenes);
 let callSheets = blankMode ? [] : clone(defaultCallSheets);
 let customProgressItems = [];
+let workLogs = [];
 let currentProjectId = defaultProjectId;
 let projectLibrary = [];
 
@@ -983,6 +985,7 @@ function createProjectSnapshot(id = currentProjectId, name = project.title) {
       scenes: clone(scenes),
       callSheets: clone(callSheets),
       customProgressItems: clone(customProgressItems),
+      workLogs: clone(workLogs),
     },
   };
 }
@@ -1004,6 +1007,7 @@ function normalizeProjectSnapshot(snapshot) {
       scenes: Array.isArray(data.scenes) ? data.scenes : [],
       callSheets: Array.isArray(data.callSheets) ? data.callSheets : [],
       customProgressItems: normalizeCustomProgressItems(data.customProgressItems),
+      workLogs: normalizeWorkLogs(data.workLogs),
     },
   };
 }
@@ -1019,6 +1023,7 @@ function applyProjectSnapshot(snapshot) {
   scenes = clone(normalized.data.scenes);
   callSheets = clone(normalized.data.callSheets);
   customProgressItems = clone(normalized.data.customProgressItems);
+  workLogs = clone(normalized.data.workLogs);
   lastSavedPersonId = "";
   lastPersonFeedback = null;
   professionalReportState.source = "local";
@@ -1358,6 +1363,7 @@ function loadSavedData() {
       scenes = saved.scenes || scenes;
       callSheets = saved.callSheets || callSheets;
       customProgressItems = normalizeCustomProgressItems(saved.customProgressItems);
+      workLogs = normalizeWorkLogs(saved.workLogs);
     }
   } catch (error) {
     console.warn("本地数据读取失败，已使用样例数据。", error);
@@ -1383,6 +1389,7 @@ function applyStarterData(options = {}) {
   scenes = blankMode ? [] : clone(defaultScenes);
   callSheets = blankMode ? [] : clone(defaultCallSheets);
   customProgressItems = [];
+  workLogs = [];
   currentProjectId = keepProjectId ? previousProjectId : `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   lastSavedPersonId = "";
   lastPersonFeedback = null;
@@ -1401,6 +1408,7 @@ function applyNewProjectData(title = "新项目") {
   scenes = [];
   callSheets = [];
   customProgressItems = [];
+  workLogs = [];
   currentProjectId = `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   lastSavedPersonId = "";
   lastPersonFeedback = null;
@@ -1556,6 +1564,7 @@ function saveData() {
         scenes,
         callSheets,
         customProgressItems,
+        workLogs,
       }),
     );
   } catch (error) {
@@ -2016,6 +2025,214 @@ function activeProgressStats() {
   const customStats = customProgressStats();
   if (isCustomInputMode()) return customStats;
   return sceneProgressStats();
+}
+
+function personWorkKey(person, index = people.indexOf(person)) {
+  return person?.id || `${person?.name || "未命名"}|${person?.role || ""}|${person?.dept || ""}|${index}`;
+}
+
+function findPersonByWorkKey(key) {
+  return people.find((person, index) => personWorkKey(person, index) === key) || null;
+}
+
+function normalizeWorkLogs(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row, index) => {
+      const person = row.personKey ? findPersonByWorkKey(row.personKey) : null;
+      const day = Math.max(1, Number(row.day) || project.currentDay || 1);
+      const sheet = callSheets.find((item) => item.day === day);
+      const hours = Math.max(0, Math.min(24, Number(row.hours) || 0));
+      const personName = String(row.personName || person?.name || "未命名人员").trim();
+      return {
+        id: String(row.id || `work-log-${Date.now()}-${index}`),
+        personKey: String(row.personKey || (person ? personWorkKey(person) : personName)),
+        personName,
+        role: String(row.role || person?.role || "").trim(),
+        dept: String(row.dept || person?.dept || "production").trim(),
+        day,
+        date: String(row.date || sheet?.date || "").trim(),
+        task: String(row.task || sheet?.title || "项目任务").trim(),
+        status: String(row.status || "recorded").trim(),
+        hours,
+        source: row.source === "estimated" ? "estimated" : "manual",
+      };
+    })
+    .filter((row) => row.hours > 0);
+}
+
+function timeToMinutes(value) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})$/u);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function sheetDurationHours(sheet) {
+  const start = timeToMinutes(sheet?.callTime);
+  const end = timeToMinutes(sheet?.wrapTime);
+  if (start === null || end === null) return 10;
+  let duration = (end - start) / 60;
+  if (duration <= 0) duration += 24;
+  return Math.max(4, Math.min(16, Math.round(duration * 2) / 2));
+}
+
+function estimatedWorkLogRows(manualRows = normalizeWorkLogs(workLogs)) {
+  const manualKeys = new Set(manualRows.map((row) => `${row.personKey}:${row.day}`));
+  const sourceSheets = callSheets.filter((sheet) => sheet.day <= project.currentDay);
+  const sheets = sourceSheets.length > 0 ? sourceSheets : callSheets.slice(0, Math.min(callSheets.length, project.currentDay || 3));
+  return sheets.flatMap((sheet) => {
+    const baseHours = sheetDurationHours(sheet);
+    const task = sheet.title || `${modeText("通告", "记录")} ${sheet.day}`;
+    return people
+      .map((person, index) => ({ person, key: personWorkKey(person, index) }))
+      .filter(({ person }) => sheet.departments.includes(person.dept))
+      .filter(({ key }) => !manualKeys.has(`${key}:${sheet.day}`))
+      .map(({ person, key }) => {
+        const actorFactor = isActorPerson(person) ? 0.76 : 1;
+        const postFactor = /post|vfx|music|publicity/u.test(person.dept) ? 0.62 : 1;
+        const hours = Math.max(2, Math.round(baseHours * actorFactor * postFactor * 2) / 2);
+        return {
+          id: `estimated-${sheet.day}-${key}`,
+          personKey: key,
+          personName: person.name || "未命名人员",
+          role: personRoleDisplay(person),
+          dept: person.dept,
+          day: sheet.day,
+          date: sheet.date || "",
+          task,
+          status: sheet.day === project.currentDay ? "current" : "estimated",
+          hours,
+          source: "estimated",
+        };
+      });
+  });
+}
+
+function workHourRows() {
+  const manualRows = normalizeWorkLogs(workLogs);
+  return [...manualRows, ...estimatedWorkLogRows(manualRows)].sort((a, b) => b.day - a.day || b.hours - a.hours);
+}
+
+function workHourSummary() {
+  const rows = workHourRows();
+  const manualRows = rows.filter((row) => row.source === "manual");
+  const totalHours = rows.reduce((sum, row) => sum + row.hours, 0);
+  const recordedHours = manualRows.reduce((sum, row) => sum + row.hours, 0);
+  const peopleMap = new Map();
+  const dayMap = new Map();
+  rows.forEach((row) => {
+    if (!peopleMap.has(row.personKey)) {
+      peopleMap.set(row.personKey, {
+        personKey: row.personKey,
+        name: row.personName,
+        role: row.role,
+        dept: row.dept,
+        hours: 0,
+        days: new Set(),
+        overtime: 0,
+        recorded: 0,
+      });
+    }
+    const personRow = peopleMap.get(row.personKey);
+    personRow.hours += row.hours;
+    personRow.days.add(row.day);
+    if (row.hours > 10.5) personRow.overtime += 1;
+    if (row.source === "manual") personRow.recorded += row.hours;
+    dayMap.set(row.day, (dayMap.get(row.day) || 0) + row.hours);
+  });
+  const topPeople = Array.from(peopleMap.values())
+    .map((row) => ({ ...row, dayCount: row.days.size }))
+    .sort((a, b) => b.hours - a.hours);
+  const dayRows = Array.from(dayMap.entries())
+    .map(([day, hours]) => ({ day, hours }))
+    .sort((a, b) => a.day - b.day);
+  const peakDay = dayRows.reduce((best, row) => (row.hours > (best?.hours || 0) ? row : best), null);
+  return {
+    rows,
+    manualRows,
+    totalHours,
+    recordedHours,
+    estimatedHours: Math.max(0, totalHours - recordedHours),
+    topPeople,
+    dayRows,
+    peakDay,
+    overtimeCount: rows.filter((row) => row.hours > 10.5).length,
+    personCount: topPeople.length,
+  };
+}
+
+function clampDay(value) {
+  return Math.max(1, Math.min(Math.max(project.plannedDays || 1, 1), Math.round(Number(value) || 1)));
+}
+
+function productionScheduleRows() {
+  const rows = [];
+  activeBudgetDepartments().forEach((department, index) => {
+    const sheets = callSheets.filter((sheet) => sheet.departments.includes(department.id));
+    if (sheets.length === 0) return;
+    const start = Math.min(...sheets.map((sheet) => sheet.day));
+    const end = Math.max(...sheets.map((sheet) => sheet.day));
+    const completed = sheets.filter((sheet) => sheet.day <= project.currentDay).length;
+    const owner = people.find((person) => person.dept === department.id);
+    const progressRate = sheets.length > 0 ? completed / sheets.length : 0;
+    rows.push({
+      id: `dept-${department.id}`,
+      title: department.name,
+      owner: owner ? `${owner.name} · ${personRoleDisplay(owner)}` : "未指派",
+      start: clampDay(start),
+      end: clampDay(end),
+      progressRate,
+      taskCount: sheets.length,
+      color: activeDepartmentColor(department, index),
+      status: end < project.currentDay && progressRate < 1 ? "延期" : progressRate >= 1 ? "完成" : "进行中",
+      risk: end < project.currentDay && progressRate < 1 ? "over" : progressRate < 0.55 && project.currentDay > start ? "tight" : "ok",
+    });
+  });
+  customProgressRows().forEach((row, index) => {
+    const start = clampDay(Math.max(1, project.currentDay - 2 + index));
+    const span = Math.max(2, Math.ceil((1 - row.rate) * 5));
+    rows.push({
+      id: `custom-${row.id}`,
+      title: row.label,
+      owner: "自定义进度",
+      start,
+      end: clampDay(start + span),
+      progressRate: row.rate,
+      taskCount: Math.round(row.target),
+      color: row.color,
+      status: row.rate >= 1 ? "完成" : row.rate >= 0.65 ? "推进" : "偏慢",
+      risk: row.rate >= 0.65 ? "ok" : row.rate >= 0.35 ? "tight" : "over",
+    });
+  });
+  return rows
+    .map((row) => ({
+      ...row,
+      span: Math.max(1, row.end - row.start + 1),
+      progressLabel: percentText(row.progressRate),
+    }))
+    .sort((a, b) => a.start - b.start || a.end - b.end)
+    .slice(0, 14);
+}
+
+function productionDashboardData() {
+  const schedule = productionScheduleRows();
+  const work = workHourSummary();
+  const progressRate = activeProgressStats().rate || 0;
+  const taskTotal = schedule.reduce((sum, row) => sum + row.taskCount, 0);
+  const delayed = schedule.filter((row) => row.risk === "over").length;
+  const tight = schedule.filter((row) => row.risk === "tight").length;
+  const lowest = schedule.reduce((worst, row) => (row.progressRate < (worst?.progressRate ?? 2) ? row : worst), null);
+  const remainingDays = Math.max(0, (project.plannedDays || 0) - (project.currentDay || 0));
+  return {
+    schedule,
+    work,
+    progressRate,
+    taskTotal,
+    delayed,
+    tight,
+    lowest,
+    remainingDays,
+  };
 }
 
 function sceneCount(code) {
@@ -5268,6 +5485,7 @@ function producerWorkspaceData() {
   const audit = auditSummaryData();
   const flow = fundFlowReadableData(8);
   const progress = activeProgressStats();
+  const production = productionDashboardData();
   const today = callSheets.find((sheet) => sheet.day === project.currentDay) || callSheets[callSheets.length - 1] || null;
   const completed = completedSheets();
   const spentRate = project.budget > 0 ? metrics.spent / project.budget : 0;
@@ -5344,6 +5562,16 @@ function producerWorkspaceData() {
       target: "audit",
     });
   }
+  if (production.delayed > 0 || production.tight > 0) {
+    decisions.push({
+      tone: production.delayed > 0 ? "warning" : "note",
+      title: "生产排期需要追踪",
+      detail: `${production.delayed} 个阶段延期，${production.tight} 个阶段待关注；工时峰值 ${production.work.peakDay ? `D${production.work.peakDay.day}` : "暂无"}。`,
+      amount: `${Math.round(production.progressRate * 100)}%`,
+      source: "排期 / 工时",
+      target: "progress",
+    });
+  }
   if (flow.unclassifiedUsed > 0 || flow.overAllocated > 0 || flow.unallocated > 0) {
     decisions.push({
       tone: flow.unclassifiedUsed > 0 || flow.overAllocated > 0 ? "warning" : "note",
@@ -5394,6 +5622,15 @@ function producerWorkspaceData() {
       target: "callsheet",
     },
     {
+      title: "排期 / 工时",
+      count: `${production.schedule.length} 阶段`,
+      metric: `${formatProgressNumber(production.work.totalHours)}h`,
+      detail: `${production.delayed} 延期 · ${production.tight} 关注 · ${production.work.personCount} 人参与`,
+      progress: production.progressRate,
+      views: ["甘特", "工时", "人员", "看板"],
+      target: "progress",
+    },
+    {
       title: "资金流向",
       count: `${flow.supplierCount} 个去向`,
       metric: money.format(flow.usedTotal),
@@ -5423,6 +5660,7 @@ function producerWorkspaceData() {
   ];
 
   const quickActions = [
+    { icon: "▣", label: "排期 / 工时", detail: "阶段、人员、工时看板", target: "progress" },
     { icon: "＋", label: modeText("新建通告", "新建记录"), detail: "节点式录入", target: "input", focus: "callsheetForm" },
     { icon: "⇥", label: "导入 Excel / 手写单", detail: "AI 识别录入", target: "input", focus: "spreadsheetFile" },
     { icon: "￥", label: "查看资金流向", detail: "公司、个人、车辆、酒店、场地", target: "fundflow" },
@@ -5430,7 +5668,7 @@ function producerWorkspaceData() {
     { icon: "↗", label: "生成监制报告", detail: "预算、风险、建议", target: "analysis" },
   ];
 
-  return { decisions: decisions.slice(0, 5), dataTables, quickActions, metrics, audit, flow, progress };
+  return { decisions: decisions.slice(0, 5), dataTables, quickActions, metrics, audit, flow, progress, production };
 }
 
 function renderProducerWorkspace() {
@@ -6426,6 +6664,176 @@ function renderProgress() {
       <div><strong>${ratingOn ? (alerts.length > 0 ? `${alerts.length} 个等级/信任项需复核` : "等级与信任评分稳定") : "等级评分已关闭"}</strong><p>${ratingOn ? (ratingRisk ? `${ratingRisk.label}：${ratingRisk.fit.label}，信任 ${ratingRisk.trust}。` : "当前人员与公司报价均未触发高风险规则。") : "当前只保留预算、进度和通告成本审查。"}</p></div>
     </div>
   `;
+}
+
+function renderProductionSchedule() {
+  const board = document.querySelector("#productionScheduleBoard");
+  const status = document.querySelector("#productionScheduleStatus");
+  if (!board || !status) return;
+  const rows = productionScheduleRows();
+  const cols = Math.max(1, Number(project.plannedDays) || 1);
+  const today = clampDay(project.currentDay || 1);
+  status.textContent = rows.length > 0 ? `${rows.length} 个阶段 · D${today}/${cols}` : "暂无排期";
+  if (rows.length === 0) {
+    board.innerHTML = `<div class="production-empty">录入通告单、部门或自定义进度后，这里会生成制片排期。</div>`;
+    return;
+  }
+
+  const ticks = Array.from({ length: cols }, (_, index) => index + 1)
+    .map((day) => `<span class="${day === today ? "today" : ""}">D${day}</span>`)
+    .join("");
+  board.innerHTML = `
+    <div class="schedule-grid" style="--schedule-cols:${cols}">
+      <div class="schedule-left schedule-head">阶段 / 负责人</div>
+      <div class="schedule-scale schedule-head">${ticks}</div>
+      ${rows
+        .map(
+          (row) => `
+            <div class="schedule-left">
+              <strong>${escapeHtml(row.title)}</strong>
+              <span>${escapeHtml(row.owner)}</span>
+              <small>D${row.start}-D${row.end} · ${escapeHtml(row.status)} · ${row.progressLabel}</small>
+            </div>
+            <div class="schedule-lane">
+              <span class="schedule-today-line" style="grid-column:${today}"></span>
+              <span class="schedule-bar ${row.risk}" style="grid-column:${row.start} / span ${row.span}; --bar-color:${row.color}">
+                <i style="width:${Math.round(Math.max(0.06, Math.min(row.progressRate, 1)) * 100)}%"></i>
+                <b>${escapeHtml(row.progressLabel)}</b>
+              </span>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderWorkHourDashboard() {
+  const dashboard = document.querySelector("#workHourDashboard");
+  const status = document.querySelector("#workHourStatus");
+  const recent = document.querySelector("#workLogRecent");
+  const personSelect = document.querySelector("#workLogPerson");
+  if (!dashboard || !status || !recent || !personSelect) return;
+
+  const summary = workHourSummary();
+  status.textContent = summary.manualRows.length > 0 ? `${summary.manualRows.length} 条手动记录 · 自动补估算` : "当前为通告单估算";
+  const currentValue = personSelect.value;
+  personSelect.innerHTML =
+    people.length > 0
+      ? people.map((person, index) => `<option value="${escapeHtml(personWorkKey(person, index))}">${escapeHtml(person.name || "未命名")} · ${escapeHtml(personRoleDisplay(person))}</option>`).join("")
+      : `<option value="">暂无人员</option>`;
+  if (Array.from(personSelect.options).some((option) => option.value === currentValue)) {
+    personSelect.value = currentValue;
+  }
+
+  const maxDayHours = Math.max(1, ...summary.dayRows.map((row) => row.hours));
+  const topPeople = summary.topPeople.slice(0, 5);
+  dashboard.innerHTML = `
+    <div class="work-hour-kpis">
+      <div><strong>${formatProgressNumber(summary.totalHours)}</strong><span>总工时</span></div>
+      <div><strong>${formatProgressNumber(summary.recordedHours)}</strong><span>手动记录</span></div>
+      <div><strong>${summary.personCount}</strong><span>参与人员</span></div>
+      <div><strong>${summary.overtimeCount}</strong><span>加班风险</span></div>
+    </div>
+    <div class="work-hour-chart">
+      ${summary.dayRows
+        .map(
+          (row) => `
+            <div class="work-day-bar">
+              <span>D${row.day}</span>
+              <i style="height:${Math.max(8, (row.hours / maxDayHours) * 92)}%"></i>
+              <b>${formatProgressNumber(row.hours)}</b>
+            </div>
+          `,
+        )
+        .join("") || `<div class="production-empty">暂无工时数据</div>`}
+    </div>
+    <div class="work-person-list">
+      ${topPeople
+        .map(
+          (row) => `
+            <div class="work-person-row">
+              <div>
+                <strong>${escapeHtml(row.name)}</strong>
+                <span>${escapeHtml(getDept(row.dept).name)} · ${escapeHtml(row.role || "未填岗位")}</span>
+              </div>
+              <b>${formatProgressNumber(row.hours)}h</b>
+            </div>
+          `,
+        )
+        .join("") || `<div class="production-empty">暂无人员工时</div>`}
+    </div>
+  `;
+
+  recent.innerHTML =
+    summary.manualRows.length > 0
+      ? summary.manualRows
+          .slice(0, 6)
+          .map(
+            (row) => `
+              <div class="work-log-row">
+                <div>
+                  <strong>${escapeHtml(row.personName)} · ${formatProgressNumber(row.hours)}h</strong>
+                  <span>D${row.day} ${escapeHtml(row.date)} · ${escapeHtml(row.task)} · ${escapeHtml(workLogStatusText(row.status))}</span>
+                </div>
+                <button class="person-delete-button" type="button" data-work-log-id="${escapeHtml(row.id)}">删除</button>
+              </div>
+            `,
+          )
+          .join("")
+      : `<div class="production-empty">还没有手动工时记录。保存后会覆盖同人同天的估算工时。</div>`;
+}
+
+function workLogStatusText(status) {
+  if (status === "overtime") return "加班";
+  if (status === "review") return "待复核";
+  if (status === "current") return "进行中";
+  if (status === "estimated") return "估算";
+  return "已记录";
+}
+
+function renderProductionDataBoard() {
+  const board = document.querySelector("#productionDataBoard");
+  const status = document.querySelector("#productionDashboardStatus");
+  if (!board || !status) return;
+  const data = productionDashboardData();
+  const work = data.work;
+  const lowest = data.lowest;
+  const averageHours = work.personCount > 0 ? work.totalHours / work.personCount : 0;
+  status.textContent = `${data.taskTotal} 项任务 · ${data.delayed} 项延期`;
+  board.innerHTML = `
+    <div class="production-data-kpis">
+      <div><span>任务总量</span><strong>${data.taskTotal}</strong><small>${data.schedule.length} 个阶段</small></div>
+      <div><span>进度完成</span><strong>${Math.round(data.progressRate * 100)}%</strong><small>预算同步 ${Math.round((project.budget > 0 ? totalSpent() / project.budget : 0) * 100)}%</small></div>
+      <div><span>延期 / 关注</span><strong>${data.delayed}/${data.tight}</strong><small>红色延期，黄色待追</small></div>
+      <div><span>人均工时</span><strong>${formatProgressNumber(averageHours)}h</strong><small>${work.personCount} 人参与</small></div>
+      <div><span>峰值工时日</span><strong>${work.peakDay ? `D${work.peakDay.day}` : "--"}</strong><small>${work.peakDay ? `${formatProgressNumber(work.peakDay.hours)}h` : "暂无"}</small></div>
+      <div><span>瓶颈阶段</span><strong>${escapeHtml(lowest?.title || "--")}</strong><small>${lowest ? lowest.progressLabel : "暂无"}</small></div>
+    </div>
+    <div class="production-status-list">
+      ${data.schedule
+        .slice(0, 6)
+        .map(
+          (row) => `
+            <div class="production-status-row">
+              <span class="${row.risk}"></span>
+              <div>
+                <strong>${escapeHtml(row.title)}</strong>
+                <small>${escapeHtml(row.owner)} · D${row.start}-D${row.end}</small>
+              </div>
+              <b>${row.progressLabel}</b>
+            </div>
+          `,
+        )
+        .join("") || `<div class="production-empty">暂无生产阶段</div>`}
+    </div>
+  `;
+}
+
+function renderProductionOps() {
+  renderProductionSchedule();
+  renderWorkHourDashboard();
+  renderProductionDataBoard();
 }
 
 function renderInputStats() {
@@ -8237,6 +8645,7 @@ function refreshAll(options = {}) {
   renderPersonnelModule();
   renderEquipmentModule();
   renderProgress();
+  renderProductionOps();
   renderDepartmentInputs();
   renderInputPreferences();
   renderSceneInput();
@@ -8652,6 +9061,55 @@ function setupInputForms() {
     saveData();
     refreshAll();
     setFormStatus(`已删除进度项：${item?.name || "未命名"}`, "warning");
+  });
+
+  document.querySelector("#workLogForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const person = findPersonByWorkKey(form.elements.personKey.value);
+    if (!person) {
+      setFormStatus("请先选择人员", "warning");
+      return;
+    }
+    const day = Math.max(1, getFormNumber(form, "day"));
+    const hours = Math.max(0, Math.min(24, getFormNumber(form, "hours")));
+    if (hours <= 0) {
+      setFormStatus("请填写大于 0 的工时", "warning");
+      return;
+    }
+    const sheet = callSheets.find((item) => item.day === day);
+    const personKey = form.elements.personKey.value;
+    const nextLog = {
+      id: `work-log-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      personKey,
+      personName: person.name || "未命名人员",
+      role: personRoleDisplay(person),
+      dept: person.dept,
+      day,
+      date: sheet?.date || "",
+      task: form.elements.task.value.trim() || sheet?.title || "项目任务",
+      status: form.elements.status.value,
+      hours,
+      source: "manual",
+    };
+    workLogs = normalizeWorkLogs(workLogs).filter((row) => !(row.personKey === personKey && row.day === day));
+    workLogs.push(nextLog);
+    form.reset();
+    form.elements.day.value = String(day);
+    form.elements.hours.value = "8";
+    saveData();
+    refreshAll();
+    setFormStatus(`工时已保存：${nextLog.personName} · ${formatProgressNumber(hours)}h`, "good");
+  });
+
+  document.querySelector("#workLogRecent")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-work-log-id]");
+    if (!button) return;
+    const target = workLogs.find((row) => row.id === button.dataset.workLogId);
+    workLogs = normalizeWorkLogs(workLogs).filter((row) => row.id !== button.dataset.workLogId);
+    saveData();
+    refreshAll();
+    setFormStatus(`已删除工时记录：${target?.personName || "人员"}`, "warning");
   });
 
   document.querySelector("#callsheetForm").addEventListener("submit", (event) => {

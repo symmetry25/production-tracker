@@ -13,7 +13,7 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=producer-workspace-1" />
+    <link rel="stylesheet" href="./styles.css?v=cgteamwork-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -826,6 +826,63 @@
               </div>
               <canvas id="editProgressChart" width="960" height="360" aria-label="剪辑进度与完成场次图表"></canvas>
               <div class="edit-progress-summary" id="editProgressSummary"></div>
+            </article>
+
+            <article class="panel production-schedule-panel">
+              <div class="panel-heading">
+                <h3>制片排期</h3>
+                <span id="productionScheduleStatus">按阶段 / 部门 / 负责人</span>
+              </div>
+              <div class="production-schedule-board" id="productionScheduleBoard"></div>
+            </article>
+
+            <article class="panel work-hours-panel">
+              <div class="panel-heading">
+                <h3>工时</h3>
+                <span id="workHourStatus">按人员与项目统计</span>
+              </div>
+              <div class="work-hour-dashboard" id="workHourDashboard"></div>
+              <form class="work-log-form" id="workLogForm">
+                <label>
+                  <span>人员</span>
+                  <select name="personKey" id="workLogPerson"></select>
+                </label>
+                <label>
+                  <span>拍摄日</span>
+                  <input name="day" type="number" min="1" step="1" value="1" />
+                </label>
+                <label>
+                  <span>工时</span>
+                  <input name="hours" type="number" min="0" max="24" step="0.5" value="8" />
+                </label>
+                <label>
+                  <span>任务</span>
+                  <input name="task" type="text" placeholder="如：夜戏拍摄 / 素材整理" />
+                </label>
+                <label>
+                  <span>状态</span>
+                  <select name="status">
+                    <option value="recorded">已记录</option>
+                    <option value="review">待复核</option>
+                    <option value="overtime">加班</option>
+                  </select>
+                </label>
+                <button class="icon-button primary" type="submit">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M12 5v14m-7-7h14" />
+                  </svg>
+                  <span>保存工时</span>
+                </button>
+              </form>
+              <div class="work-log-list" id="workLogRecent"></div>
+            </article>
+
+            <article class="panel production-dashboard-panel">
+              <div class="panel-heading">
+                <h3>生产数据看板</h3>
+                <span id="productionDashboardStatus">任务 / 工时 / 延期 / 资源</span>
+              </div>
+              <div class="production-data-board" id="productionDataBoard"></div>
             </article>
           </div>
         </section>
@@ -1662,6 +1719,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=producer-workspace-1"></script>
+    <script src="./app.js?v=cgteamwork-1"></script>
   </body>
 </html>

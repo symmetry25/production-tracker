@@ -2472,6 +2472,326 @@ tbody tr:hover td {
   font-size: 12px;
 }
 
+.production-schedule-panel,
+.production-dashboard-panel {
+  grid-column: 1 / -1;
+}
+
+.work-hours-panel {
+  grid-column: span 2;
+}
+
+.production-schedule-board {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.schedule-grid {
+  display: grid;
+  grid-template-columns: 280px minmax(760px, 1fr);
+  min-width: 1040px;
+}
+
+.schedule-head {
+  min-height: 36px;
+  color: var(--muted);
+  background: var(--surface-raised);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.schedule-left {
+  display: grid;
+  gap: 4px;
+  align-content: center;
+  min-height: 66px;
+  padding: 10px 12px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.schedule-left strong,
+.schedule-left span,
+.schedule-left small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-left span,
+.schedule-left small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.schedule-scale,
+.schedule-lane {
+  display: grid;
+  grid-template-columns: repeat(var(--schedule-cols), minmax(36px, 1fr));
+  min-height: 66px;
+  border-bottom: 1px solid var(--line);
+  background:
+    repeating-linear-gradient(90deg, rgba(30, 37, 35, 0.045) 0 1px, transparent 1px 36px),
+    var(--surface);
+}
+
+.schedule-scale {
+  min-height: 36px;
+}
+
+.schedule-scale span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  border-right: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.schedule-scale .today {
+  color: var(--blue);
+  background: rgba(46, 95, 134, 0.12);
+}
+
+.schedule-lane {
+  position: relative;
+  align-items: center;
+  padding: 0 6px;
+}
+
+.schedule-today-line {
+  align-self: stretch;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--blue);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.schedule-bar {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 28px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(46, 95, 134, 0.22);
+  border-radius: 6px;
+}
+
+.schedule-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--bar-color, var(--teal));
+  opacity: 0.9;
+}
+
+.schedule-bar b {
+  position: relative;
+  z-index: 1;
+  padding: 0 9px;
+  color: #fff;
+  font-size: 12px;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+
+.schedule-bar.tight i {
+  background: var(--amber);
+}
+
+.schedule-bar.over i {
+  background: var(--red);
+}
+
+.work-hour-dashboard {
+  display: grid;
+  gap: 12px;
+}
+
+.work-hour-kpis,
+.production-data-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.production-data-kpis {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.work-hour-kpis > div,
+.production-data-kpis > div {
+  min-height: 74px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  border-radius: 8px;
+}
+
+.work-hour-kpis strong,
+.production-data-kpis strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 20px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-hour-kpis span,
+.production-data-kpis span,
+.production-data-kpis small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.work-hour-chart {
+  display: flex;
+  gap: 7px;
+  align-items: end;
+  min-height: 130px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.work-day-bar {
+  display: grid;
+  grid-template-rows: 18px 1fr 18px;
+  gap: 4px;
+  justify-items: center;
+  align-self: stretch;
+  width: 42px;
+  flex: 0 0 42px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.work-day-bar i {
+  align-self: end;
+  width: 16px;
+  background: var(--blue);
+  border-radius: 5px 5px 2px 2px;
+}
+
+.work-person-list,
+.work-log-list,
+.production-status-list {
+  display: grid;
+  gap: 6px;
+}
+
+.work-person-row,
+.work-log-row,
+.production-status-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  border-radius: 8px;
+}
+
+.work-person-row strong,
+.work-log-row strong,
+.production-status-row strong,
+.work-person-row span,
+.work-log-row span,
+.production-status-row small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-person-row strong,
+.work-log-row strong,
+.production-status-row strong {
+  font-size: 13px;
+}
+
+.work-person-row span,
+.work-log-row span,
+.production-status-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.work-log-form {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.4fr) 82px 82px minmax(160px, 1fr) 110px auto;
+  gap: 8px;
+  align-items: end;
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.work-log-form label {
+  display: grid;
+  gap: 5px;
+}
+
+.work-log-form label span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.production-data-board {
+  display: grid;
+  gap: 12px;
+}
+
+.production-status-row {
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+}
+
+.production-status-row > span {
+  width: 10px;
+  height: 34px;
+  background: var(--green);
+  border-radius: 999px;
+}
+
+.production-status-row > span.tight {
+  background: var(--amber);
+}
+
+.production-status-row > span.over {
+  background: var(--red);
+}
+
+.production-empty {
+  padding: 14px;
+  border: 1px dashed var(--line-strong);
+  color: var(--muted);
+  background: var(--surface-raised);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .scene-list {
   max-height: 420px;
   overflow: auto;
@@ -4191,7 +4511,16 @@ tbody tr:hover td {
 .producer-action-button,
 .producer-empty,
 .producer-column-head span,
-.producer-action-button i {
+.producer-action-button i,
+.production-schedule-board,
+.work-hour-kpis > div,
+.production-data-kpis > div,
+.work-hour-chart,
+.work-person-row,
+.work-log-row,
+.production-status-row,
+.work-log-form,
+.production-empty {
   border-radius: 8px;
 }
 
@@ -4319,6 +4648,29 @@ tbody tr:hover td {
 :root.dark-mode .fund-flow-detail-card > span,
 :root.dark-mode .fund-flow-track {
   background: #313a43;
+}
+
+:root.dark-mode .production-schedule-board,
+:root.dark-mode .work-hour-chart,
+:root.dark-mode .work-log-form {
+  background: var(--surface);
+}
+
+:root.dark-mode .schedule-head,
+:root.dark-mode .work-hour-kpis > div,
+:root.dark-mode .production-data-kpis > div,
+:root.dark-mode .work-person-row,
+:root.dark-mode .work-log-row,
+:root.dark-mode .production-status-row,
+:root.dark-mode .production-empty {
+  background: #20262d;
+}
+
+:root.dark-mode .schedule-scale,
+:root.dark-mode .schedule-lane {
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 36px),
+    var(--surface);
 }
 
 :root.dark-mode .report-cover {
@@ -4504,6 +4856,24 @@ tbody tr:hover td {
     grid-template-columns: 1fr;
   }
 
+  .work-hours-panel {
+    grid-column: 1 / -1;
+  }
+
+  .work-log-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .work-log-form .icon-button {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  .work-hour-kpis,
+  .production-data-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .producer-workspace {
     grid-template-columns: 1fr;
   }
@@ -4642,6 +5012,9 @@ tbody tr:hover td {
   .custom-progress-panel,
   .personnel-panel,
   .custom-event-panel,
+  .production-schedule-panel,
+  .production-dashboard-panel,
+  .work-hours-panel,
   .callsheet-form-panel {
     grid-column: auto;
   }
@@ -4763,6 +5136,8 @@ tbody tr:hover td {
   .module-summary-grid,
   .vfx-audit-summary,
   .vfx-audit-bars,
+  .work-hour-kpis,
+  .production-data-kpis,
   .fund-flow-summary,
   .fund-flow-kpis,
   .fund-flow-readable-grid,
@@ -4841,9 +5216,14 @@ tbody tr:hover td {
 	  .visual-summary,
   .custom-progress-item,
   .edit-progress-summary,
+  .work-log-form,
   .input-stats,
   .comparison-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .work-log-form .icon-button {
+    grid-column: auto;
   }
 
   .preference-grid label:nth-child(n) {
