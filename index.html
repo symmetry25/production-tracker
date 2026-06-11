@@ -13,7 +13,7 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=cgteamwork-1" />
+    <link rel="stylesheet" href="./styles.css?v=layout-clean-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -443,8 +443,8 @@
             <div class="status-pill" id="personnelModuleBadge">计算中</div>
           </div>
 
-          <div class="module-layout">
-            <article class="panel module-wide">
+          <div class="module-layout module-dashboard-layout">
+            <article class="panel module-summary-panel">
               <div class="panel-heading">
                 <h3>人员总览</h3>
                 <span>人工成本 / 等级 / 信任</span>
@@ -452,7 +452,7 @@
               <div class="module-summary-grid" id="personnelSummaryMetrics"></div>
             </article>
 
-            <article class="panel">
+            <article class="panel module-side-panel module-department-panel">
               <div class="panel-heading">
                 <h3>部门人员</h3>
                 <span>按分组汇总</span>
@@ -460,7 +460,7 @@
               <div class="module-list" id="personnelDepartmentList"></div>
             </article>
 
-            <article class="panel">
+            <article class="panel module-side-panel module-risk-panel">
               <div class="panel-heading">
                 <h3>人员风险</h3>
                 <span>报价与信任</span>
@@ -468,7 +468,7 @@
               <div class="module-risk-list" id="personnelRiskList"></div>
             </article>
 
-            <article class="panel module-full personnel-card-panel">
+            <article class="panel module-spotlight-panel personnel-card-panel">
               <div class="panel-heading">
                 <h3>人员档案</h3>
                 <span>姓名 / 联系方式 / 备注</span>
@@ -476,7 +476,7 @@
               <div class="personnel-card-grid" id="personnelCardGrid"></div>
             </article>
 
-            <article class="panel module-full">
+            <article class="panel module-main-panel">
               <div class="panel-heading">
                 <h3>人员明细</h3>
                 <span>公司 / 供应商 / 岗位</span>
@@ -513,8 +513,8 @@
             <div class="status-pill" id="equipmentModuleBadge">计算中</div>
           </div>
 
-          <div class="module-layout">
-            <article class="panel module-wide">
+          <div class="module-layout module-dashboard-layout">
+            <article class="panel module-summary-panel">
               <div class="panel-heading">
                 <h3>器材总览</h3>
                 <span>租赁 / 押金 / 供应商</span>
@@ -522,7 +522,7 @@
               <div class="module-summary-grid" id="equipmentSummaryMetrics"></div>
             </article>
 
-            <article class="panel">
+            <article class="panel module-side-panel module-department-panel">
               <div class="panel-heading">
                 <h3>部门器材</h3>
                 <span>按分组汇总</span>
@@ -530,7 +530,7 @@
               <div class="module-list" id="equipmentDepartmentList"></div>
             </article>
 
-            <article class="panel">
+            <article class="panel module-side-panel module-risk-panel">
               <div class="panel-heading">
                 <h3>器材风险</h3>
                 <span>供应商与报价</span>
@@ -538,7 +538,7 @@
               <div class="module-risk-list" id="equipmentRiskList"></div>
             </article>
 
-            <article class="panel module-full">
+            <article class="panel module-main-panel">
               <div class="panel-heading">
                 <h3>器材明细</h3>
                 <span>日租 / 使用天数 / 押金</span>
@@ -1719,6 +1719,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=cgteamwork-1"></script>
+    <script src="./app.js?v=layout-clean-1"></script>
   </body>
 </html>

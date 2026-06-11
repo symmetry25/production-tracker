@@ -4113,7 +4113,7 @@ function renderAuditModule() {
       (rule) => `
         <div class="audit-rule-item ${rule.severity}">
           <strong>${escapeHtml(rule.label)}</strong>
-          <span>${escapeHtml(rule.detail)}</span>
+          <span>${escapeHtml(compactSentence(rule.detail))}</span>
           <small>${rule.count} 项命中</small>
         </div>
       `,
@@ -5848,22 +5848,23 @@ function renderBudgetTables() {
   const budgetShareInsight = document.querySelector("#budgetShareInsight");
   if (budgetShareInsight) {
     budgetShareInsight.textContent = topBudgetRow
-      ? `${topBudgetRow.label}最高 · ${percentText(topBudgetRow.value / totalDepartmentBudget)}`
+      ? `${topBudgetRow.label}最高 · ${percentText(totalDepartmentBudget > 0 ? topBudgetRow.value / totalDepartmentBudget : 0)}`
       : modeText("部门预算百分比", "自定义分类预算百分比");
   }
   const budgetDepartments = activeBudgetDepartments();
   document.querySelector("#departmentTable").innerHTML = budgetDepartments.length > 0
     ? budgetDepartments
     .map((department) => {
-      const used = spent[department.id];
-      const rate = used / department.budget;
-      const budgetShare = totalDepartmentBudget > 0 ? department.budget / totalDepartmentBudget : 0;
+      const used = Number(spent[department.id]) || 0;
+      const budget = Number(department.budget) || 0;
+      const rate = budget > 0 ? used / budget : used > 0 ? 1 : 0;
+      const budgetShare = totalDepartmentBudget > 0 ? budget / totalDepartmentBudget : 0;
       const statusClass = rate > 1 ? "over" : rate > 0.82 ? "tight" : "ok";
       const statusText = rate > 1 ? "已超支" : rate > 0.82 ? "需关注" : "健康";
       return `
         <tr>
           <td><strong>${department.name}</strong></td>
-          <td>${money.format(department.budget)} · ${percentText(budgetShare)}</td>
+          <td>${money.format(budget)} · ${percentText(budgetShare)}</td>
           <td>${money.format(used)}</td>
           <td><span class="status-text ${statusClass}">${statusText} · ${Math.round(rate * 100)}%</span></td>
         </tr>
@@ -5873,8 +5874,13 @@ function renderBudgetTables() {
     : `<tr><td colspan="4">${isCustomInputMode() ? "暂无自定义分类。请先在录入偏好保存自定义部门/分类。" : "暂无部门预算。"}</td></tr>`;
 
   const categories = spentByCategory();
-  document.querySelector("#categoryLegend").innerHTML = Object.entries(categoryNames)
-    .map(([key, name]) => `<span class="legend-item"><i class="legend-swatch" style="background:${activeCategoryColor(key)}"></i>${name} ${compactMoney(categories[key])}</span>`)
+  const visibleCategoryLegend = Object.entries(categoryNames)
+    .map(([key, name]) => ({ key, name, value: Number(categories[key]) || 0 }))
+    .filter((row) => row.value > 0)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6);
+  document.querySelector("#categoryLegend").innerHTML = visibleCategoryLegend
+    .map((row) => `<span class="legend-item"><i class="legend-swatch" style="background:${activeCategoryColor(row.key)}"></i>${row.name} ${compactMoney(row.value)}</span>`)
     .join("");
 
   renderBudgetShareControls();
@@ -6113,7 +6119,13 @@ function renderDepartmentShareChart(prefix, rows = departmentAnalysisRows()) {
 }
 
 function percentText(value) {
-  return `${Math.round(value * 100)}%`;
+  const safeValue = Number.isFinite(value) ? value : 0;
+  return `${Math.round(safeValue * 100)}%`;
+}
+
+function compactSentence(text, limit = 46) {
+  const normalized = String(text || "").replace(/\s+/g, " ").trim();
+  return normalized.length > limit ? `${normalized.slice(0, limit - 1)}…` : normalized;
 }
 
 function reportDateLabel(date = new Date()) {

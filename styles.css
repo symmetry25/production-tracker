@@ -64,6 +64,29 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-color: rgba(120, 132, 126, 0.42) transparent;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  background: rgba(120, 132, 126, 0.42);
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 132, 126, 0.62);
+  background-clip: padding-box;
 }
 
 html {
@@ -4721,6 +4744,287 @@ tbody tr:hover td {
   background: rgba(246, 189, 79, 0.13);
 }
 
+/* Dense desktop module layouts */
+.module-dashboard-layout {
+  grid-template-columns: minmax(680px, 1fr) minmax(300px, 360px);
+  gap: 14px;
+}
+
+.module-dashboard-layout .module-summary-panel {
+  grid-column: 1 / -1;
+}
+
+.module-dashboard-layout .module-main-panel {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.module-dashboard-layout .module-department-panel {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.module-dashboard-layout .module-risk-panel {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+#personnel .module-spotlight-panel {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+.module-dashboard-layout .panel-heading {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+}
+
+.module-dashboard-layout .module-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.module-dashboard-layout .module-summary-card {
+  min-height: 76px;
+  padding: 10px;
+}
+
+.module-dashboard-layout .module-summary-card strong {
+  margin: 5px 0 2px;
+  font-size: clamp(18px, 1.35vw, 22px);
+}
+
+.module-dashboard-layout .module-list,
+.module-dashboard-layout .module-risk-list {
+  max-height: 540px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.module-dashboard-layout .module-bar-row,
+.module-dashboard-layout .module-risk-item {
+  padding: 9px;
+  gap: 6px;
+}
+
+.module-dashboard-layout .module-risk-item strong,
+.module-dashboard-layout .module-row-head strong {
+  font-size: 13px;
+}
+
+.module-dashboard-layout .module-main-panel .table-wrap {
+  max-height: 570px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.module-dashboard-layout .module-table {
+  min-width: 860px;
+}
+
+.personnel-card-panel .personnel-card-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: 340px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.personnel-card-panel .personnel-profile-card {
+  padding: 10px;
+  grid-template-columns: 38px minmax(0, 1fr);
+}
+
+.personnel-card-panel .personnel-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+#budget .budget-layout {
+  grid-template-columns: minmax(390px, 0.62fr) minmax(560px, 1fr);
+  gap: 14px;
+}
+
+#budget .budget-layout > .panel:first-child {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 0;
+}
+
+#budget .budget-layout .chart-panel:not(.fund-flow-panel) {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+}
+
+#budget .budget-layout .roster-panel {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+
+#budget .budget-layout .fund-flow-panel {
+  grid-column: 1 / -1;
+  min-height: 520px;
+}
+
+#budget .table-wrap {
+  max-height: 580px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+#budget .table-wrap table {
+  min-width: 0;
+}
+
+#budget th,
+#budget td {
+  padding: 10px;
+}
+
+#budget #categoryLegend:empty {
+  display: none;
+}
+
+#budget .mini-legend {
+  max-width: 760px;
+  justify-content: flex-end;
+}
+
+#budget .legend-item {
+  white-space: nowrap;
+}
+
+#budget #categoryChart {
+  min-height: 340px;
+  max-height: 400px;
+}
+
+#audit .audit-layout {
+  grid-template-columns: minmax(720px, 1fr) minmax(320px, 380px);
+  gap: 14px;
+}
+
+#audit .audit-summary-panel {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 0;
+}
+
+#audit .audit-filter-panel {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+}
+
+#audit .audit-wide {
+  grid-column: 1;
+  grid-row: 2 / span 3;
+  min-height: 0;
+}
+
+#audit .audit-rules-panel {
+  grid-column: 2;
+  grid-row: 2;
+  min-height: 0;
+}
+
+#audit .audit-brief-panel {
+  grid-column: 2;
+  grid-row: 3;
+  min-height: 0;
+}
+
+#audit .audit-vfx-panel {
+  grid-column: 1 / -1;
+  grid-row: 5;
+  min-height: 0;
+}
+
+#audit .audit-summary-panel .module-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#audit .audit-summary-panel .module-summary-card {
+  min-height: 76px;
+}
+
+#audit .audit-summary-panel .module-summary-card strong {
+  font-size: clamp(17px, 1.3vw, 21px);
+  overflow-wrap: normal;
+}
+
+#audit .audit-filter-panel {
+  padding: 14px;
+}
+
+#audit .audit-filter-panel .chart-type-tabs {
+  justify-content: flex-start;
+}
+
+#audit .audit-rule-list,
+#audit .audit-brief {
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+#audit .audit-rule-item,
+#audit .audit-brief-block {
+  min-height: 0;
+  padding: 10px;
+}
+
+#audit .audit-brief {
+  grid-template-columns: 1fr;
+}
+
+#audit .audit-wide .table-wrap {
+  max-height: 620px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+#progress .progress-layout {
+  grid-template-columns: minmax(300px, 360px) minmax(540px, 1fr) minmax(320px, 400px);
+  gap: 14px;
+}
+
+#progress .progress-layout > .chart-panel:first-child {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+#progress .scene-panel {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+#progress .risk-panel {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+#progress .progress-edit-panel,
+#progress .production-schedule-panel,
+#progress .work-hours-panel,
+#progress .production-dashboard-panel {
+  grid-column: 1 / -1;
+}
+
+#progress .scene-list {
+  max-height: 520px;
+}
+
+#progress .risk-list {
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
 @media (min-width: 1101px) and (max-width: 1600px) {
   .topbar-tools {
     grid-template-columns: 1fr;
@@ -5334,6 +5638,56 @@ tbody tr:hover td {
   .daily-bar-row,
   .scene-row {
     min-width: 0;
+  }
+}
+
+@media (max-width: 1100px) {
+  .module-dashboard-layout,
+  #budget .budget-layout,
+  #audit .audit-layout,
+  #progress .progress-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .module-dashboard-layout .module-summary-panel,
+  .module-dashboard-layout .module-main-panel,
+  .module-dashboard-layout .module-department-panel,
+  .module-dashboard-layout .module-risk-panel,
+  #personnel .module-spotlight-panel,
+  #budget .budget-layout > .panel:first-child,
+  #budget .budget-layout .chart-panel:not(.fund-flow-panel),
+  #budget .budget-layout .roster-panel,
+  #budget .budget-layout .fund-flow-panel,
+  #audit .audit-summary-panel,
+  #audit .audit-filter-panel,
+  #audit .audit-wide,
+  #audit .audit-rules-panel,
+  #audit .audit-brief-panel,
+  #audit .audit-vfx-panel,
+  #progress .progress-layout > .chart-panel:first-child,
+  #progress .scene-panel,
+  #progress .risk-panel,
+  #progress .progress-edit-panel,
+  #progress .production-schedule-panel,
+  #progress .work-hours-panel,
+  #progress .production-dashboard-panel {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .module-dashboard-layout,
+  #budget .budget-layout,
+  #audit .audit-layout,
+  #progress .progress-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .module-dashboard-layout .module-summary-grid,
+  #audit .audit-summary-panel .module-summary-grid,
+  .personnel-card-panel .personnel-card-grid {
+    grid-template-columns: 1fr;
   }
 }
 
