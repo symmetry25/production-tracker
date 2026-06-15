@@ -13,7 +13,7 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=schedule-timeline-2" />
+    <link rel="stylesheet" href="./styles.css?v=production-tracking-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -252,6 +252,42 @@
                   </div>
                   <div class="producer-action-list" id="producerActionRail"></div>
                 </section>
+              </div>
+            </article>
+
+            <article class="panel production-tracking-panel">
+              <div class="panel-heading production-tracking-heading">
+                <div>
+                  <h3>Production Tracking Console</h3>
+                  <span>任务 / 资源 / 审核 / 预算风险</span>
+                </div>
+                <div class="status-pill" id="productionTrackingBadge">载入中</div>
+              </div>
+              <div class="tracking-console" id="productionTrackingConsole">
+                <div class="tracking-console-kpis" id="trackingConsoleKpis"></div>
+                <div class="tracking-console-grid">
+                  <section class="tracking-console-section tracking-table-section" aria-labelledby="trackingTableTitle">
+                    <div class="tracking-section-head">
+                      <span>Live Work</span>
+                      <h4 id="trackingTableTitle">生产追踪</h4>
+                    </div>
+                    <div class="tracking-table" id="trackingConsoleTable"></div>
+                  </section>
+                  <section class="tracking-console-section tracking-resource-section" aria-labelledby="trackingResourceTitle">
+                    <div class="tracking-section-head">
+                      <span>Resources</span>
+                      <h4 id="trackingResourceTitle">资源与供应商</h4>
+                    </div>
+                    <div class="tracking-resource-list" id="trackingResourceList"></div>
+                  </section>
+                  <section class="tracking-console-section tracking-review-section" aria-labelledby="trackingReviewTitle">
+                    <div class="tracking-section-head">
+                      <span>Review</span>
+                      <h4 id="trackingReviewTitle">审查队列</h4>
+                    </div>
+                    <div class="tracking-review-list" id="trackingReviewList"></div>
+                  </section>
+                </div>
               </div>
             </article>
 
@@ -1765,6 +1801,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=schedule-timeline-2"></script>
+    <script src="./app.js?v=production-tracking-1"></script>
   </body>
 </html>

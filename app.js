@@ -5942,6 +5942,219 @@ function renderProducerWorkspace() {
     .join("");
 }
 
+function trackingToneFromRisk(risk) {
+  if (risk === "over" || risk === "high") return "warning";
+  if (risk === "tight" || risk === "medium") return "note";
+  return "good";
+}
+
+function trackingStatusText(tone) {
+  if (tone === "warning") return "优先处理";
+  if (tone === "note") return "待复核";
+  return "正常推进";
+}
+
+function productionTrackingData() {
+  const metrics = analysisMetrics();
+  const production = productionDashboardData();
+  const audit = auditSummaryData();
+  const flow = fundFlowReadableData(10);
+  const vfxRows = vfxSupplierAuditRows();
+  const today = callSheets.find((sheet) => sheet.day === project.currentDay) || callSheets[callSheets.length - 1] || null;
+  const scheduleItems = production.schedule.slice(0, 6).map((row) => {
+    const tone = trackingToneFromRisk(row.risk);
+    return {
+      label: row.title,
+      owner: row.owner,
+      type: "阶段",
+      status: row.status,
+      range: `D${row.start}-D${row.end}`,
+      amount: row.progressLabel,
+      meta: `${row.taskCount} 项任务`,
+      tone,
+      target: "progress",
+      focus: "productionScheduleBoard",
+    };
+  });
+  const callsheetItems = callSheets
+    .slice()
+    .sort((a, b) => Math.abs(a.day - project.currentDay) - Math.abs(b.day - project.currentDay))
+    .slice(0, 3)
+    .map((sheet) => {
+      const total = dayTotal(sheet);
+      const dayBudget = project.budget > 0 ? project.budget / Math.max(project.plannedDays || 1, 1) : total;
+      const tone = total > dayBudget * 1.25 ? "warning" : total > dayBudget ? "note" : "good";
+      return {
+        label: sheet.title,
+        owner: sheet.location,
+        type: "通告",
+        status: sheet.day < project.currentDay ? "已完成" : sheet.day === project.currentDay ? "今日执行" : "计划中",
+        range: `D${sheet.day}`,
+        amount: money.format(total),
+        meta: `${sheet.departments.length} 部门 · ${sheet.extra.vehicles} 车 / ${sheet.extra.rooms} 房`,
+        tone,
+        target: "callsheet",
+        focus: "callsheetDetail",
+      };
+    });
+  const vfxItems = vfxRows.slice(0, 3).map((row) => ({
+    label: row.vendor,
+    owner: row.departments.join(" / ") || "VFX / 调色",
+    type: "VFX",
+    status: row.status,
+    range: `交付 ${percentText(row.progressRate)}`,
+    amount: money.format(row.usedAmount),
+    meta: `合同 ${money.format(row.contractAmount)} · 信任 ${row.trust}`,
+    tone: trackingToneFromRisk(row.risk),
+    target: "audit",
+    focus: "vfxSupplierAudit",
+  }));
+  const rows = [...scheduleItems, ...callsheetItems, ...vfxItems]
+    .sort((a, b) => {
+      const weight = { warning: 0, note: 1, good: 2 };
+      return weight[a.tone] - weight[b.tone];
+    })
+    .slice(0, 10);
+  const resourceRows = [
+    {
+      label: "人员 / 演员",
+      value: `${people.length} 人`,
+      detail: `${people.filter(isActorPerson).length} 位演员 · ${new Set(people.map((person) => person.vendor || "个人 / 自由职业")).size} 个公司/个体`,
+      amount: money.format(people.reduce((sum, person) => sum + personTotal(person), 0)),
+      target: "personnel",
+    },
+    {
+      label: "器材 / 设备",
+      value: `${equipment.length} 项`,
+      detail: `${new Set(equipment.map((item) => item.vendor || "未登记公司")).size} 个供应商 · 押金 ${money.format(equipment.reduce((sum, item) => sum + item.deposit, 0))}`,
+      amount: money.format(equipment.reduce((sum, item) => sum + equipmentTotal(item), 0)),
+      target: "equipment",
+    },
+    {
+      label: "车辆 / 酒店 / 场地",
+      value: `${callSheets.reduce((sum, sheet) => sum + sheet.extra.vehicles, 0)} 车`,
+      detail: `${callSheets.reduce((sum, sheet) => sum + sheet.extra.rooms, 0)} 房 · 场地 ${money.format(callSheets.reduce((sum, sheet) => sum + (sheet.extra.locationFee || 0), 0))}`,
+      amount: money.format(callSheets.reduce((sum, sheet) => sum + dayProductionCost(sheet), 0)),
+      target: "fundflow",
+    },
+    {
+      label: "VFX / 后期供应商",
+      value: `${vfxRows.length} 个`,
+      detail: `${vfxRows.filter((row) => row.risk !== "ok").length} 个需复核 · 平均交付 ${percentText(vfxRows.length > 0 ? averageNumbers(vfxRows.map((row) => row.progressRate), 0) : 0)}`,
+      amount: money.format(vfxRows.reduce((sum, row) => sum + row.contractAmount, 0)),
+      target: "audit",
+      focus: "vfxSupplierAudit",
+    },
+  ];
+  const reviewRows = [
+    ...audit.items.slice(0, 4).map((item) => ({
+      label: item.name,
+      status: auditRiskLabel(item.risk),
+      detail: item.reason,
+      amount: money.format(item.amount),
+      tone: item.risk === "high" ? "warning" : item.risk === "medium" ? "note" : "good",
+      target: "audit",
+    })),
+    ...vfxRows
+      .filter((row) => row.risk !== "ok" || row.gap > 0.12)
+      .slice(0, 2)
+      .map((row) => ({
+        label: row.vendor,
+        status: row.status,
+        detail: `已用 ${percentText(row.paymentRate)} / 交付 ${percentText(row.progressRate)}`,
+        amount: money.format(row.usedAmount),
+        tone: trackingToneFromRisk(row.risk),
+        target: "audit",
+        focus: "vfxSupplierAudit",
+      })),
+  ].slice(0, 6);
+  const budgetRate = project.budget > 0 ? metrics.spent / project.budget : 0;
+  const kpis = [
+    { label: "追踪项", value: rows.length, detail: `${production.schedule.length} 阶段 · ${callSheets.length} 通告`, tone: rows.some((row) => row.tone === "warning") ? "warning" : "good" },
+    { label: "完成进度", value: percentText(production.progressRate), detail: `当前 D${project.currentDay}/${project.plannedDays}`, tone: production.delayed > 0 ? "warning" : production.tight > 0 ? "note" : "good" },
+    { label: "预算消耗", value: percentText(budgetRate), detail: money.format(metrics.spent), tone: budgetRate > production.progressRate + 0.12 ? "warning" : budgetRate > production.progressRate + 0.06 ? "note" : "good" },
+    { label: "审查队列", value: audit.highRiskCount + audit.mediumRiskCount, detail: `${audit.noEvidenceCount} 项缺凭证`, tone: audit.highRiskCount > 0 ? "warning" : audit.mediumRiskCount > 0 ? "note" : "good" },
+    { label: "资金流", value: flow.supplierCount, detail: flow.statusLabel, tone: flow.unclassifiedUsed > 0 || flow.overAllocated > 0 ? "warning" : flow.unallocated > 0 ? "note" : "good" },
+  ];
+  return { rows, resourceRows, reviewRows, kpis, today };
+}
+
+function renderProductionTrackingConsole() {
+  const container = document.querySelector("#productionTrackingConsole");
+  const badge = document.querySelector("#productionTrackingBadge");
+  const kpiNode = document.querySelector("#trackingConsoleKpis");
+  const table = document.querySelector("#trackingConsoleTable");
+  const resources = document.querySelector("#trackingResourceList");
+  const reviews = document.querySelector("#trackingReviewList");
+  if (!container || !badge || !kpiNode || !table || !resources || !reviews) return;
+  const data = productionTrackingData();
+  const warningCount = data.rows.filter((row) => row.tone === "warning").length + data.reviewRows.filter((row) => row.tone === "warning").length;
+  const noteCount = data.rows.filter((row) => row.tone === "note").length + data.reviewRows.filter((row) => row.tone === "note").length;
+  badge.textContent = warningCount > 0 ? `${warningCount} 项阻塞` : noteCount > 0 ? `${noteCount} 项待复核` : "追踪稳定";
+  badge.className = `status-pill ${warningCount > 0 ? "warning" : noteCount > 0 ? "note" : "good"}`;
+  kpiNode.innerHTML = data.kpis
+    .map(
+      (item) => `
+        <button class="tracking-kpi ${item.tone}" type="button" data-workspace-view="${item.label === "资金流" ? "fundflow" : item.label === "审查队列" ? "audit" : "progress"}">
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${escapeHtml(String(item.value))}</strong>
+          <small>${escapeHtml(item.detail)}</small>
+        </button>
+      `,
+    )
+    .join("");
+  table.innerHTML =
+    data.rows.length > 0
+      ? data.rows
+          .map(
+            (row) => `
+              <button class="tracking-row ${row.tone}" type="button" data-workspace-view="${escapeHtml(row.target)}" ${row.focus ? `data-workspace-focus="${escapeHtml(row.focus)}"` : ""}>
+                <span class="tracking-row-type">${escapeHtml(row.type)}</span>
+                <span class="tracking-row-main">
+                  <strong>${escapeHtml(row.label)}</strong>
+                  <small>${escapeHtml(row.owner)} · ${escapeHtml(row.meta)}</small>
+                </span>
+                <span class="tracking-row-range">${escapeHtml(row.range)}</span>
+                <span class="tracking-row-amount">${escapeHtml(row.amount)}</span>
+                <span class="tracking-row-status">${escapeHtml(row.status || trackingStatusText(row.tone))}</span>
+              </button>
+            `,
+          )
+          .join("")
+      : `<div class="producer-empty">暂无生产追踪项。录入通告、排期或 VFX 进度后会显示。</div>`;
+  resources.innerHTML = data.resourceRows
+    .map(
+      (row) => `
+        <button class="tracking-resource-row" type="button" data-workspace-view="${escapeHtml(row.target)}" ${row.focus ? `data-workspace-focus="${escapeHtml(row.focus)}"` : ""}>
+          <span>
+            <strong>${escapeHtml(row.label)}</strong>
+            <small>${escapeHtml(row.detail)}</small>
+          </span>
+          <b>${escapeHtml(row.value)}</b>
+          <em>${escapeHtml(row.amount)}</em>
+        </button>
+      `,
+    )
+    .join("");
+  reviews.innerHTML =
+    data.reviewRows.length > 0
+      ? data.reviewRows
+          .map(
+            (row) => `
+              <button class="tracking-review-row ${row.tone}" type="button" data-workspace-view="${escapeHtml(row.target)}" ${row.focus ? `data-workspace-focus="${escapeHtml(row.focus)}"` : ""}>
+                <span>
+                  <strong>${escapeHtml(row.label)}</strong>
+                  <small>${escapeHtml(row.detail)}</small>
+                </span>
+                <b>${escapeHtml(row.status)}</b>
+                <em>${escapeHtml(row.amount)}</em>
+              </button>
+            `,
+          )
+          .join("")
+      : `<div class="producer-empty">审查队列为空。</div>`;
+}
+
 function renderCallsheetSelect(preferredDay = null) {
   const select = document.querySelector("#callsheetSelect");
   setText("#callsheetTitle", modeText("每日通告单", "执行记录"));
@@ -8857,6 +9070,7 @@ function refreshAll(options = {}) {
   renderKpis();
   renderToday();
   renderProducerWorkspace();
+  renderProductionTrackingConsole();
   const selectedDay = options.selectedDay || Number(document.querySelector("#callsheetSelect").value) || project.currentDay;
   renderCallsheetSelect(selectedDay);
   renderCallsheet(selectedDay);
@@ -9602,7 +9816,7 @@ function focusWorkspaceTarget(targetId) {
 }
 
 function setupProducerWorkspace() {
-  const workspace = document.querySelector("#producerWorkspace");
+  const workspace = document.querySelector("#overview");
   if (!workspace) return;
   workspace.addEventListener("click", (event) => {
     const target = event.target.closest("[data-workspace-view]");
