@@ -5903,6 +5903,158 @@ function renderHeader() {
     isCustomInputMode()
       ? `${blankMode ? "空白测试版 · " : ""}${project.plannedDays} 天计划 · 当前第 ${project.currentDay} 天 · ${progress.rows.length} 项自定义进度`
       : `${blankMode ? "空白测试版 · " : ""}${project.plannedDays} 天计划 · 当前第 ${project.currentDay} 天 · ${project.totalScenes} 场戏`;
+  setText("#workspaceRibbonTitle", `${activeViewLabel()} · ${project.title || "未命名项目"}`);
+}
+
+function activeViewLabel() {
+  const activeTab = document.querySelector(".tab-button.active span");
+  return activeTab?.textContent?.trim() || "总览";
+}
+
+function inspectorRiskRows(metrics, audit) {
+  const rows = [];
+  if (metrics.variance > 0) {
+    rows.push({
+      tone: "warning",
+      title: "完片预测超预算",
+      meta: `预测 ${money.format(metrics.projectedFinal)} · 偏差 ${money.format(metrics.variance)}`,
+      view: "analysis",
+      focus: "analysisReport",
+    });
+  } else if (metrics.delta > 0.06) {
+    rows.push({
+      tone: "note",
+      title: "预算消耗快于进度",
+      meta: `预算快 ${Math.round(metrics.delta * 100)} 点 · 需复核后续通告`,
+      view: "budget",
+      focus: "budgetTableBody",
+    });
+  }
+  if (audit.highRiskCount > 0) {
+    rows.push({
+      tone: "warning",
+      title: `${audit.highRiskCount} 项高风险审计`,
+      meta: audit.topItem ? `${audit.topItem.kind} · ${audit.topItem.name}` : "凭证、等级或付款关口需复核",
+      view: "audit",
+      focus: "auditTableBody",
+    });
+  }
+  const blockedReviews = vfxReviewRows().filter((row) => row.status === "blocked" || row.paymentGate === "hold");
+  if (blockedReviews.length > 0) {
+    rows.push({
+      tone: "note",
+      title: `${blockedReviews.length} 个版本/付款关口暂停`,
+      meta: `${blockedReviews[0].vendor} · ${blockedReviews[0].shotGroup}`,
+      view: "audit",
+      focus: "vfxVersionList",
+    });
+  }
+  const lowTrust = isRatingEnabled() ? [...people, ...equipment].filter((item) => normalizeTrust(item.trust) < 65).length : 0;
+  if (lowTrust > 0) {
+    rows.push({
+      tone: "note",
+      title: `${lowTrust} 项信任评分偏低`,
+      meta: "人员 / 公司等级需要制片确认",
+      view: "personnel",
+      focus: "personnelModule",
+    });
+  }
+  if (rows.length === 0) {
+    rows.push({
+      tone: "good",
+      title: "当前无关键阻塞",
+      meta: "预算、审计和管线状态处于可控范围",
+      view: "overview",
+      focus: "producerWorkspace",
+    });
+  }
+  return rows.slice(0, 4);
+}
+
+function renderProductionInspector() {
+  const inspector = document.querySelector("#productionInspector");
+  if (!inspector) return;
+  const metrics = analysisMetrics();
+  const audit = auditSummaryData();
+  const progress = metrics.progress;
+  const spentRate = Math.max(0, metrics.spentRate || 0);
+  const progressRate = Math.max(0, metrics.progressRate || 0);
+  const remaining = project.budget - metrics.spent;
+  setText("#workspaceRibbonTitle", `${activeViewLabel()} · ${project.title || "未命名项目"}`);
+  const health = document.querySelector("#inspectorHealth");
+  health.textContent = metrics.health.label;
+  health.className = `status-pill ${metrics.health.className}`;
+  setText("#inspectorActiveView", `当前视图：${activeViewLabel()}`);
+  setText("#inspectorTitle", project.title || "项目详情");
+  document.querySelector("#inspectorProgressStrip").innerHTML = `
+    <div class="inspector-progress-row">
+      <span>预算消耗</span>
+      <strong>${Math.round(spentRate * 100)}%</strong>
+      <i><b style="width:${Math.round(Math.min(spentRate, 1.4) * 100)}%"></b></i>
+    </div>
+    <div class="inspector-progress-row">
+      <span>${escapeHtml(progress.label || "完成进度")}</span>
+      <strong>${Math.round(progressRate * 100)}%</strong>
+      <i><b style="width:${Math.round(Math.min(progressRate, 1) * 100)}%"></b></i>
+    </div>
+  `;
+  document.querySelector("#inspectorProjectFacts").innerHTML = [
+    { label: "总预算", value: money.format(project.budget || 0), meta: `剩余 ${money.format(remaining)}` },
+    { label: "已用", value: money.format(metrics.spent), meta: `日均 ${money.format(metrics.averageDayCost || 0)}` },
+    { label: "完片预测", value: money.format(metrics.projectedFinal || metrics.spent), meta: metrics.variance > 0 ? `超 ${money.format(metrics.variance)}` : `余量 ${money.format(Math.abs(metrics.variance || 0))}` },
+    { label: "计划", value: `D${project.currentDay}/${project.plannedDays}`, meta: progress.detailText },
+  ]
+    .map(
+      (item) => `
+        <div class="inspector-fact">
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${escapeHtml(item.value)}</strong>
+          <small>${escapeHtml(item.meta)}</small>
+        </div>
+      `,
+    )
+    .join("");
+  const actionRows = [
+    { label: "打开通告", meta: "今日安排 / 车辆 / 酒店", view: "callsheet", focus: "callsheetDetail" },
+    { label: "资金流向", meta: "公司 / 个人 / 供应商", view: "fundflow", focus: "fundFlowLargeChart" },
+    { label: "审查队列", meta: `${audit.highRiskCount + audit.mediumRiskCount} 项需看`, view: "audit", focus: "auditTableBody" },
+    { label: "管线中心", meta: `${pipelineEvents.length} 个事件`, view: "overview", focus: "pipelineCore" },
+  ];
+  document.querySelector("#inspectorActionList").innerHTML = actionRows
+    .map(
+      (item) => `
+        <button class="inspector-action" type="button" data-workspace-view="${escapeHtml(item.view)}" data-workspace-focus="${escapeHtml(item.focus)}">
+          <strong>${escapeHtml(item.label)}</strong>
+          <span>${escapeHtml(item.meta)}</span>
+        </button>
+      `,
+    )
+    .join("");
+  document.querySelector("#inspectorRiskList").innerHTML = inspectorRiskRows(metrics, audit)
+    .map(
+      (item) => `
+        <button class="inspector-risk ${escapeHtml(item.tone)}" type="button" data-workspace-view="${escapeHtml(item.view)}" data-workspace-focus="${escapeHtml(item.focus)}">
+          <strong>${escapeHtml(item.title)}</strong>
+          <span>${escapeHtml(item.meta)}</span>
+        </button>
+      `,
+    )
+    .join("");
+  document.querySelector("#inspectorEventList").innerHTML =
+    pipelineEvents.length > 0
+      ? pipelineEvents
+          .slice(0, 4)
+          .map(
+            (event) => `
+              <button class="inspector-event ${escapeHtml(event.tone)}" type="button" data-context-kind="pipeline-event" data-context-title="${escapeHtml(event.label)}" data-context-meta="${escapeHtml(`${event.eventType} · ${event.entityName}`)}" data-pipeline-payload="${escapeHtml(JSON.stringify(event.payload, null, 2))}" data-pipeline-path="${escapeHtml(event.path)}">
+                <span>${escapeHtml(event.eventType)}</span>
+                <strong>${escapeHtml(event.entityName || event.label)}</strong>
+                <small>${escapeHtml(new Date(event.createdAt).toLocaleString("zh-CN", { hour12: false }))}</small>
+              </button>
+            `,
+          )
+          .join("")
+      : `<div class="inspector-empty">暂无管线事件。可在总览的 Pipeline Core 里触发。</div>`;
 }
 
 function renderKpis() {
@@ -10551,6 +10703,7 @@ function refreshAll(options = {}) {
   renderProducerWorkspace();
   renderProductionTrackingConsole();
   renderPipelineCore();
+  renderProductionInspector();
   const selectedDay = options.selectedDay || Number(document.querySelector("#callsheetSelect").value) || project.currentDay;
   renderCallsheetSelect(selectedDay);
   renderCallsheet(selectedDay);
@@ -11280,6 +11433,7 @@ function setupTabs() {
         renderFundFlowDetailTable();
         drawFundFlowLargeChart();
       }
+      renderProductionInspector();
       canvasRegistry.forEach((draw) => draw());
     });
   });
@@ -11297,7 +11451,7 @@ function focusWorkspaceTarget(targetId) {
 }
 
 function setupProducerWorkspace() {
-  const workspace = document.querySelector("#overview");
+  const workspace = document.querySelector(".app-shell");
   if (!workspace) return;
   workspace.addEventListener("click", (event) => {
     const target = event.target.closest("[data-workspace-view]");

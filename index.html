@@ -13,7 +13,7 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=pipeline-events-1" />
+    <link rel="stylesheet" href="./styles.css?v=studio-console-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -112,6 +112,21 @@
       </header>
 
       <main>
+        <div class="workspace-ribbon" aria-label="工作区概览">
+          <div>
+            <span>Workspace</span>
+            <strong id="workspaceRibbonTitle">制片控制台</strong>
+          </div>
+          <div>
+            <span>Mode</span>
+            <strong>Budget / Schedule / Audit</strong>
+          </div>
+          <div>
+            <span>Pipeline</span>
+            <strong>Local Toolkit Core</strong>
+          </div>
+        </div>
+
         <section class="kpi-grid" aria-label="项目关键指标">
           <article class="metric-card">
             <span>总预算</span>
@@ -136,6 +151,7 @@
         </section>
 
         <nav class="view-tabs" aria-label="看板视图" role="tablist">
+          <span class="nav-group-label" role="presentation">项目控制</span>
           <button class="tab-button active" type="button" data-view="overview" role="tab" aria-selected="true">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M4 13h6V4H4v9Zm10 7h6V4h-6v16ZM4 20h6v-3H4v3Z" />
@@ -149,6 +165,7 @@
             </svg>
             <span data-i18n="nav.analysis">分析</span>
           </button>
+          <span class="nav-group-label" role="presentation">资源</span>
           <button class="tab-button" type="button" data-view="personnel" role="tab" aria-selected="false">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -170,6 +187,7 @@
             </svg>
             <span data-i18n="nav.callsheet">通告单</span>
           </button>
+          <span class="nav-group-label" role="presentation">财务</span>
           <button class="tab-button" type="button" data-view="budget" role="tab" aria-selected="false">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M4 19V5m0 14h16M8 16V9m5 7V6m5 10v-4" />
@@ -198,12 +216,14 @@
             </svg>
             <span data-i18n="nav.progress">进度</span>
           </button>
+          <span class="nav-group-label" role="presentation">数据</span>
           <button class="tab-button" type="button" data-view="visuals" role="tab" aria-selected="false">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M4 19V5m0 14h16M8 15l3-4 3 2 4-6" />
             </svg>
             <span data-i18n="nav.visuals">图表</span>
           </button>
+          <span class="nav-group-label" role="presentation">系统</span>
           <button class="tab-button" type="button" data-view="input" role="tab" aria-selected="false">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M12 5v14m-7-7h14M5 19h14" />
@@ -1961,6 +1981,46 @@
           </div>
         </section>
       </main>
+
+      <aside class="production-inspector" id="productionInspector" aria-labelledby="inspectorTitle">
+        <div class="inspector-head">
+          <div>
+            <p class="eyebrow">Inspector</p>
+            <h2 id="inspectorTitle">项目详情</h2>
+            <span id="inspectorActiveView">当前视图：总览</span>
+          </div>
+          <div class="status-pill" id="inspectorHealth">载入中</div>
+        </div>
+        <div class="inspector-progress" id="inspectorProgressStrip"></div>
+        <section class="inspector-section" aria-labelledby="inspectorProjectTitle">
+          <div class="inspector-section-head">
+            <span>Project</span>
+            <h3 id="inspectorProjectTitle">制片概况</h3>
+          </div>
+          <div class="inspector-facts" id="inspectorProjectFacts"></div>
+        </section>
+        <section class="inspector-section" aria-labelledby="inspectorActionsTitle">
+          <div class="inspector-section-head">
+            <span>Actions</span>
+            <h3 id="inspectorActionsTitle">快捷进入</h3>
+          </div>
+          <div class="inspector-actions" id="inspectorActionList"></div>
+        </section>
+        <section class="inspector-section" aria-labelledby="inspectorRiskTitle">
+          <div class="inspector-section-head">
+            <span>Watchlist</span>
+            <h3 id="inspectorRiskTitle">风险观察</h3>
+          </div>
+          <div class="inspector-watchlist" id="inspectorRiskList"></div>
+        </section>
+        <section class="inspector-section" aria-labelledby="inspectorEventTitle">
+          <div class="inspector-section-head">
+            <span>Events</span>
+            <h3 id="inspectorEventTitle">最近事件</h3>
+          </div>
+          <div class="inspector-events" id="inspectorEventList"></div>
+        </section>
+      </aside>
     </div>
 
     <div class="workspace-context-menu" id="workspaceContextMenu" hidden>
@@ -1972,6 +2032,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=pipeline-events-1"></script>
+    <script src="./app.js?v=studio-console-1"></script>
   </body>
 </html>
