@@ -13,7 +13,7 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=shot-pipeline-1" />
+    <link rel="stylesheet" href="./styles.css?v=vfx-review-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -790,6 +790,80 @@
               </div>
               <div class="vfx-audit-summary" id="vfxAuditSummary"></div>
               <div class="vfx-audit-list" id="vfxSupplierAudit"></div>
+            </article>
+
+            <article class="panel audit-version-panel">
+              <div class="panel-heading">
+                <h3>版本审阅 / 付款关口</h3>
+                <span id="vfxVersionStatus">镜头版本 / 批注 / 验收</span>
+              </div>
+              <form class="vfx-version-form" id="vfxVersionForm">
+                <div class="vfx-version-fields">
+                  <input name="id" type="hidden" />
+                  <label>
+                    <span>供应商</span>
+                    <input name="vendor" type="text" list="vfxVendorOptions" placeholder="公司 / 个人" required />
+                    <datalist id="vfxVendorOptions"></datalist>
+                  </label>
+                  <label>
+                    <span>镜头组 / 资产</span>
+                    <input name="shotGroup" type="text" placeholder="如 13-18 工厂追逐" required />
+                  </label>
+                  <label>
+                    <span>版本号</span>
+                    <input name="version" type="text" placeholder="v001" required />
+                  </label>
+                  <label>
+                    <span>审阅状态</span>
+                    <select name="status">
+                      <option value="submitted">已提交</option>
+                      <option value="notes">有批注</option>
+                      <option value="approved">已通过</option>
+                      <option value="blocked">阻塞</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>镜头数量</span>
+                    <input name="shotCount" type="number" min="1" step="1" value="1" />
+                  </label>
+                  <label>
+                    <span>已通过</span>
+                    <input name="approvedCount" type="number" min="0" step="1" value="0" />
+                  </label>
+                  <label>
+                    <span>交付日期</span>
+                    <input name="date" type="date" />
+                  </label>
+                  <label>
+                    <span>审阅人</span>
+                    <input name="reviewer" type="text" placeholder="监制 / 导演 / VFX 监制" />
+                  </label>
+                  <label>
+                    <span>付款节点</span>
+                    <select name="paymentGate">
+                      <option value="hold">暂缓付款</option>
+                      <option value="deposit">可付定金</option>
+                      <option value="milestone">可付阶段款</option>
+                      <option value="final">可结尾款</option>
+                    </select>
+                  </label>
+                  <label class="vfx-version-notes">
+                    <span>批注 / 风险</span>
+                    <input name="notes" type="text" placeholder="缺 roto、合成边缘、调色未锁定..." />
+                  </label>
+                </div>
+                <div class="vfx-version-actions">
+                  <button class="icon-button primary" type="submit">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M12 5v14m-7-7h14" />
+                    </svg>
+                    <span>保存版本</span>
+                  </button>
+                  <button class="ghost-button" type="button" id="newVfxVersion">新建</button>
+                </div>
+              </form>
+              <div class="vfx-version-summary" id="vfxVersionSummary"></div>
+              <div class="vfx-version-list" id="vfxVersionList"></div>
             </article>
 
             <article class="panel audit-wide">
@@ -1816,6 +1890,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=shot-pipeline-1"></script>
+    <script src="./app.js?v=vfx-review-1"></script>
   </body>
 </html>

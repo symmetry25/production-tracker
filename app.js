@@ -366,6 +366,48 @@ const defaultCallSheets = [
   },
 ];
 
+const defaultVfxReviewVersions = [
+  {
+    id: "vfx-review-factory-v002",
+    vendor: "蓝线调色棚",
+    shotGroup: "13-18 工厂追逐",
+    version: "v002",
+    status: "notes",
+    shotCount: 18,
+    approvedCount: 9,
+    date: "2026-05-18",
+    reviewer: "邵青 / 林夏",
+    paymentGate: "hold",
+    notes: "爆点合成边缘和雨夜调色需要返修，下一笔付款先等 v003。",
+  },
+  {
+    id: "vfx-review-rain-v001",
+    vendor: "蓝线调色棚",
+    shotGroup: "19-24 河堤雨夜",
+    version: "v001",
+    status: "submitted",
+    shotCount: 12,
+    approvedCount: 2,
+    date: "2026-05-19",
+    reviewer: "监制 / 摄影指导",
+    paymentGate: "hold",
+    notes: "等导演批注，重点看雨效方向和肤色一致性。",
+  },
+  {
+    id: "vfx-review-title-v001",
+    vendor: "云桥后期统筹",
+    shotGroup: "片头包装 / 字幕模板",
+    version: "v001",
+    status: "approved",
+    shotCount: 6,
+    approvedCount: 6,
+    date: "2026-05-17",
+    reviewer: "制片主任",
+    paymentGate: "milestone",
+    notes: "包装方向确认，可进入批量套版。",
+  },
+];
+
 const fullDemoProject = {
   title: "《临夏》完整版测试剧组",
   demoPreset: "full",
@@ -566,6 +608,7 @@ function applyFullDemoData(options = {}) {
   equipment = clone(fullDemoEquipment);
   scenes = clone(defaultScenes);
   callSheets = buildFullDemoCallSheets();
+  vfxReviewVersions = clone(defaultVfxReviewVersions);
   customProgressItems = [
     { id: "full-demo-progress-contracts", name: "合同归档", done: 18, target: 24, unit: "份" },
     { id: "full-demo-progress-invoices", name: "发票回收", done: 9, target: 18, unit: "张" },
@@ -592,6 +635,7 @@ let people = blankMode ? [] : clone(defaultPeople);
 let equipment = blankMode ? [] : clone(defaultEquipment);
 let scenes = blankMode ? [] : clone(defaultScenes);
 let callSheets = blankMode ? [] : clone(defaultCallSheets);
+let vfxReviewVersions = blankMode ? [] : clone(defaultVfxReviewVersions);
 let customProgressItems = [];
 let workLogs = [];
 let scheduleTasks = [];
@@ -989,6 +1033,7 @@ function createProjectSnapshot(id = currentProjectId, name = project.title) {
       equipment: clone(equipment),
       scenes: clone(scenes),
       callSheets: clone(callSheets),
+      vfxReviewVersions: clone(vfxReviewVersions),
       customProgressItems: clone(customProgressItems),
       workLogs: clone(workLogs),
       scheduleTasks: clone(scheduleTasks),
@@ -1000,6 +1045,7 @@ function normalizeProjectSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== "object") return null;
   const data = snapshot.data || snapshot;
   const projectData = data.project || {};
+  const hasVfxReviewData = Object.prototype.hasOwnProperty.call(data, "vfxReviewVersions");
   const id = snapshot.id || `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return {
     id,
@@ -1012,6 +1058,7 @@ function normalizeProjectSnapshot(snapshot) {
       equipment: Array.isArray(data.equipment) ? data.equipment : [],
       scenes: Array.isArray(data.scenes) ? data.scenes : [],
       callSheets: Array.isArray(data.callSheets) ? data.callSheets : [],
+      vfxReviewVersions: hasVfxReviewData ? normalizeVfxReviewVersions(data.vfxReviewVersions) : blankMode ? [] : clone(defaultVfxReviewVersions),
       customProgressItems: normalizeCustomProgressItems(data.customProgressItems),
       workLogs: normalizeWorkLogs(data.workLogs),
       scheduleTasks: normalizeScheduleTasks(data.scheduleTasks),
@@ -1029,6 +1076,7 @@ function applyProjectSnapshot(snapshot) {
   equipment = clone(normalized.data.equipment);
   scenes = clone(normalized.data.scenes);
   callSheets = clone(normalized.data.callSheets);
+  vfxReviewVersions = clone(normalized.data.vfxReviewVersions);
   customProgressItems = clone(normalized.data.customProgressItems);
   workLogs = clone(normalized.data.workLogs);
   scheduleTasks = clone(normalized.data.scheduleTasks);
@@ -1246,6 +1294,36 @@ function normalizeCustomProgressItems(items) {
     .filter((item) => item.name && item.target > 0);
 }
 
+function normalizeVfxReviewStatus(status) {
+  return ["submitted", "notes", "approved", "blocked"].includes(status) ? status : "submitted";
+}
+
+function normalizeVfxPaymentGate(gate) {
+  return ["hold", "deposit", "milestone", "final"].includes(gate) ? gate : "hold";
+}
+
+function normalizeVfxReviewVersions(items) {
+  return (Array.isArray(items) ? items : [])
+    .map((item, index) => {
+      const shotCount = Math.max(1, Number(item?.shotCount) || 1);
+      const approvedCount = Math.max(0, Math.min(shotCount, Number(item?.approvedCount) || 0));
+      return {
+        id: String(item?.id || `vfx-review-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`),
+        vendor: String(item?.vendor || "").trim() || "未登记供应商",
+        shotGroup: String(item?.shotGroup || "").trim() || "未命名镜头组",
+        version: String(item?.version || "").trim() || "v001",
+        status: normalizeVfxReviewStatus(item?.status),
+        shotCount,
+        approvedCount,
+        date: String(item?.date || "").trim(),
+        reviewer: String(item?.reviewer || "").trim() || "未指派",
+        paymentGate: normalizeVfxPaymentGate(item?.paymentGate),
+        notes: String(item?.notes || "").trim(),
+      };
+    })
+    .filter((item) => item.vendor && item.shotGroup && item.version);
+}
+
 function languageLabel() {
   return displaySettings.language === "en" ? translate("display.languageEn") : translate("display.languageZh");
 }
@@ -1371,6 +1449,7 @@ function loadSavedData() {
       equipment = saved.equipment || equipment;
       scenes = saved.scenes || scenes;
       callSheets = saved.callSheets || callSheets;
+      vfxReviewVersions = Object.prototype.hasOwnProperty.call(saved, "vfxReviewVersions") ? normalizeVfxReviewVersions(saved.vfxReviewVersions) : blankMode ? [] : clone(defaultVfxReviewVersions);
       customProgressItems = normalizeCustomProgressItems(saved.customProgressItems);
       workLogs = normalizeWorkLogs(saved.workLogs);
       scheduleTasks = normalizeScheduleTasks(saved.scheduleTasks);
@@ -1399,6 +1478,7 @@ function applyStarterData(options = {}) {
   equipment = blankMode ? [] : clone(defaultEquipment);
   scenes = blankMode ? [] : clone(defaultScenes);
   callSheets = blankMode ? [] : clone(defaultCallSheets);
+  vfxReviewVersions = blankMode ? [] : clone(defaultVfxReviewVersions);
   customProgressItems = [];
   workLogs = [];
   scheduleTasks = [];
@@ -1420,6 +1500,7 @@ function applyNewProjectData(title = "新项目") {
   equipment = [];
   scenes = [];
   callSheets = [];
+  vfxReviewVersions = [];
   customProgressItems = [];
   workLogs = [];
   scheduleTasks = [];
@@ -1578,6 +1659,7 @@ function saveData() {
         equipment,
         scenes,
         callSheets,
+        vfxReviewVersions,
         customProgressItems,
         workLogs,
         scheduleTasks,
@@ -4032,6 +4114,77 @@ function vfxSupplierAuditRows() {
     });
 }
 
+const vfxReviewStatusLabels = {
+  submitted: { label: "已提交", className: "tight" },
+  notes: { label: "有批注", className: "tight" },
+  approved: { label: "已通过", className: "ok" },
+  blocked: { label: "阻塞", className: "over" },
+};
+
+const vfxPaymentGateLabels = {
+  hold: "暂缓付款",
+  deposit: "可付定金",
+  milestone: "可付阶段款",
+  final: "可结尾款",
+};
+
+function vfxReviewRisk(row) {
+  if (!row) return "medium";
+  if (row.status === "blocked") return "high";
+  if (row.paymentGate === "final" && row.approvalRate < 1) return "high";
+  if (row.paymentGate === "milestone" && row.approvalRate < 0.5) return "high";
+  if (row.status === "notes" && row.approvalRate < 0.5) return "high";
+  if (row.status === "notes" || row.status === "submitted") return "medium";
+  if (row.approvalRate < 0.85) return "medium";
+  return "ok";
+}
+
+function vfxReviewActionText(row) {
+  if (row.status === "blocked") return "暂停付款，拉齐制片、导演、VFX 监制做一次阻塞复盘。";
+  if (row.paymentGate === "final" && row.approvalRate < 1) return "尾款前必须补齐版本验收单和全量通过记录。";
+  if (row.paymentGate === "milestone" && row.approvalRate < 0.5) return "阶段款前先拿到下一版交付和明确批注关闭项。";
+  if (row.status === "notes") return "把批注拆成可关闭清单，要求供应商给下一版日期。";
+  if (row.status === "submitted") return "安排审片窗口，审阅人完成批注后再进入付款判断。";
+  return "归档验收记录，可按节点推进付款。";
+}
+
+function vfxReviewRows() {
+  vfxReviewVersions = normalizeVfxReviewVersions(vfxReviewVersions);
+  const supplierRows = vfxSupplierAuditRows();
+  const supplierMap = new Map(supplierRows.map((row) => [row.vendor, row]));
+  const totalSupplierAmount = supplierRows.reduce((sum, row) => sum + row.contractAmount, 0);
+  const vendorShotTotals = vfxReviewVersions.reduce((map, item) => {
+    map.set(item.vendor, (map.get(item.vendor) || 0) + (Number(item.shotCount) || 1));
+    return map;
+  }, new Map());
+  const totalVersionShots = vfxReviewVersions.reduce((sum, item) => sum + (Number(item.shotCount) || 1), 0);
+
+  return vfxReviewVersions
+    .map((item) => {
+      const supplier = supplierMap.get(item.vendor);
+      const approvalRate = (Number(item.approvedCount) || 0) / Math.max(Number(item.shotCount) || 1, 1);
+      const amount = supplier
+        ? Math.round((supplier.contractAmount * (Number(item.shotCount) || 1)) / Math.max(vendorShotTotals.get(item.vendor) || 1, 1))
+        : totalSupplierAmount > 0
+          ? Math.round((totalSupplierAmount * (Number(item.shotCount) || 1)) / Math.max(totalVersionShots, 1))
+          : 0;
+      const row = {
+        ...item,
+        approvalRate,
+        amount,
+        supplier,
+      };
+      row.risk = vfxReviewRisk(row);
+      row.action = vfxReviewActionText(row);
+      return row;
+    })
+    .sort((a, b) => {
+      const riskWeight = { high: 3, medium: 2, ok: 1 };
+      const dateSort = String(b.date || "").localeCompare(String(a.date || ""));
+      return (riskWeight[b.risk] || 0) - (riskWeight[a.risk] || 0) || dateSort || b.amount - a.amount;
+    });
+}
+
 function auditReferenceItems() {
   const items = [];
   const spent = departmentSpentMap();
@@ -4154,6 +4307,20 @@ function auditReferenceItems() {
     });
   });
 
+  vfxReviewRows().forEach((row) => {
+    if (row.risk === "ok") return;
+    items.push({
+      kind: "版本审阅",
+      name: `${row.shotGroup} · ${row.version}`,
+      source: `${row.vendor} · ${vfxPaymentGateLabels[row.paymentGate] || "付款关口"}`,
+      amount: row.amount,
+      status: vfxReviewStatusLabels[row.status]?.label || "待审",
+      risk: row.risk,
+      evidence: row.risk === "high" ? "需补版本批注 / 验收单 / 付款审批" : "需核版本批注",
+      reason: `${row.approvedCount}/${row.shotCount} 镜头通过，${row.action}`,
+    });
+  });
+
   const riskWeight = { high: 3, medium: 2, low: 1 };
   return items.sort((a, b) => (riskWeight[b.risk] || 0) - (riskWeight[a.risk] || 0) || b.amount - a.amount);
 }
@@ -4189,7 +4356,7 @@ function auditSummaryData() {
             : rule.id === "missing_evidence"
               ? items.filter((item) => /需补|缺/.test(item.evidence)).length
               : rule.id === "vfx_progress"
-                ? vfxSupplierAuditRows().filter((row) => row.risk !== "ok" || row.gap > 0.12).length
+                ? vfxSupplierAuditRows().filter((row) => row.risk !== "ok" || row.gap > 0.12).length + vfxReviewRows().filter((row) => row.risk !== "ok").length
                 : rule.id === "callsheet_jump"
                   ? items.filter((item) => item.kind === "通告单").length
                   : 0,
@@ -4281,6 +4448,74 @@ function renderVfxSupplierAudit() {
     .join("");
 }
 
+function renderVfxVersionReview() {
+  const status = document.querySelector("#vfxVersionStatus");
+  const summary = document.querySelector("#vfxVersionSummary");
+  const list = document.querySelector("#vfxVersionList");
+  const vendorOptions = document.querySelector("#vfxVendorOptions");
+  if (!status || !summary || !list) return;
+
+  const rows = vfxReviewRows();
+  const supplierVendors = vfxSupplierAuditRows().map((row) => row.vendor);
+  const versionVendors = rows.map((row) => row.vendor);
+  const vendors = Array.from(new Set([...supplierVendors, ...versionVendors].filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-CN"));
+  if (vendorOptions) {
+    vendorOptions.innerHTML = vendors.map((vendor) => `<option value="${escapeHtml(vendor)}"></option>`).join("");
+  }
+
+  const totalShots = rows.reduce((sum, row) => sum + row.shotCount, 0);
+  const approvedShots = rows.reduce((sum, row) => sum + row.approvedCount, 0);
+  const highRisk = rows.filter((row) => row.risk === "high").length;
+  const blocked = rows.filter((row) => row.status === "blocked").length;
+  const approvalRate = totalShots > 0 ? approvedShots / totalShots : 0;
+
+  status.textContent = rows.length > 0 ? `${rows.length} 个版本 · ${highRisk} 项高风险` : "暂无版本";
+  summary.innerHTML = `
+    <div class="vfx-version-stat"><span>版本数</span><strong>${rows.length}</strong></div>
+    <div class="vfx-version-stat"><span>镜头通过</span><strong>${approvedShots}/${totalShots}</strong></div>
+    <div class="vfx-version-stat"><span>通过率</span><strong>${percentText(approvalRate)}</strong></div>
+    <div class="vfx-version-stat"><span>阻塞</span><strong>${blocked}</strong></div>
+  `;
+
+  if (rows.length === 0) {
+    list.innerHTML = `<div class="audit-empty">暂无版本审阅记录。保存供应商版本后，这里会显示批注、通过率和付款关口。</div>`;
+    return;
+  }
+
+  list.innerHTML = rows
+    .map((row) => {
+      const statusMeta = vfxReviewStatusLabels[row.status] || vfxReviewStatusLabels.submitted;
+      const paymentLabel = vfxPaymentGateLabels[row.paymentGate] || "付款关口";
+      const riskClass = row.risk === "high" ? "over" : row.risk === "medium" ? "tight" : "ok";
+      return `
+        <div class="vfx-version-row ${row.risk}" data-review-id="${escapeHtml(row.id)}">
+          <div class="vfx-version-main">
+            <div>
+              <strong>${escapeHtml(row.shotGroup)} · ${escapeHtml(row.version)}</strong>
+              <span>${escapeHtml(row.vendor)} · ${escapeHtml(row.reviewer)} · ${escapeHtml(row.date || "未填日期")}</span>
+            </div>
+            <span class="status-text ${statusMeta.className}">${escapeHtml(statusMeta.label)}</span>
+          </div>
+          <div class="vfx-version-meter">
+            <div><span>通过 ${row.approvedCount}/${row.shotCount}</span><strong>${percentText(row.approvalRate)}</strong></div>
+            <div class="vfx-progress-track"><span style="width: ${Math.round(row.approvalRate * 100)}%"></span></div>
+          </div>
+          <div class="vfx-version-meta">
+            <span>${escapeHtml(paymentLabel)}</span>
+            <span class="status-text ${riskClass}">${row.risk === "high" ? "高风险" : row.risk === "medium" ? "待复核" : "稳定"}</span>
+            <span>${row.amount > 0 ? money.format(row.amount) : "未匹配合同金额"}</span>
+          </div>
+          <p>${escapeHtml(row.notes || row.action)}</p>
+          <div class="vfx-version-row-actions">
+            <button type="button" data-vfx-review-edit="${escapeHtml(row.id)}">编辑</button>
+            <button type="button" data-vfx-review-delete="${escapeHtml(row.id)}">删除</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 function renderAuditModule() {
   const badge = document.querySelector("#auditHealthBadge");
   const summary = document.querySelector("#auditSummaryCards");
@@ -4363,6 +4598,7 @@ function renderAuditModule() {
     </div>
   `;
   renderVfxSupplierAudit();
+  renderVfxVersionReview();
 }
 
 function drawFundFlowChart() {
@@ -5960,6 +6196,7 @@ function productionTrackingData() {
   const audit = auditSummaryData();
   const flow = fundFlowReadableData(10);
   const vfxRows = vfxSupplierAuditRows();
+  const reviewVersionRows = vfxReviewRows();
   const today = callSheets.find((sheet) => sheet.day === project.currentDay) || callSheets[callSheets.length - 1] || null;
   const scheduleItems = production.schedule.slice(0, 6).map((row) => {
     const tone = trackingToneFromRisk(row.risk);
@@ -6009,7 +6246,19 @@ function productionTrackingData() {
     target: "audit",
     focus: "vfxSupplierAudit",
   }));
-  const rows = [...scheduleItems, ...callsheetItems, ...vfxItems]
+  const versionItems = reviewVersionRows.slice(0, 4).map((row) => ({
+    label: `${row.shotGroup} · ${row.version}`,
+    owner: row.vendor,
+    type: "版本",
+    status: vfxReviewStatusLabels[row.status]?.label || "待审",
+    range: `${row.approvedCount}/${row.shotCount} 通过`,
+    amount: row.amount > 0 ? money.format(row.amount) : vfxPaymentGateLabels[row.paymentGate],
+    meta: `${row.reviewer} · ${vfxPaymentGateLabels[row.paymentGate]}`,
+    tone: trackingToneFromRisk(row.risk),
+    target: "audit",
+    focus: "vfxVersionList",
+  }));
+  const rows = [...scheduleItems, ...callsheetItems, ...vfxItems, ...versionItems]
     .sort((a, b) => {
       const weight = { warning: 0, note: 1, good: 2 };
       return weight[a.tone] - weight[b.tone];
@@ -6040,10 +6289,10 @@ function productionTrackingData() {
     {
       label: "VFX / 后期供应商",
       value: `${vfxRows.length} 个`,
-      detail: `${vfxRows.filter((row) => row.risk !== "ok").length} 个需复核 · 平均交付 ${percentText(vfxRows.length > 0 ? averageNumbers(vfxRows.map((row) => row.progressRate), 0) : 0)}`,
+      detail: `${reviewVersionRows.length} 个版本 · ${vfxRows.filter((row) => row.risk !== "ok").length + reviewVersionRows.filter((row) => row.risk !== "ok").length} 项需复核`,
       amount: money.format(vfxRows.reduce((sum, row) => sum + row.contractAmount, 0)),
       target: "audit",
-      focus: "vfxSupplierAudit",
+      focus: "vfxVersionList",
     },
   ];
   const reviewRows = [
@@ -6067,13 +6316,25 @@ function productionTrackingData() {
         target: "audit",
         focus: "vfxSupplierAudit",
       })),
+    ...reviewVersionRows
+      .filter((row) => row.risk !== "ok")
+      .slice(0, 3)
+      .map((row) => ({
+        label: `${row.shotGroup} · ${row.version}`,
+        status: vfxReviewStatusLabels[row.status]?.label || "待审",
+        detail: `${row.vendor} · ${row.approvedCount}/${row.shotCount} 通过 · ${vfxPaymentGateLabels[row.paymentGate]}`,
+        amount: row.amount > 0 ? money.format(row.amount) : "未匹配金额",
+        tone: trackingToneFromRisk(row.risk),
+        target: "audit",
+        focus: "vfxVersionList",
+      })),
   ].slice(0, 6);
   const budgetRate = project.budget > 0 ? metrics.spent / project.budget : 0;
   const kpis = [
     { label: "追踪项", value: rows.length, detail: `${production.schedule.length} 阶段 · ${callSheets.length} 通告`, tone: rows.some((row) => row.tone === "warning") ? "warning" : "good" },
     { label: "完成进度", value: percentText(production.progressRate), detail: `当前 D${project.currentDay}/${project.plannedDays}`, tone: production.delayed > 0 ? "warning" : production.tight > 0 ? "note" : "good" },
     { label: "预算消耗", value: percentText(budgetRate), detail: money.format(metrics.spent), tone: budgetRate > production.progressRate + 0.12 ? "warning" : budgetRate > production.progressRate + 0.06 ? "note" : "good" },
-    { label: "审查队列", value: audit.highRiskCount + audit.mediumRiskCount, detail: `${audit.noEvidenceCount} 项缺凭证`, tone: audit.highRiskCount > 0 ? "warning" : audit.mediumRiskCount > 0 ? "note" : "good" },
+    { label: "审查队列", value: audit.highRiskCount + audit.mediumRiskCount, detail: `${audit.noEvidenceCount} 项缺凭证 · ${reviewVersionRows.length} 版本`, tone: audit.highRiskCount > 0 ? "warning" : audit.mediumRiskCount > 0 ? "note" : "good" },
     { label: "资金流", value: flow.supplierCount, detail: flow.statusLabel, tone: flow.unclassifiedUsed > 0 || flow.overAllocated > 0 ? "warning" : flow.unallocated > 0 ? "note" : "good" },
   ];
   return { rows, resourceRows, reviewRows, kpis, today };
@@ -8049,6 +8310,108 @@ function setupAuditFilters() {
     auditState.filter = button.dataset.filter || "all";
     renderAuditFilterControls();
     renderAuditModule();
+  });
+}
+
+function resetVfxReviewForm() {
+  const form = document.querySelector("#vfxVersionForm");
+  if (!form) return;
+  form.reset();
+  form.elements.id.value = "";
+  form.elements.status.value = "submitted";
+  form.elements.shotCount.value = "1";
+  form.elements.approvedCount.value = "0";
+  form.elements.paymentGate.value = "hold";
+  form.elements.date.value = reportDateLabel();
+  const vendor = vfxSupplierAuditRows()[0]?.vendor || "";
+  if (vendor) {
+    form.elements.vendor.value = vendor;
+  }
+}
+
+function fillVfxReviewForm(reviewId) {
+  const form = document.querySelector("#vfxVersionForm");
+  const row = normalizeVfxReviewVersions(vfxReviewVersions).find((item) => item.id === reviewId);
+  if (!form || !row) return false;
+  form.elements.id.value = row.id;
+  form.elements.vendor.value = row.vendor;
+  form.elements.shotGroup.value = row.shotGroup;
+  form.elements.version.value = row.version;
+  form.elements.status.value = row.status;
+  form.elements.shotCount.value = String(row.shotCount);
+  form.elements.approvedCount.value = String(row.approvedCount);
+  form.elements.date.value = row.date || reportDateLabel();
+  form.elements.reviewer.value = row.reviewer;
+  form.elements.paymentGate.value = row.paymentGate;
+  form.elements.notes.value = row.notes;
+  form.scrollIntoView({ behavior: "smooth", block: "center" });
+  window.setTimeout(() => form.elements.shotGroup.focus({ preventScroll: true }), 220);
+  return true;
+}
+
+function setupVfxReviewControls() {
+  const form = document.querySelector("#vfxVersionForm");
+  const list = document.querySelector("#vfxVersionList");
+  if (!form || !list) return;
+  resetVfxReviewForm();
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const shotCount = Math.max(1, getFormNumber(form, "shotCount"));
+    const approvedCount = Math.max(0, Math.min(shotCount, getFormNumber(form, "approvedCount")));
+    const vendor = getFormText(form, "vendor") || "未登记供应商";
+    const shotGroup = getFormText(form, "shotGroup");
+    const version = getFormText(form, "version");
+    if (!shotGroup || !version) {
+      setFormStatus("请填写镜头组和版本号", "warning");
+      return;
+    }
+    const nextRow = {
+      id: form.elements.id.value || `vfx-review-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      vendor,
+      shotGroup,
+      version,
+      status: normalizeVfxReviewStatus(form.elements.status.value),
+      shotCount,
+      approvedCount,
+      date: form.elements.date.value || reportDateLabel(),
+      reviewer: getFormText(form, "reviewer") || "未指派",
+      paymentGate: normalizeVfxPaymentGate(form.elements.paymentGate.value),
+      notes: getFormText(form, "notes"),
+    };
+    const existingIndex = vfxReviewVersions.findIndex((item) => item.id === nextRow.id);
+    if (existingIndex >= 0) {
+      vfxReviewVersions[existingIndex] = nextRow;
+    } else {
+      vfxReviewVersions.push(nextRow);
+    }
+    vfxReviewVersions = normalizeVfxReviewVersions(vfxReviewVersions);
+    saveData();
+    refreshAll();
+    fillVfxReviewForm(nextRow.id);
+    setFormStatus(`版本已保存：${nextRow.shotGroup} · ${nextRow.version}`, "good");
+  });
+
+  document.querySelector("#newVfxVersion")?.addEventListener("click", () => {
+    resetVfxReviewForm();
+    setFormStatus("已准备新版本记录", "good");
+  });
+
+  list.addEventListener("click", (event) => {
+    const editButton = event.target.closest("[data-vfx-review-edit]");
+    if (editButton) {
+      fillVfxReviewForm(editButton.dataset.vfxReviewEdit);
+      setFormStatus("版本已载入表单", "good");
+      return;
+    }
+    const deleteButton = event.target.closest("[data-vfx-review-delete]");
+    if (!deleteButton) return;
+    const target = vfxReviewVersions.find((item) => item.id === deleteButton.dataset.vfxReviewDelete);
+    vfxReviewVersions = vfxReviewVersions.filter((item) => item.id !== deleteButton.dataset.vfxReviewDelete);
+    saveData();
+    refreshAll();
+    resetVfxReviewForm();
+    setFormStatus(`已删除版本：${target?.shotGroup || "未命名"} ${target?.version || ""}`, "warning");
   });
 }
 
@@ -10070,6 +10433,7 @@ function init() {
   setupAnalysisVisual();
   setupBudgetShareControls();
   setupAuditFilters();
+  setupVfxReviewControls();
   setupInputPreferences();
   setupInputForms();
   setupChartViewControls();

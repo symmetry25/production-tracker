@@ -470,6 +470,26 @@ h3 {
   background: transparent;
 }
 
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  background: var(--control);
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.ghost-button:hover {
+  border-color: var(--teal);
+  background: var(--surface-raised);
+}
+
 main {
   max-width: 1680px;
   margin: 0 auto;
@@ -1591,6 +1611,10 @@ main {
   grid-column: span 3;
 }
 
+.audit-version-panel {
+  grid-column: span 3;
+}
+
 .audit-wide,
 .audit-brief-panel {
   grid-column: span 3;
@@ -1673,6 +1697,10 @@ main {
 }
 
 .audit-layout .audit-vfx-panel {
+  grid-column: span 3;
+}
+
+.audit-layout .audit-version-panel {
   grid-column: span 3;
 }
 
@@ -1967,6 +1995,205 @@ main {
   color: var(--ink);
   font-size: 13px;
   line-height: 1.55;
+}
+
+.vfx-version-form {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.vfx-version-fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.25fr) minmax(190px, 1.45fr) 92px 112px 86px 86px 126px 132px 128px;
+  gap: 8px;
+  align-items: end;
+}
+
+.vfx-version-fields label {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.vfx-version-fields label span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vfx-version-fields input,
+.vfx-version-fields select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  background: var(--control);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.vfx-version-fields .vfx-version-notes {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1280px) {
+  .vfx-version-fields .vfx-version-notes {
+    grid-column: 1 / -1;
+  }
+}
+
+.vfx-version-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.vfx-version-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.vfx-version-stat,
+.vfx-version-row {
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  border-radius: 8px;
+}
+
+.vfx-version-stat {
+  min-height: 68px;
+  padding: 10px;
+}
+
+.vfx-version-stat span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.vfx-version-stat strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 19px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.vfx-version-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.vfx-version-row {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+}
+
+.vfx-version-row.high {
+  border-left: 4px solid var(--red);
+}
+
+.vfx-version-row.medium {
+  border-left: 4px solid var(--amber);
+}
+
+.vfx-version-row.ok {
+  border-left: 4px solid var(--green);
+}
+
+.vfx-version-main,
+.vfx-version-meta,
+.vfx-version-meter > div:first-child,
+.vfx-version-row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vfx-version-main {
+  align-items: flex-start;
+}
+
+.vfx-version-main > div {
+  min-width: 0;
+}
+
+.vfx-version-main strong,
+.vfx-version-main span {
+  display: block;
+}
+
+.vfx-version-main strong {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vfx-version-main div > span,
+.vfx-version-meta,
+.vfx-version-meter > div:first-child {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.vfx-version-meta {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.vfx-version-meter > div:first-child strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.vfx-version-row p {
+  min-height: 40px;
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.vfx-version-row-actions {
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.vfx-version-row-actions button {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--surface);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.vfx-version-row-actions button:hover {
+  border-color: var(--teal);
+  color: var(--ink);
 }
 
 .analysis-forecast-item strong,
@@ -5091,6 +5318,8 @@ body.schedule-dragging .schedule-bar.selected {
 .audit-brief-block,
 .vfx-audit-metric,
 .vfx-audit-row,
+.vfx-version-stat,
+.vfx-version-row,
 .department-share-stack,
 .department-share-empty,
 .report-section,
@@ -5193,6 +5422,10 @@ body.schedule-dragging .schedule-bar.selected {
 :root.dark-mode .audit-brief-block,
 :root.dark-mode .vfx-audit-metric,
 :root.dark-mode .vfx-audit-row,
+:root.dark-mode .vfx-version-form,
+:root.dark-mode .vfx-version-stat,
+:root.dark-mode .vfx-version-row,
+:root.dark-mode .vfx-version-row-actions button,
 :root.dark-mode .callsheet-node-board,
 :root.dark-mode .callsheet-node,
 :root.dark-mode .callsheet-node-summary > div,
@@ -5580,6 +5813,12 @@ body.schedule-dragging .schedule-bar.selected {
   min-height: 0;
 }
 
+#audit .audit-version-panel {
+  grid-column: 1 / -1;
+  grid-row: 6;
+  min-height: 0;
+}
+
 #audit .audit-summary-panel .module-summary-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -5765,6 +6004,7 @@ body.schedule-dragging .schedule-bar.selected {
   .audit-filter-panel,
   .audit-rules-panel,
   .audit-vfx-panel,
+  .audit-version-panel,
   .audit-wide,
   .audit-brief-panel,
   .module-wide,
@@ -5869,6 +6109,8 @@ body.schedule-dragging .schedule-bar.selected {
   .fund-flow-kpis,
   .fund-flow-readable-grid,
   .personnel-card-grid,
+  .vfx-version-fields,
+  .vfx-version-list,
   .fund-flow-readable.large .fund-flow-readable-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -6095,6 +6337,9 @@ body.schedule-dragging .schedule-bar.selected {
   .module-summary-grid,
   .vfx-audit-summary,
   .vfx-audit-bars,
+  .vfx-version-summary,
+  .vfx-version-fields,
+  .vfx-version-list,
   .work-hour-kpis,
   .production-data-kpis,
   .fund-flow-summary,
@@ -6339,6 +6584,7 @@ body.schedule-dragging .schedule-bar.selected {
   #audit .audit-rules-panel,
   #audit .audit-brief-panel,
   #audit .audit-vfx-panel,
+  #audit .audit-version-panel,
   #progress .progress-layout > .chart-panel:first-child,
   #progress .scene-panel,
   #progress .risk-panel,
