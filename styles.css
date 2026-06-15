@@ -1381,6 +1381,403 @@ main {
   align-items: start;
 }
 
+.tracking-workflow-section {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.tracking-workflow-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--teal) 7%, transparent), transparent 45%),
+    var(--surface-raised);
+}
+
+.tracking-workflow-head span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.tracking-workflow-head h4 {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+
+.tracking-workflow-grid {
+  display: grid;
+  grid-template-columns: minmax(560px, 1.36fr) minmax(300px, 0.74fr) minmax(320px, 0.82fr);
+  min-width: 0;
+}
+
+.tracking-shot-grid,
+.tracking-task-stack,
+.tracking-workload-panel {
+  min-width: 0;
+  border-right: 1px solid var(--line);
+}
+
+.tracking-workload-panel {
+  border-right: 0;
+}
+
+.tracking-shot-header,
+.tracking-shot-row {
+  display: grid;
+  grid-template-columns: 76px minmax(170px, 1fr) minmax(112px, 0.52fr) 48px 52px minmax(92px, 0.36fr) 92px;
+  gap: 8px;
+  align-items: center;
+}
+
+.tracking-shot-header {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--surface-strong);
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.tracking-shot-row {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  background: transparent;
+  box-shadow: inset 4px 0 0 var(--teal);
+  text-align: left;
+}
+
+.tracking-shot-row.warning {
+  box-shadow: inset 4px 0 0 var(--red);
+}
+
+.tracking-shot-row.note {
+  box-shadow: inset 4px 0 0 var(--amber);
+}
+
+.tracking-shot-row:last-child {
+  border-bottom: 0;
+}
+
+.tracking-shot-row:hover,
+.tracking-task-card:hover,
+.tracking-workload-row:hover {
+  background: var(--surface-strong);
+}
+
+.tracking-shot-code {
+  color: var(--ink);
+  font-family: "SFMono-Regular", "Cascadia Code", "Menlo", monospace;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.tracking-shot-title,
+.tracking-shot-title strong,
+.tracking-shot-title small,
+.tracking-shot-row > span,
+.tracking-task-card strong,
+.tracking-task-card small,
+.tracking-workload-row strong,
+.tracking-workload-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-shot-title {
+  display: grid;
+  gap: 2px;
+}
+
+.tracking-shot-title strong,
+.tracking-task-card strong,
+.tracking-workload-row strong {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.tracking-shot-title small,
+.tracking-task-card small,
+.tracking-task-card em,
+.tracking-workload-row small,
+.tracking-workload-row em {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.tracking-task-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px 5px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 900;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.tracking-task-counts i {
+  font-style: normal;
+}
+
+.tracking-task-counts b {
+  color: var(--ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tracking-assignee-stack {
+  display: flex;
+  min-width: 0;
+}
+
+.tracking-assignee-stack i {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  margin-left: -5px;
+  border: 1px solid var(--surface);
+  color: var(--ink);
+  background: var(--surface-raised);
+  border-radius: 50%;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.tracking-assignee-stack i:first-child {
+  margin-left: 0;
+}
+
+.tracking-row-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 6px;
+  align-items: center;
+}
+
+.tracking-row-progress i,
+.tracking-workload-row i {
+  height: 7px;
+  overflow: hidden;
+  background: var(--track);
+  border-radius: 999px;
+}
+
+.tracking-row-progress i i,
+.tracking-row-progress i b,
+.tracking-workload-row i b {
+  display: block;
+  height: 100%;
+  background: var(--teal);
+  border-radius: inherit;
+}
+
+.tracking-row-progress b {
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tracking-task-stack {
+  display: grid;
+  align-content: start;
+}
+
+.tracking-task-card {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  min-height: 82px;
+  padding: 10px 11px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  background: transparent;
+  box-shadow: inset 4px 0 0 var(--teal);
+  text-align: left;
+}
+
+.tracking-task-card.warning {
+  box-shadow: inset 4px 0 0 var(--red);
+}
+
+.tracking-task-card.note {
+  box-shadow: inset 4px 0 0 var(--amber);
+}
+
+.tracker-status {
+  justify-self: start;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--surface-raised);
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.tracker-status.approved {
+  border-color: color-mix(in srgb, var(--teal) 34%, var(--line));
+  color: var(--teal);
+}
+
+.tracker-status.pending-review,
+.tracker-status.in-progress {
+  border-color: color-mix(in srgb, var(--amber) 34%, var(--line));
+  color: var(--amber);
+}
+
+.tracker-status.changes-requested,
+.tracker-status.on-hold {
+  border-color: color-mix(in srgb, var(--red) 34%, var(--line));
+  color: var(--red);
+}
+
+.tracking-task-meta {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.tracking-task-meta em {
+  min-width: 0;
+  overflow: hidden;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-workload-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.tracking-workload-summary div {
+  min-width: 0;
+  padding: 10px;
+  border-right: 1px solid var(--line);
+}
+
+.tracking-workload-summary div:last-child {
+  border-right: 0;
+}
+
+.tracking-workload-summary span,
+.tracking-workload-summary small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-workload-summary strong {
+  display: block;
+  margin: 3px 0;
+  font-size: 17px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tracking-burndown-mini {
+  display: flex;
+  height: 92px;
+  gap: 18px;
+  align-items: end;
+  justify-content: center;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  background:
+    repeating-linear-gradient(to top, transparent 0 22px, color-mix(in srgb, var(--line) 60%, transparent) 22px 23px),
+    var(--surface);
+}
+
+.tracking-burndown-mini > span {
+  position: relative;
+  width: 34px;
+  min-height: 8px;
+  background: color-mix(in srgb, var(--blue) 72%, var(--surface));
+  border-radius: 5px 5px 2px 2px;
+}
+
+.tracking-burndown-mini > span.warning {
+  background: color-mix(in srgb, var(--red) 78%, var(--surface));
+}
+
+.tracking-burndown-mini b {
+  position: absolute;
+  right: 50%;
+  bottom: -16px;
+  transform: translateX(50%);
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.tracking-workload-list {
+  display: grid;
+}
+
+.tracking-workload-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  gap: 7px 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.tracking-workload-row.warning {
+  box-shadow: inset 4px 0 0 var(--red);
+}
+
+.tracking-workload-row.note {
+  box-shadow: inset 4px 0 0 var(--amber);
+}
+
+.tracking-workload-row i {
+  align-self: center;
+}
+
+.tracking-workload-row em {
+  grid-column: 1 / -1;
+  font-style: normal;
+}
+
 .tracking-console-section {
   min-width: 0;
   border: 1px solid var(--line);
@@ -6527,9 +6924,17 @@ body.schedule-dragging .schedule-bar.selected {
 :root.dark-mode .producer-empty,
 :root.dark-mode .producer-column-head span,
 :root.dark-mode .tracking-kpi,
+:root.dark-mode .tracking-workflow-section,
+:root.dark-mode .tracking-workflow-head,
+:root.dark-mode .tracking-shot-header,
+:root.dark-mode .tracking-workload-summary,
+:root.dark-mode .tracking-task-card,
+:root.dark-mode .tracking-shot-row,
+:root.dark-mode .tracking-workload-row,
 :root.dark-mode .tracking-console-section,
 :root.dark-mode .tracking-section-head,
 :root.dark-mode .tracking-section-head span,
+:root.dark-mode .tracker-status,
 :root.dark-mode .tracking-row-type,
 :root.dark-mode .shot-pipeline-board,
 :root.dark-mode .pipeline-head,
@@ -6544,6 +6949,9 @@ body.schedule-dragging .schedule-bar.selected {
 :root.dark-mode .tracking-resource-row:hover,
 :root.dark-mode .tracking-review-row:hover,
 :root.dark-mode .tracking-kpi:hover,
+:root.dark-mode .tracking-shot-row:hover,
+:root.dark-mode .tracking-task-card:hover,
+:root.dark-mode .tracking-workload-row:hover,
 :root.dark-mode .pipeline-shot-cell:hover,
 :root.dark-mode .pipeline-step:hover,
 :root.dark-mode .pipeline-status-cell:hover {
@@ -6988,6 +7396,29 @@ body.schedule-dragging .schedule-bar.selected {
   .project-manager {
     grid-template-columns: minmax(260px, 1fr) repeat(5, auto);
   }
+
+  .tracking-workflow-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tracking-shot-grid,
+  .tracking-task-stack,
+  .tracking-workload-panel {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .tracking-workload-panel {
+    border-bottom: 0;
+  }
+
+  .tracking-task-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracking-task-card:nth-child(2n - 1) {
+    border-right: 1px solid var(--line);
+  }
 }
 
 @media (min-width: 1101px) and (max-width: 1320px) {
@@ -7335,6 +7766,38 @@ body.schedule-dragging .schedule-bar.selected {
 
   .tracking-console-grid {
     grid-template-columns: 1fr;
+  }
+
+  .tracking-workflow-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-shot-grid,
+  .tracking-task-stack,
+  .tracking-workload-panel {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .tracking-workload-panel {
+    border-bottom: 0;
+  }
+
+  .tracking-shot-grid {
+    overflow-x: auto;
+  }
+
+  .tracking-shot-header,
+  .tracking-shot-row {
+    min-width: 780px;
+  }
+
+  .tracking-task-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracking-task-card:nth-child(2n - 1) {
+    border-right: 1px solid var(--line);
   }
 
   .producer-column {
@@ -7725,6 +8188,32 @@ body.schedule-dragging .schedule-bar.selected {
   .tracking-row-amount,
   .tracking-row-status {
     grid-column: 2;
+  }
+
+  .tracking-workflow-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tracking-task-stack {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-task-card:nth-child(2n - 1) {
+    border-right: 0;
+  }
+
+  .tracking-workload-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-workload-summary div {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .tracking-workload-summary div:last-child {
+    border-bottom: 0;
   }
 
   .pipeline-core {
