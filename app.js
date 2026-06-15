@@ -6054,6 +6054,8 @@ function inspectorTargetFromElement(target) {
     payload: target.dataset.pipelinePayload || "",
     trigger: target.dataset.pipelineTrigger || "",
     queueId: target.dataset.pipelineQueueId || "",
+    trackerTaskId: target.dataset.trackerTaskId || "",
+    trackerShotCode: target.dataset.trackerShotCode || "",
     summary: contextSummaryFromElement(target),
     facts,
   };
@@ -6064,6 +6066,7 @@ function selectInspectorTarget(target) {
   document.querySelectorAll(".inspector-selected").forEach((item) => item.classList.remove("inspector-selected"));
   target?.classList?.add("inspector-selected");
   renderProductionInspector();
+  renderTrackerTaskDetailPanel();
 }
 
 function inspectorObjectActions(target) {
@@ -6674,6 +6677,112 @@ function taskStatusFromRate(rate, risk = "ok", needsReview = false) {
   return "NOT_STARTED";
 }
 
+function trackerTaskNextAction(task) {
+  if (!task) return "选择一个任务查看下一步。";
+  if (task.status === "CHANGES_REQUESTED") return "把批注拆成可关闭项，要求负责人回传下一版日期。";
+  if (task.status === "ON_HOLD") return "先确认阻塞原因，再决定是否调整供应商、排期或付款关口。";
+  if (task.status === "PENDING_REVIEW") return "安排导演、监制或后期负责人完成审阅，并记录是否可进入付款。";
+  if (task.status === "IN_PROGRESS") return "盯住 D 日节点，提前确认素材、人员和机器是否到位。";
+  if (task.status === "APPROVED") return "归档验收记录，把任务从待处理队列里关闭。";
+  return "补齐负责人、截止日和首版交付标准。";
+}
+
+function trackerTaskNotes(task) {
+  if (!task) return [];
+  const notes = [];
+  if (task.latestVersion?.notes) notes.push(task.latestVersion.notes);
+  if (task.latestVersion?.action) notes.push(task.latestVersion.action);
+  if (task.latestVersion?.risk && task.latestVersion.risk !== "ok") {
+    notes.push(`风险：${vfxReviewStatusLabels[task.latestVersion.status]?.label || "待审"} · ${vfxPaymentGateLabels[task.latestVersion.paymentGate] || "付款关口未定"}`);
+  }
+  if (task.status === "ON_HOLD" && notes.length === 0) notes.push("当前步骤暂停，需要补齐依赖条件。");
+  if (task.status === "NOT_STARTED" && notes.length === 0) notes.push("还没有版本或批注记录，建议先明确交付口径。");
+  return [...new Set(notes)].slice(0, 3);
+}
+
+function trackerTaskDetailTarget(tracker) {
+  if (selectedInspectorTarget?.trackerTaskId) {
+    const matchedById = tracker.allTasks.find((task) => task.id === selectedInspectorTarget.trackerTaskId);
+    if (matchedById) return matchedById;
+  }
+  const selectedTaskId = selectedInspectorTarget?.kind === "tracker-task" ? selectedInspectorTarget.facts?.find((item) => item.label === "任务") : null;
+  if (selectedInspectorTarget?.kind === "tracker-task") {
+    const titleParts = String(selectedInspectorTarget.title || "").split("·").map((item) => item.trim());
+    const matchedByTitle = tracker.allTasks.find((task) => task.shotCode === titleParts[0] && task.name === titleParts.slice(1).join(" · "));
+    if (matchedByTitle) return matchedByTitle;
+    const matchedByFact = tracker.allTasks.find((task) => task.name === selectedTaskId?.value && selectedInspectorTarget.title?.includes(task.shotCode));
+    if (matchedByFact) return matchedByFact;
+  }
+  return tracker.priorityTasks[0] || tracker.allTasks.find((task) => task.status !== "APPROVED") || tracker.allTasks[0] || null;
+}
+
+function renderTrackerTaskDetailPanel() {
+  const detail = document.querySelector("#trackingTaskDetail");
+  if (!detail) return;
+  const tracker = productionTrackerWorkflowData();
+  detail.innerHTML = renderTrackerTaskDetail(trackerTaskDetailTarget(tracker), tracker);
+}
+
+function renderTrackerTaskDetail(task, tracker) {
+  if (!task) return `<div class="producer-empty">暂无任务详情。录入场次、VFX 版本或排期后会显示。</div>`;
+  const statusClass = trackerStatusClass(task.status);
+  const statusLabel = trackerStatusLabel(task.status);
+  const version = task.latestVersion || null;
+  const notes = trackerTaskNotes(task);
+  const shot = tracker.shotRows.find((row) => row.code === task.shotCode);
+  const versionStatus = version ? vfxReviewStatusLabels[version.status]?.label || "待审" : "暂无版本";
+  const payment = version ? vfxPaymentGateLabels[version.paymentGate] || "付款关口未定" : "等待提交";
+  const approval = version ? `${version.approvedCount}/${version.shotCount} · ${percentText(version.approvalRate)}` : `${Math.round((task.progress || 0) * 100)}%`;
+  return `
+    <div class="tracking-detail-identity">
+      <span class="tracker-status ${statusClass}">${escapeHtml(statusLabel)}</span>
+      <strong>${escapeHtml(task.shotCode)} · ${escapeHtml(task.name)}</strong>
+      <small>${escapeHtml(task.shotTitle)} · ${escapeHtml(getDept(task.department).name)} · D${task.dueDay}</small>
+    </div>
+    <div class="tracking-detail-progress" aria-label="任务进度">
+      <span><b style="width:${Math.round(Math.max(0.04, Math.min(task.progress || 0, 1)) * 100)}%"></b></span>
+      <em>${Math.round((task.progress || 0) * 100)}%</em>
+    </div>
+    <div class="tracking-detail-grid">
+      <section>
+        <span>负责人</span>
+        <strong>${escapeHtml(task.assignee)}</strong>
+        <small>${escapeHtml(task.assigneeRole || "未登记岗位")}</small>
+      </section>
+      <section>
+        <span>版本</span>
+        <strong>${escapeHtml(version ? version.version : `${task.versionCount} version`)}</strong>
+        <small>${escapeHtml(version ? `${version.vendor} · ${versionStatus}` : "等待上传版本")}</small>
+      </section>
+      <section>
+        <span>验收</span>
+        <strong>${escapeHtml(approval)}</strong>
+        <small>${escapeHtml(payment)}</small>
+      </section>
+      <section>
+        <span>镜头范围</span>
+        <strong>${escapeHtml(shot ? `${shot.frameStart}-${shot.frameEnd}` : task.entityType)}</strong>
+        <small>${escapeHtml(shot ? `${shot.tasks.length} 项任务 · ${shot.note}` : "Shot Task")}</small>
+      </section>
+    </div>
+    <div class="tracking-detail-notes">
+      <div>
+        <span>Review Notes</span>
+        <strong>${task.noteCount} 条批注</strong>
+      </div>
+      ${notes.length > 0 ? notes.map((note) => `<p>${escapeHtml(note)}</p>`).join("") : `<p>暂无批注。可在审查队列里补充版本备注。</p>`}
+    </div>
+    <div class="tracking-detail-action">
+      <span>Next Action</span>
+      <strong>${escapeHtml(trackerTaskNextAction(task))}</strong>
+      <div>
+        <button type="button" data-workspace-view="${task.status === "PENDING_REVIEW" || task.status === "CHANGES_REQUESTED" ? "audit" : "progress"}" data-workspace-focus="${task.status === "PENDING_REVIEW" || task.status === "CHANGES_REQUESTED" ? "vfxVersionList" : "productionScheduleBoard"}">打开关联视图</button>
+        <button type="button" data-context-kind="tracker-task" data-context-title="${escapeHtml(`${task.shotCode} · ${task.name}`)}" data-context-meta="${escapeHtml(`${statusLabel} · ${task.assignee}`)}" data-tracker-task-id="${escapeHtml(task.id)}">选中任务</button>
+      </div>
+    </div>
+  `;
+}
+
 function shotTaskRowsForScene(scene, pipelineRow, versionMap, scheduleMap) {
   const taskTemplates = [
     { key: "shoot", name: "Shooting", label: "拍摄", department: "directing", ownerFallback: "导演组" },
@@ -6978,10 +7087,11 @@ function renderProductionTrackingConsole() {
   const shotGrid = document.querySelector("#trackingShotGrid");
   const taskStack = document.querySelector("#trackingTaskStack");
   const workloadPanel = document.querySelector("#trackingWorkloadPanel");
+  const taskDetail = document.querySelector("#trackingTaskDetail");
   const table = document.querySelector("#trackingConsoleTable");
   const resources = document.querySelector("#trackingResourceList");
   const reviews = document.querySelector("#trackingReviewList");
-  if (!container || !badge || !kpiNode || !workflowBadge || !shotGrid || !taskStack || !workloadPanel || !table || !resources || !reviews) return;
+  if (!container || !badge || !kpiNode || !workflowBadge || !shotGrid || !taskStack || !workloadPanel || !taskDetail || !table || !resources || !reviews) return;
   const data = productionTrackingData();
   const warningCount = data.rows.filter((row) => row.tone === "warning").length + data.reviewRows.filter((row) => row.tone === "warning").length;
   const noteCount = data.rows.filter((row) => row.tone === "note").length + data.reviewRows.filter((row) => row.tone === "note").length;
@@ -7047,8 +7157,9 @@ function renderProductionTrackingConsole() {
             const statusClass = trackerStatusClass(task.status);
             const statusLabel = trackerStatusLabel(task.status);
             const versionText = task.latestVersion ? `${task.latestVersion.version} · ${task.latestVersion.vendor}` : `${task.versionCount} version`;
+            const selected = selectedInspectorTarget?.trackerTaskId === task.id;
             return `
-              <button class="tracking-task-card ${trackerStatusTone(task.status)}" type="button" data-context-kind="tracker-task" data-context-title="${escapeHtml(`${task.shotCode} · ${task.name}`)}" data-context-meta="${escapeHtml(`${statusLabel} · ${task.assignee}`)}" data-tracker-task-id="${escapeHtml(task.id)}" data-workspace-view="${task.status === "PENDING_REVIEW" || task.status === "CHANGES_REQUESTED" ? "audit" : "progress"}" data-workspace-focus="${task.status === "PENDING_REVIEW" || task.status === "CHANGES_REQUESTED" ? "vfxVersionList" : "productionScheduleBoard"}">
+              <button class="tracking-task-card ${trackerStatusTone(task.status)}${selected ? " inspector-selected" : ""}" type="button" data-context-kind="tracker-task" data-context-title="${escapeHtml(`${task.shotCode} · ${task.name}`)}" data-context-meta="${escapeHtml(`${statusLabel} · ${task.assignee}`)}" data-tracker-task-id="${escapeHtml(task.id)}" data-workspace-view="${task.status === "PENDING_REVIEW" || task.status === "CHANGES_REQUESTED" ? "audit" : "progress"}" data-workspace-focus="${task.status === "PENDING_REVIEW" || task.status === "CHANGES_REQUESTED" ? "vfxVersionList" : "productionScheduleBoard"}">
                 <span class="tracker-status ${statusClass}">${escapeHtml(statusLabel)}</span>
                 <strong>${escapeHtml(task.shotCode)} · ${escapeHtml(task.name)}</strong>
                 <small>${escapeHtml(task.shotTitle)} · ${escapeHtml(task.assignee)} · D${task.dueDay}</small>
@@ -7061,6 +7172,7 @@ function renderProductionTrackingConsole() {
           })
           .join("")
       : `<div class="producer-empty">暂无待处理任务。</div>`;
+  taskDetail.innerHTML = renderTrackerTaskDetail(trackerTaskDetailTarget(tracker), tracker);
   const maxWorkloadHours = Math.max(1, ...tracker.workloadRows.map((row) => row.hours));
   workloadPanel.innerHTML = `
     <div class="tracking-workload-summary">
@@ -11991,7 +12103,7 @@ function setupProducerWorkspace() {
   workspace.addEventListener("click", (event) => {
     const target = event.target.closest("[data-workspace-view]");
     if (!target) return;
-    if (target.closest(".tracking-workflow-section")) return;
+    if (target.closest(".tracking-workflow-section") && !target.closest(".tracking-detail-action")) return;
     const view = target.dataset.workspaceView;
     document.querySelector(`.tab-button[data-view="${CSS.escape(view)}"]`)?.click();
     window.setTimeout(() => focusWorkspaceTarget(target.dataset.workspaceFocus), 120);
