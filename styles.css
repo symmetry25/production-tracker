@@ -1439,6 +1439,58 @@ main {
   align-items: center;
 }
 
+.tracking-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(138px, 0.35fr) minmax(150px, 0.4fr) auto auto;
+  gap: 8px;
+  align-items: end;
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.tracking-filter-bar label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tracking-filter-bar span,
+.tracking-filter-bar strong {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.tracking-filter-bar select {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--control);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.tracking-filter-bar button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--control);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.tracking-filter-bar strong {
+  justify-self: end;
+  padding-bottom: 7px;
+}
+
 .tracking-shot-header {
   padding: 8px 10px;
   border-bottom: 1px solid var(--line);
@@ -1467,6 +1519,12 @@ main {
 
 .tracking-shot-row.note {
   box-shadow: inset 4px 0 0 var(--amber);
+}
+
+.tracking-shot-row.expanded {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--teal) 8%, transparent), transparent 50%),
+    var(--surface-strong);
 }
 
 .tracking-shot-row:last-child {
@@ -1544,6 +1602,56 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
+.tracking-shot-linked-tasks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 9px 10px 11px 16px;
+  border-bottom: 1px solid var(--line);
+  background:
+    repeating-linear-gradient(90deg, transparent 0 9px, color-mix(in srgb, var(--line) 42%, transparent) 9px 10px),
+    color-mix(in srgb, var(--surface) 82%, var(--surface-strong));
+}
+
+.tracking-shot-linked-tasks button {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--surface-strong);
+  border-radius: 6px;
+  text-align: left;
+  box-shadow: inset 3px 0 0 var(--teal);
+}
+
+.tracking-shot-linked-tasks button.warning {
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
+.tracking-shot-linked-tasks button.note {
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+
+.tracking-shot-linked-tasks strong,
+.tracking-shot-linked-tasks small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-shot-linked-tasks strong {
+  font-size: 12px;
+}
+
+.tracking-shot-linked-tasks small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
 .tracking-assignee-stack {
   display: flex;
   min-width: 0;
@@ -1602,6 +1710,24 @@ main {
 .tracking-task-stack {
   display: grid;
   align-content: start;
+}
+
+.tracking-task-stack-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.tracking-task-stack-head span,
+.tracking-task-stack-head strong {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
 }
 
 .tracking-task-card {
@@ -1869,6 +1995,68 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
+.tracking-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.tracking-status-actions button,
+.tracking-note-submit {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--control);
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.tracking-version-player {
+  display: grid;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 6px;
+}
+
+.tracking-version-frame {
+  display: grid;
+  min-height: 58px;
+  align-content: center;
+  justify-items: center;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--teal) 14%, transparent), transparent 44%),
+    linear-gradient(45deg, color-mix(in srgb, var(--blue) 12%, transparent), transparent 58%),
+    var(--surface-strong);
+  border-radius: 5px;
+}
+
+.tracking-version-frame span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.tracking-version-frame strong {
+  color: var(--ink);
+  font-family: "SFMono-Regular", "Cascadia Code", "Menlo", monospace;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.tracking-version-player small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+}
+
 .tracking-detail-grid {
   display: grid;
   grid-area: fields;
@@ -1925,6 +2113,34 @@ main {
   -webkit-line-clamp: 2;
 }
 
+.tracking-note-thread {
+  display: grid;
+  gap: 6px;
+}
+
+.tracking-note-input {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.tracking-note-input textarea {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--control);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.tracking-note-submit {
+  justify-self: start;
+}
+
 .tracking-detail-action {
   display: grid;
   grid-area: action;
@@ -1938,6 +2154,41 @@ main {
   white-space: normal;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+}
+
+.tracking-history-list {
+  display: grid;
+  gap: 5px;
+}
+
+.tracking-history-list p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 7px 8px;
+  border-left: 3px solid var(--line-strong);
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+  border-radius: 0 6px 6px 0;
+}
+
+.tracking-history-list b,
+.tracking-history-list small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-history-list b {
+  color: var(--ink);
+  font-size: 10.5px;
+  font-weight: 950;
+}
+
+.tracking-history-list small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .tracking-detail-action div {
@@ -7987,6 +8238,19 @@ body.schedule-dragging .schedule-bar.selected {
     min-width: 780px;
   }
 
+  .tracking-filter-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracking-filter-bar button,
+  .tracking-filter-bar strong {
+    justify-self: stretch;
+  }
+
+  .tracking-shot-linked-tasks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .tracking-task-stack {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -8422,6 +8686,11 @@ body.schedule-dragging .schedule-bar.selected {
 
   .tracking-detail-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracking-filter-bar,
+  .tracking-shot-linked-tasks {
+    grid-template-columns: 1fr;
   }
 
   .tracking-detail-grid section:nth-child(2n) {
