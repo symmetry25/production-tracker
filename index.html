@@ -13,7 +13,7 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=vfx-review-1" />
+    <link rel="stylesheet" href="./styles.css?v=pipeline-core-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -288,6 +288,61 @@
                     <div class="tracking-review-list" id="trackingReviewList"></div>
                   </section>
                 </div>
+              </div>
+            </article>
+
+            <article class="panel pipeline-core-panel">
+              <div class="panel-heading pipeline-core-heading">
+                <div>
+                  <p class="eyebrow">Pipeline Core</p>
+                  <h3>管线配置中心</h3>
+                  <span>项目上下文 / 路径模板 / Hook / 工具模块注册</span>
+                </div>
+                <div class="status-pill" id="pipelineCoreBadge">载入中</div>
+              </div>
+              <div class="pipeline-core" id="pipelineCore">
+                <section class="pipeline-core-section pipeline-context-section" aria-labelledby="pipelineContextTitle">
+                  <div class="tracking-section-head">
+                    <span>Context</span>
+                    <h4 id="pipelineContextTitle">当前上下文</h4>
+                  </div>
+                  <div class="pipeline-context-grid" id="pipelineContextGrid"></div>
+                </section>
+                <section class="pipeline-core-section pipeline-template-section" aria-labelledby="pipelineTemplateTitle">
+                  <div class="tracking-section-head">
+                    <span>Templates</span>
+                    <h4 id="pipelineTemplateTitle">路径模板</h4>
+                  </div>
+                  <div class="pipeline-template-list" id="pipelineTemplateList"></div>
+                </section>
+                <section class="pipeline-core-section pipeline-hook-section" aria-labelledby="pipelineHookTitle">
+                  <div class="tracking-section-head">
+                    <span>Hooks</span>
+                    <h4 id="pipelineHookTitle">审查 Hook</h4>
+                  </div>
+                  <div class="pipeline-hook-list" id="pipelineHookList"></div>
+                </section>
+                <section class="pipeline-core-section pipeline-module-section" aria-labelledby="pipelineModuleTitle">
+                  <div class="tracking-section-head">
+                    <span>Registry</span>
+                    <h4 id="pipelineModuleTitle">工具模块</h4>
+                  </div>
+                  <div class="pipeline-module-grid" id="pipelineModuleGrid"></div>
+                </section>
+                <section class="pipeline-core-section pipeline-folder-section" aria-labelledby="pipelineFolderTitle">
+                  <div class="tracking-section-head">
+                    <span>Bootstrap</span>
+                    <h4 id="pipelineFolderTitle">文件夹结构</h4>
+                  </div>
+                  <div class="pipeline-folder-output" id="pipelineFolderOutput"></div>
+                  <div class="pipeline-core-actions">
+                    <button class="icon-button primary" type="button" data-pipeline-action="copy-tree">复制结构</button>
+                    <button class="icon-button ghost" type="button" data-pipeline-action="publish-version">发布版本</button>
+                    <button class="icon-button ghost" type="button" data-pipeline-action="load-delivery">加载交付</button>
+                    <button class="icon-button ghost" type="button" data-pipeline-action="open-audit">打开审查</button>
+                  </div>
+                  <div class="pipeline-core-status" id="pipelineCoreStatus">等待管线数据。</div>
+                </section>
               </div>
             </article>
 
@@ -1898,6 +1953,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=context-menu-1"></script>
+    <script src="./app.js?v=pipeline-core-1"></script>
   </body>
 </html>

@@ -6127,6 +6127,7 @@ function producerWorkspaceData() {
     { icon: "⇥", label: "导入 Excel / 手写单", detail: "AI 识别录入", target: "input", focus: "spreadsheetFile" },
     { icon: "￥", label: "查看资金流向", detail: "公司、个人、车辆、酒店、场地", target: "fundflow" },
     { icon: "✓", label: "费用审查", detail: "等级、信任、凭证、VFX", target: "audit" },
+    { icon: "TK", label: "管线配置", detail: "上下文、模板、Hook", target: "overview", focus: "pipelineCore" },
     { icon: "↗", label: "生成监制报告", detail: "预算、风险、建议", target: "analysis" },
   ];
 
@@ -6442,6 +6443,305 @@ function renderProductionTrackingConsole() {
           )
           .join("")
       : `<div class="producer-empty">审查队列为空。</div>`;
+}
+
+function pipelinePathSegment(value, fallback = "untitled") {
+  const text = String(value || fallback).trim() || fallback;
+  return text
+    .replace(/[\\/:*?"<>|#%{}^~`[\]]+/gu, "-")
+    .replace(/\s+/gu, "_")
+    .replace(/_+/gu, "_")
+    .slice(0, 44)
+    .replace(/^[-_.]+|[-_.]+$/gu, "") || fallback;
+}
+
+function pipelineToneFromIssueCount(count, hasWarnings = false) {
+  if (count > 0) return "warning";
+  if (hasWarnings) return "note";
+  return "good";
+}
+
+function pipelineCoreData() {
+  const metrics = analysisMetrics();
+  const audit = auditSummaryData();
+  const flow = fundFlowReadableData(8);
+  const progress = activeProgressStats();
+  const production = productionDashboardData();
+  const activeSheet = callSheets.find((sheet) => sheet.day === project.currentDay) || callSheets[callSheets.length - 1] || null;
+  const activeSceneCode = activeSheet?.scenes?.[0] || scenes[0]?.code || "SH000";
+  const activeScene = scenes.find((scene) => scene.code === activeSceneCode) || scenes[0] || null;
+  const topDepartment = departmentAnalysisRows()[0]?.department || null;
+  const activeDepartmentId = activeSheet?.departments?.find((id) => departments.some((department) => department.id === id)) || topDepartment?.id || departments[0]?.id || "production";
+  const activeDepartment = getDept(activeDepartmentId);
+  const task = selectedScheduleTask() || production.schedule[0] || null;
+  const reviewRows = vfxReviewRows();
+  const vfxRows = vfxSupplierAuditRows();
+  const reviewRow = reviewRows[0] || null;
+  const vendor =
+    reviewRow?.vendor ||
+    vfxRows[0]?.vendor ||
+    equipment.find((item) => item.vendor && item.vendor !== "未登记公司")?.vendor ||
+    people.find((person) => person.vendor && person.vendor !== "个人 / 自由职业")?.vendor ||
+    "未登记供应商";
+  const projectName = project.title || "当前项目";
+  const projectToken = pipelinePathSegment(projectName, "project");
+  const shotToken = pipelinePathSegment(activeScene ? `${activeScene.code}_${activeScene.title}` : activeSceneCode, "SH000");
+  const deptToken = pipelinePathSegment(activeDepartment.name || activeDepartment.id, "department");
+  const taskToken = pipelinePathSegment(task?.title || "main_task", "task");
+  const vendorToken = pipelinePathSegment(vendor, "vendor");
+  const versionToken = pipelinePathSegment(reviewRow?.version || "v001", "v001");
+  const dateToken = pipelinePathSegment(activeSheet?.date || new Date().toISOString().slice(0, 10), "date");
+  const callsheetToken = pipelinePathSegment(activeSheet?.code || `D${project.currentDay || 1}`, "callsheet");
+  const budgetRate = project.budget > 0 ? metrics.spent / project.budget : 0;
+  const budgetGap = budgetRate - (progress.rate || 0);
+  const missingVendorCount =
+    people.filter((person) => !person.vendor || person.vendor === "个人 / 自由职业").length +
+    equipment.filter((item) => !item.vendor || item.vendor === "未登记公司").length;
+  const lowTrustCount =
+    people.filter((person) => normalizeTrust(person.trust) < 76).length +
+    equipment.filter((item) => normalizeTrust(item.trust) < 76).length;
+  const blockedReviewCount = reviewRows.filter((row) => row.status === "blocked" || row.risk === "high").length;
+  const heldPaymentCount = reviewRows.filter((row) => row.paymentGate === "hold" && row.approvalRate < 0.9).length;
+  const unclassifiedCount = flow.unclassifiedUsed > 0 ? 1 : 0;
+  const templates = [
+    {
+      key: "work_file",
+      label: "工作文件",
+      template: "项目/{Project}/shots/{ShotGroup}/{Department}/{Task}/work/{name}_v001.ext",
+      resolved: `项目/${projectToken}/shots/${shotToken}/${deptToken}/${taskToken}/work/${shotToken}_${taskToken}_v001.ext`,
+      meta: "给摄影、剪辑、VFX 等工作文件统一命名",
+      target: "progress",
+      focus: "shotPipelineBoard",
+    },
+    {
+      key: "publish",
+      label: "发布版本",
+      template: "项目/{Project}/shots/{ShotGroup}/{Department}/{Task}/publish/{Version}",
+      resolved: `项目/${projectToken}/shots/${shotToken}/${deptToken}/${taskToken}/publish/${versionToken}`,
+      meta: "通过审查后进入可交付版本区",
+      target: "audit",
+      focus: "vfxVersionList",
+    },
+    {
+      key: "review",
+      label: "审阅版本",
+      template: "项目/{Project}/reviews/{Vendor}/{ShotGroup}/{Version}",
+      resolved: `项目/${projectToken}/reviews/${vendorToken}/${shotToken}/${versionToken}`,
+      meta: "供应商交付、导演批注、付款关口",
+      target: "audit",
+      focus: "vfxVersionList",
+    },
+    {
+      key: "finance_audit",
+      label: "财务凭证",
+      template: "项目/{Project}/finance/audit/{Department}/evidence",
+      resolved: `项目/${projectToken}/finance/audit/${deptToken}/evidence`,
+      meta: "合同、发票、付款审批与审计证据",
+      target: "audit",
+      focus: "auditTableBody",
+    },
+    {
+      key: "vendor_delivery",
+      label: "供应商交付",
+      template: "项目/{Project}/deliveries/{Vendor}/{YYYY-MM-DD}/{Version}",
+      resolved: `项目/${projectToken}/deliveries/${vendorToken}/${dateToken}/${versionToken}`,
+      meta: "车辆、酒店、器材、VFX 等外部交付入口",
+      target: "fundflow",
+      focus: "fundFlowDetailTable",
+    },
+    {
+      key: "call_sheet",
+      label: "通告单归档",
+      template: "项目/{Project}/call_sheets/D{Day}_{Callsheet}",
+      resolved: `项目/${projectToken}/call_sheets/D${project.currentDay || 1}_${callsheetToken}`,
+      meta: "每日通告、车辆、住宿、场地和成本记录",
+      target: "callsheet",
+      focus: "callsheetDetail",
+    },
+  ];
+  const hooks = [
+    {
+      id: "before_import_validate",
+      label: "导入前字段校验",
+      status: missingVendorCount > 0 ? `${missingVendorCount} 项供应商待补` : "字段完整",
+      detail: "Excel / 手写单进入系统前，检查部门、金额、公司/个人和日期。",
+      tone: missingVendorCount > 0 ? "note" : "good",
+      target: "input",
+      focus: "inputPreferencesPanel",
+    },
+    {
+      id: "before_publish_review",
+      label: "发布版本前检查",
+      status: blockedReviewCount > 0 ? `${blockedReviewCount} 个版本阻塞` : "可发布",
+      detail: "镜头版本必须有审阅人、通过数和批注状态，阻塞版本不能进入 publish。",
+      tone: blockedReviewCount > 0 ? "warning" : heldPaymentCount > 0 ? "note" : "good",
+      target: "audit",
+      focus: "vfxVersionList",
+    },
+    {
+      id: "payment_gate_audit",
+      label: "付款关口审计",
+      status: heldPaymentCount > 0 || audit.highRiskCount > 0 ? `${heldPaymentCount + audit.highRiskCount} 项暂缓` : "可流转",
+      detail: "付款前联动凭证、预算消耗、版本验收和供应商信任评分。",
+      tone: heldPaymentCount > 0 || audit.highRiskCount > 0 ? "warning" : audit.mediumRiskCount > 0 ? "note" : "good",
+      target: "audit",
+      focus: "auditTableBody",
+    },
+    {
+      id: "budget_progress_guard",
+      label: "预算进度防线",
+      status: budgetGap > 0.08 ? `预算快 ${Math.round(budgetGap * 100)} 点` : "节奏正常",
+      detail: "预算消耗明显快于完成进度时，要求监制复核后续支出。",
+      tone: budgetGap > 0.12 ? "warning" : budgetGap > 0.06 ? "note" : "good",
+      target: "analysis",
+      focus: "analysisReport",
+    },
+    {
+      id: "vendor_trust_check",
+      label: "供应商信任检查",
+      status: lowTrustCount > 0 ? `${lowTrustCount} 项低信任` : "信任稳定",
+      detail: "公司等级、个人等级和信任评分低于阈值时进入审查队列。",
+      tone: lowTrustCount > 0 ? "note" : "good",
+      target: "personnel",
+      focus: "personnelModule",
+    },
+    {
+      id: "fund_flow_classifier",
+      label: "资金流分类器",
+      status: unclassifiedCount > 0 ? money.format(flow.unclassifiedUsed) : "已分类",
+      detail: "将人员、器材、车辆、酒店、场地、VFX 供应商归入资金流向图。",
+      tone: unclassifiedCount > 0 || flow.overAllocated > 0 ? "warning" : flow.unallocated > 0 ? "note" : "good",
+      target: "fundflow",
+      focus: "fundFlowLargeChart",
+    },
+  ];
+  const modules = [
+    { label: "Budget Core", value: money.format(project.budget || 0), detail: "总预算、部门预算、组别拆分", status: project.budget > 0 ? "active" : "setup", target: "budget" },
+    { label: "Call Sheet Builder", value: `${callSheets.length} 张`, detail: "节点式通告单、日成本、资源", status: callSheets.length > 0 ? "active" : "setup", target: "callsheet" },
+    { label: "Schedule Timeline", value: `${production.schedule.length} 段`, detail: "可拖动排期、工时、进度", status: production.delayed > 0 ? "risk" : "active", target: "progress", focus: "productionScheduleBoard" },
+    { label: "Review Versions", value: `${reviewRows.length} 版`, detail: "VFX / 后期版本、批注、验收", status: blockedReviewCount > 0 ? "risk" : "active", target: "audit", focus: "vfxVersionList" },
+    { label: "Audit Hooks", value: `${audit.items.length} 项`, detail: "凭证、等级、信任、付款关口", status: audit.highRiskCount > 0 ? "risk" : "active", target: "audit" },
+    { label: "Fund Flow Graph", value: `${flow.supplierCount} 个`, detail: "公司/个人/车辆/酒店/场地流向", status: flow.unclassifiedUsed > 0 ? "risk" : "active", target: "fundflow" },
+    { label: "Import / OCR", value: "API", detail: "Excel、手写单、AI 识别接口", status: "setup", target: "input", focus: "spreadsheetFile" },
+    { label: "Pipeline Config", value: "Local", detail: "上下文、模板、Hook、模块注册", status: "active", target: "overview", focus: "pipelineCore" },
+  ];
+  const context = [
+    { label: "Project", value: projectName, meta: `${money.format(project.budget || 0)} · D${project.currentDay || 1}/${project.plannedDays || 1}`, tone: "good", target: "input", focus: "projectForm" },
+    { label: "Shot / Scene", value: activeScene ? `${activeScene.code} · ${activeScene.title}` : activeSceneCode, meta: activeScene ? `${activeScene.location} · ${activeScene.pages} 页` : "未登记场次", tone: activeScene?.risk === "warning" ? "warning" : activeScene?.risk === "note" ? "note" : "good", target: "progress", focus: "shotPipelineBoard" },
+    { label: "Department", value: activeDepartment.name || activeDepartment.id, meta: `${budgetBudgetLabel()} ${money.format(activeDepartment.budget || 0)}`, tone: "good", target: "budget", focus: "budgetTableBody" },
+    { label: "Task", value: task?.title || "未指派阶段", meta: task ? `${task.owner} · ${task.status}` : "等待排期", tone: task?.risk === "over" || task?.risk === "high" ? "warning" : task?.risk === "tight" ? "note" : "good", target: "progress", focus: "productionScheduleBoard" },
+    { label: "Vendor", value: vendor, meta: reviewRow ? `${reviewRow.shotGroup} · ${reviewRow.version}` : "可绑定供应商", tone: blockedReviewCount > 0 ? "warning" : heldPaymentCount > 0 ? "note" : "good", target: "audit", focus: "vfxVersionList" },
+  ];
+  const folderTree = [
+    `${projectToken}/`,
+    `  00_admin/`,
+    `    budget/`,
+    `    contracts/`,
+    `    audit/evidence/`,
+    `  01_call_sheets/`,
+    `    D${project.currentDay || 1}_${callsheetToken}/`,
+    `  02_shots/`,
+    `    ${shotToken}/`,
+    `      ${deptToken}/`,
+    `        work/`,
+    `        publish/${versionToken}/`,
+    `  03_assets/`,
+    `    art_props_costume/`,
+    `  04_reviews/`,
+    `    ${vendorToken}/${shotToken}/${versionToken}/`,
+    `  05_deliveries/`,
+    `    vehicles_hotels_locations/`,
+    `    vfx_color_sound/`,
+    `  06_reports/`,
+    `    producer_weekly/`,
+  ];
+  const issueCount = hooks.filter((hook) => hook.tone === "warning").length;
+  const noteCount = hooks.filter((hook) => hook.tone === "note").length;
+  return {
+    configId: `pipe-${pipelinePathSegment(projectName, "project").toLowerCase()}`,
+    context,
+    templates,
+    hooks,
+    modules,
+    folderTree,
+    issueCount,
+    noteCount,
+    sourceLabel: "Inspired by Flow Production Tracking Toolkit Core",
+  };
+}
+
+function pipelineFolderTreeText() {
+  return pipelineCoreData().folderTree.join("\n");
+}
+
+function renderPipelineCore() {
+  const container = document.querySelector("#pipelineCore");
+  const badge = document.querySelector("#pipelineCoreBadge");
+  const contextGrid = document.querySelector("#pipelineContextGrid");
+  const templateList = document.querySelector("#pipelineTemplateList");
+  const hookList = document.querySelector("#pipelineHookList");
+  const moduleGrid = document.querySelector("#pipelineModuleGrid");
+  const folderOutput = document.querySelector("#pipelineFolderOutput");
+  const status = document.querySelector("#pipelineCoreStatus");
+  if (!container || !badge || !contextGrid || !templateList || !hookList || !moduleGrid || !folderOutput || !status) return;
+  const data = pipelineCoreData();
+  const badgeTone = pipelineToneFromIssueCount(data.issueCount, data.noteCount > 0);
+  badge.textContent = data.issueCount > 0 ? `${data.issueCount} 个 Hook 阻塞` : data.noteCount > 0 ? `${data.noteCount} 个 Hook 关注` : "管线可用";
+  badge.className = `status-pill ${badgeTone}`;
+  contextGrid.innerHTML = data.context
+    .map(
+      (item) => `
+        <button class="pipeline-context-card ${item.tone}" type="button" data-context-kind="pipeline-core" data-context-title="${escapeHtml(item.value)}" data-context-meta="${escapeHtml(`${item.label} · ${item.meta}`)}" data-workspace-view="${escapeHtml(item.target)}" data-workspace-focus="${escapeHtml(item.focus || "")}">
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${escapeHtml(item.value)}</strong>
+          <small>${escapeHtml(item.meta)}</small>
+        </button>
+      `,
+    )
+    .join("");
+  templateList.innerHTML = data.templates
+    .map(
+      (item) => `
+        <button class="pipeline-template-row" type="button" data-context-kind="pipeline-core" data-context-title="${escapeHtml(item.label)}" data-context-meta="${escapeHtml(item.resolved)}" data-pipeline-path="${escapeHtml(item.resolved)}" data-workspace-view="${escapeHtml(item.target)}" data-workspace-focus="${escapeHtml(item.focus || "")}">
+          <span class="pipeline-template-key">${escapeHtml(item.key)}</span>
+          <span class="pipeline-template-body">
+            <strong>${escapeHtml(item.label)}</strong>
+            <code>${escapeHtml(item.resolved)}</code>
+            <small>${escapeHtml(item.template)}</small>
+          </span>
+          <em>${escapeHtml(item.meta)}</em>
+        </button>
+      `,
+    )
+    .join("");
+  hookList.innerHTML = data.hooks
+    .map(
+      (hook) => `
+        <button class="pipeline-hook-row ${hook.tone}" type="button" data-context-kind="pipeline-core" data-context-title="${escapeHtml(hook.label)}" data-context-meta="${escapeHtml(`${hook.status} · ${hook.detail}`)}" data-workspace-view="${escapeHtml(hook.target)}" data-workspace-focus="${escapeHtml(hook.focus || "")}">
+          <span class="pipeline-hook-led"></span>
+          <span>
+            <strong>${escapeHtml(hook.label)}</strong>
+            <small>${escapeHtml(hook.detail)}</small>
+          </span>
+          <b>${escapeHtml(hook.status)}</b>
+        </button>
+      `,
+    )
+    .join("");
+  moduleGrid.innerHTML = data.modules
+    .map(
+      (module) => `
+        <button class="pipeline-module-card ${module.status}" type="button" data-context-kind="pipeline-core" data-context-title="${escapeHtml(module.label)}" data-context-meta="${escapeHtml(`${module.value} · ${module.detail}`)}" data-workspace-view="${escapeHtml(module.target)}" data-workspace-focus="${escapeHtml(module.focus || "")}">
+          <span>${escapeHtml(module.status === "risk" ? "Risk" : module.status === "setup" ? "Setup" : "Active")}</span>
+          <strong>${escapeHtml(module.label)}</strong>
+          <b>${escapeHtml(module.value)}</b>
+          <small>${escapeHtml(module.detail)}</small>
+        </button>
+      `,
+    )
+    .join("");
+  folderOutput.innerHTML = `<pre>${escapeHtml(data.folderTree.join("\n"))}</pre>`;
+  status.textContent = `${data.configId} · ${data.templates.length} 个模板 · ${data.hooks.length} 个 Hook · ${data.modules.length} 个模块`;
 }
 
 function renderCallsheetSelect(preferredDay = null) {
@@ -9108,6 +9408,15 @@ function contextMenuItems(target) {
       { action: "copy", label: "复制镜头摘要", hint: "场次、步骤和状态", key: "⌘C" },
     ];
   }
+  if (kind === "pipeline-core") {
+    return [
+      { action: "open", label: "打开关联视图", hint: "跳到这个模板或 Hook 对应模块", key: "↵" },
+      { action: "pipeline-copy-path", label: "复制路径 / 摘要", hint: "复制当前管线对象", key: "P" },
+      { action: "pipeline-copy-tree", label: "复制文件夹结构", hint: "项目管线目录草案", key: "T" },
+      { action: "pipeline-publish", label: "发布版本", hint: "进入 VFX / 后期版本审阅", key: "V" },
+      { action: "pipeline-delivery", label: "加载供应商交付", hint: "进入资金流和供应商明细", key: "D" },
+    ];
+  }
   return base;
 }
 
@@ -9185,6 +9494,30 @@ async function executeContextAction(action, target) {
     document.querySelector('.tab-button[data-view="audit"]')?.click();
     window.setTimeout(() => focusWorkspaceTarget("vfxVersionList"), 120);
     return;
+  }
+  if (action.startsWith("pipeline-")) {
+    if (action === "pipeline-copy-path") {
+      await copyTextToClipboard(target.dataset.pipelinePath || contextSummaryFromElement(target));
+      setFormStatus("管线路径已复制", "good");
+      return;
+    }
+    if (action === "pipeline-copy-tree") {
+      await copyTextToClipboard(pipelineFolderTreeText());
+      setFormStatus("项目文件夹结构已复制", "good");
+      return;
+    }
+    if (action === "pipeline-publish") {
+      document.querySelector('.tab-button[data-view="audit"]')?.click();
+      window.setTimeout(() => focusWorkspaceTarget("vfxVersionList"), 120);
+      setFormStatus("已进入版本发布 / 审阅", "good");
+      return;
+    }
+    if (action === "pipeline-delivery") {
+      document.querySelector('.tab-button[data-view="fundflow"]')?.click();
+      window.setTimeout(() => focusWorkspaceTarget("fundFlowDetailTable"), 120);
+      setFormStatus("已进入供应商交付与资金流", "good");
+      return;
+    }
   }
   if (action.startsWith("schedule-")) {
     const taskId = target.dataset.contextTaskId || target.dataset.scheduleId;
@@ -9282,6 +9615,38 @@ function setupWorkspaceContextMenu() {
   });
   window.addEventListener("scroll", hideWorkspaceContextMenu, true);
   window.addEventListener("resize", hideWorkspaceContextMenu);
+}
+
+function setupPipelineCoreActions() {
+  const container = document.querySelector("#pipelineCore");
+  if (!container) return;
+  container.addEventListener("click", async (event) => {
+    const actionButton = event.target.closest("[data-pipeline-action]");
+    if (!actionButton) return;
+    const action = actionButton.dataset.pipelineAction;
+    if (action === "copy-tree") {
+      await copyTextToClipboard(pipelineFolderTreeText());
+      setFormStatus("项目文件夹结构已复制", "good");
+      return;
+    }
+    if (action === "publish-version") {
+      document.querySelector('.tab-button[data-view="audit"]')?.click();
+      window.setTimeout(() => focusWorkspaceTarget("vfxVersionList"), 120);
+      setFormStatus("已进入版本发布 / 审阅", "good");
+      return;
+    }
+    if (action === "load-delivery") {
+      document.querySelector('.tab-button[data-view="fundflow"]')?.click();
+      window.setTimeout(() => focusWorkspaceTarget("fundFlowDetailTable"), 120);
+      setFormStatus("已进入供应商交付与资金流", "good");
+      return;
+    }
+    if (action === "open-audit") {
+      document.querySelector('.tab-button[data-view="audit"]')?.click();
+      window.setTimeout(() => focusWorkspaceTarget("auditTableBody"), 120);
+      setFormStatus("已打开审查队列", "good");
+    }
+  });
 }
 
 function renderProjectForm() {
@@ -9763,6 +10128,7 @@ function refreshAll(options = {}) {
   renderToday();
   renderProducerWorkspace();
   renderProductionTrackingConsole();
+  renderPipelineCore();
   const selectedDay = options.selectedDay || Number(document.querySelector("#callsheetSelect").value) || project.currentDay;
   renderCallsheetSelect(selectedDay);
   renderCallsheet(selectedDay);
@@ -10676,6 +11042,7 @@ function init() {
   setupAuditFilters();
   setupVfxReviewControls();
   setupWorkspaceContextMenu();
+  setupPipelineCoreActions();
   setupInputPreferences();
   setupInputForms();
   setupChartViewControls();
