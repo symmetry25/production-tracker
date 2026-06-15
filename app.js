@@ -618,6 +618,7 @@ function applyFullDemoData(options = {}) {
   ];
   workLogs = [];
   scheduleTasks = [];
+  pipelineEvents = [];
   selectedScheduleTaskId = "";
   currentProjectId = keepProjectId ? previousProjectId : `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   lastSavedPersonId = "";
@@ -639,6 +640,7 @@ let vfxReviewVersions = blankMode ? [] : clone(defaultVfxReviewVersions);
 let customProgressItems = [];
 let workLogs = [];
 let scheduleTasks = [];
+let pipelineEvents = [];
 let currentProjectId = defaultProjectId;
 let projectLibrary = [];
 let selectedScheduleTaskId = "";
@@ -1037,6 +1039,7 @@ function createProjectSnapshot(id = currentProjectId, name = project.title) {
       customProgressItems: clone(customProgressItems),
       workLogs: clone(workLogs),
       scheduleTasks: clone(scheduleTasks),
+      pipelineEvents: clone(pipelineEvents),
     },
   };
 }
@@ -1062,6 +1065,7 @@ function normalizeProjectSnapshot(snapshot) {
       customProgressItems: normalizeCustomProgressItems(data.customProgressItems),
       workLogs: normalizeWorkLogs(data.workLogs),
       scheduleTasks: normalizeScheduleTasks(data.scheduleTasks),
+      pipelineEvents: normalizePipelineEvents(data.pipelineEvents),
     },
   };
 }
@@ -1080,6 +1084,7 @@ function applyProjectSnapshot(snapshot) {
   customProgressItems = clone(normalized.data.customProgressItems);
   workLogs = clone(normalized.data.workLogs);
   scheduleTasks = clone(normalized.data.scheduleTasks);
+  pipelineEvents = clone(normalized.data.pipelineEvents);
   selectedScheduleTaskId = scheduleTasks[0]?.id || "";
   lastSavedPersonId = "";
   lastPersonFeedback = null;
@@ -1324,6 +1329,25 @@ function normalizeVfxReviewVersions(items) {
     .filter((item) => item.vendor && item.shotGroup && item.version);
 }
 
+function normalizePipelineEvents(items) {
+  return (Array.isArray(items) ? items : [])
+    .map((item, index) => ({
+      id: String(item?.id || `pipeline-event-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`),
+      eventType: String(item?.eventType || "pipeline.event").trim(),
+      label: String(item?.label || "未命名事件").trim(),
+      entityType: String(item?.entityType || "Queue").trim(),
+      entityName: String(item?.entityName || "").trim(),
+      action: String(item?.action || "").trim(),
+      status: String(item?.status || "queued").trim(),
+      tone: ["warning", "note", "good"].includes(item?.tone) ? item.tone : "good",
+      path: String(item?.path || "").trim(),
+      payload: item?.payload && typeof item.payload === "object" ? item.payload : {},
+      createdAt: String(item?.createdAt || new Date().toISOString()),
+    }))
+    .filter((item) => item.eventType && item.label)
+    .slice(0, 24);
+}
+
 function languageLabel() {
   return displaySettings.language === "en" ? translate("display.languageEn") : translate("display.languageZh");
 }
@@ -1453,6 +1477,7 @@ function loadSavedData() {
       customProgressItems = normalizeCustomProgressItems(saved.customProgressItems);
       workLogs = normalizeWorkLogs(saved.workLogs);
       scheduleTasks = normalizeScheduleTasks(saved.scheduleTasks);
+      pipelineEvents = normalizePipelineEvents(saved.pipelineEvents);
       selectedScheduleTaskId = scheduleTasks[0]?.id || "";
     }
   } catch (error) {
@@ -1482,6 +1507,7 @@ function applyStarterData(options = {}) {
   customProgressItems = [];
   workLogs = [];
   scheduleTasks = [];
+  pipelineEvents = [];
   selectedScheduleTaskId = "";
   currentProjectId = keepProjectId ? previousProjectId : `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   lastSavedPersonId = "";
@@ -1504,6 +1530,7 @@ function applyNewProjectData(title = "新项目") {
   customProgressItems = [];
   workLogs = [];
   scheduleTasks = [];
+  pipelineEvents = [];
   selectedScheduleTaskId = "";
   currentProjectId = `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   lastSavedPersonId = "";
@@ -1663,6 +1690,7 @@ function saveData() {
         customProgressItems,
         workLogs,
         scheduleTasks,
+        pipelineEvents,
       }),
     );
   } catch (error) {
@@ -6852,6 +6880,87 @@ function pipelineQueuePackageText(rows = null) {
     .join("\n\n---\n\n");
 }
 
+function pipelineEventPayload(action, queueRow = null) {
+  const row = queueRow || pipelineCoreData().queueRows[0] || null;
+  const eventType = {
+    publish: "Version.publish",
+    load: "Delivery.load",
+    audit: "PaymentGate.review",
+    notify: "Crew.notify",
+    report: "ProducerReport.request",
+  }[action] || "Pipeline.event";
+  return {
+    eventType,
+    project: project.title || "当前项目",
+    projectId: currentProjectId,
+    action,
+    entity: row
+      ? {
+          id: row.id,
+          type: row.type,
+          name: row.label,
+          owner: row.owner,
+          stage: row.stage,
+          path: row.path,
+          amount: row.amount,
+          progress: row.progressLabel,
+          tone: row.tone,
+        }
+      : null,
+    context: {
+      currentDay: project.currentDay,
+      plannedDays: project.plannedDays,
+      budget: project.budget,
+      generatedAt: new Date().toISOString(),
+    },
+  };
+}
+
+function recordPipelineEvent(action, queueRow = null) {
+  const payload = pipelineEventPayload(action, queueRow);
+  const row = queueRow || payload.entity || {};
+  const label = {
+    publish: "发布版本事件",
+    load: "加载交付事件",
+    audit: "付款关口复核",
+    notify: "通知负责人",
+    report: "生成制片报告",
+  }[action] || "管线事件";
+  const event = {
+    id: `pipeline-event-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    eventType: payload.eventType,
+    label,
+    entityType: row.type || payload.entity?.type || "Pipeline",
+    entityName: row.label || payload.entity?.name || project.title || "当前项目",
+    action,
+    status: row.tone === "warning" || action === "audit" ? "needs_review" : "queued",
+    tone: row.tone || (action === "audit" ? "note" : "good"),
+    path: row.path || payload.entity?.path || "",
+    payload,
+    createdAt: new Date().toISOString(),
+  };
+  pipelineEvents = normalizePipelineEvents([event, ...pipelineEvents]);
+  saveData();
+  refreshAll();
+  setFormStatus(`已触发：${label}`, event.tone === "warning" ? "warning" : "good");
+  return event;
+}
+
+function pipelineActionRows(data) {
+  const primary = data.queueRows[0] || null;
+  const review = data.queueRows.find((row) => row.kind === "review") || primary;
+  const load = data.queueRows.find((row) => row.kind === "load") || primary;
+  const gate = data.queueRows.find((row) => row.kind === "gate") || primary;
+  const work = data.queueRows.find((row) => row.kind === "work") || primary;
+  return [
+    { action: "publish", label: "发布版本", detail: review ? `${review.label} · ${review.stage}` : "等待版本队列", tone: review?.tone || "good", queueId: review?.id || "" },
+    { action: "load", label: "加载交付", detail: load ? `${load.label} · ${load.amount}` : "等待交付队列", tone: load?.tone || "good", queueId: load?.id || "" },
+    { action: "audit", label: "付款关口", detail: gate ? `${gate.label} · ${gate.stage}` : "审计队列稳定", tone: gate?.tone || "good", queueId: gate?.id || "" },
+    { action: "notify", label: "通知负责人", detail: work ? `${work.owner} · ${work.label}` : "暂无负责人", tone: work?.tone || "good", queueId: work?.id || "" },
+    { action: "report", label: "生成报告", detail: `${data.queueSummary.total} 个队列项 · ${money.format(data.queueSummary.amount)}`, tone: data.queueSummary.warning > 0 ? "warning" : data.queueSummary.note > 0 ? "note" : "good", queueId: primary?.id || "" },
+  ];
+}
+
 function renderPipelineCore() {
   const container = document.querySelector("#pipelineCore");
   const badge = document.querySelector("#pipelineCoreBadge");
@@ -6861,10 +6970,17 @@ function renderPipelineCore() {
   const moduleGrid = document.querySelector("#pipelineModuleGrid");
   const queueSummary = document.querySelector("#pipelineQueueSummary");
   const queueList = document.querySelector("#pipelineQueueList");
+  const actionGrid = document.querySelector("#pipelineActionGrid");
+  const eventLog = document.querySelector("#pipelineEventLog");
+  const payloadPreview = document.querySelector("#pipelinePayloadPreview");
   const folderOutput = document.querySelector("#pipelineFolderOutput");
   const status = document.querySelector("#pipelineCoreStatus");
-  if (!container || !badge || !contextGrid || !templateList || !hookList || !moduleGrid || !queueSummary || !queueList || !folderOutput || !status) return;
+  if (!container || !badge || !contextGrid || !templateList || !hookList || !moduleGrid || !queueSummary || !queueList || !actionGrid || !eventLog || !payloadPreview || !folderOutput || !status) return;
   const data = pipelineCoreData();
+  const actionRows = pipelineActionRows(data);
+  const previewAction = actionRows[0] || { action: "publish", queueId: "" };
+  const previewRow = data.queueRows.find((row) => row.id === previewAction.queueId) || data.queueRows[0] || null;
+  const latestPayload = pipelineEvents[0]?.payload || pipelineEventPayload(previewAction.action, previewRow);
   const badgeTone = pipelineToneFromIssueCount(data.issueCount, data.noteCount > 0);
   badge.textContent = data.issueCount > 0 ? `${data.issueCount} 个 Hook 阻塞` : data.noteCount > 0 ? `${data.noteCount} 个 Hook 关注` : "管线可用";
   badge.className = `status-pill ${badgeTone}`;
@@ -6948,8 +7064,35 @@ function renderPipelineCore() {
           )
           .join("")
       : `<div class="producer-empty">暂无发布 / 加载队列。录入版本、排期或供应商交付后会显示。</div>`;
+  actionGrid.innerHTML = actionRows
+    .map(
+      (action) => `
+        <button class="pipeline-action-card ${action.tone}" type="button" data-pipeline-trigger="${escapeHtml(action.action)}" data-pipeline-queue-id="${escapeHtml(action.queueId)}" data-context-kind="pipeline-action" data-context-title="${escapeHtml(action.label)}" data-context-meta="${escapeHtml(action.detail)}">
+          <span>${escapeHtml(action.action)}</span>
+          <strong>${escapeHtml(action.label)}</strong>
+          <small>${escapeHtml(action.detail)}</small>
+        </button>
+      `,
+    )
+    .join("");
+  eventLog.innerHTML =
+    pipelineEvents.length > 0
+      ? pipelineEvents
+          .slice(0, 6)
+          .map(
+            (event) => `
+              <button class="pipeline-event-row ${event.tone}" type="button" data-context-kind="pipeline-event" data-context-title="${escapeHtml(event.label)}" data-context-meta="${escapeHtml(`${event.eventType} · ${event.entityName}`)}" data-pipeline-payload="${escapeHtml(JSON.stringify(event.payload, null, 2))}" data-pipeline-path="${escapeHtml(event.path)}">
+                <span>${escapeHtml(event.eventType)}</span>
+                <strong>${escapeHtml(event.entityName || event.label)}</strong>
+                <small>${escapeHtml(new Date(event.createdAt).toLocaleString("zh-CN", { hour12: false }))} · ${escapeHtml(event.status)}</small>
+              </button>
+            `,
+          )
+          .join("")
+      : `<div class="producer-empty">暂无事件。点击动作触发器后，这里会显示本地 webhook 记录。</div>`;
+  payloadPreview.innerHTML = `<pre>${escapeHtml(JSON.stringify(latestPayload, null, 2))}</pre>`;
   folderOutput.innerHTML = `<pre>${escapeHtml(data.folderTree.join("\n"))}</pre>`;
-  status.textContent = `${data.configId} · ${data.templates.length} 个模板 · ${data.hooks.length} 个 Hook · ${data.modules.length} 个模块 · ${data.queueRows.length} 个队列项`;
+  status.textContent = `${data.configId} · ${data.templates.length} 个模板 · ${data.hooks.length} 个 Hook · ${data.modules.length} 个模块 · ${data.queueRows.length} 个队列项 · ${pipelineEvents.length} 个事件`;
 }
 
 function renderCallsheetSelect(preferredDay = null) {
@@ -9648,6 +9791,18 @@ function contextMenuItems(target) {
     items.push({ action: "pipeline-delivery", label: "查看交付 / 资金流", hint: "进入供应商明细", key: "D" });
     return items;
   }
+  if (kind === "pipeline-action") {
+    return [
+      { action: "pipeline-trigger-action", label: "触发动作", hint: "写入本地 webhook 事件", key: "↵" },
+      { action: "pipeline-copy-payload", label: "复制 Payload", hint: "复制将要发送的数据", key: "J" },
+    ];
+  }
+  if (kind === "pipeline-event") {
+    return [
+      { action: "pipeline-copy-payload", label: "复制事件 Payload", hint: "用于 API / webhook 调试", key: "J" },
+      { action: "pipeline-copy-path", label: "复制关联路径", hint: "事件绑定的文件或队列路径", key: "P" },
+    ];
+  }
   return base;
 }
 
@@ -9727,6 +9882,19 @@ async function executeContextAction(action, target) {
     return;
   }
   if (action.startsWith("pipeline-")) {
+    if (action === "pipeline-trigger-action") {
+      const trigger = target.dataset.pipelineTrigger || "publish";
+      const queueId = target.dataset.pipelineQueueId || "";
+      const row = pipelineCoreData().queueRows.find((item) => item.id === queueId) || pipelineCoreData().queueRows[0] || null;
+      recordPipelineEvent(trigger, row);
+      return;
+    }
+    if (action === "pipeline-copy-payload") {
+      const payload = target.dataset.pipelinePayload || JSON.stringify(pipelineEventPayload(target.dataset.pipelineTrigger || "publish", pipelineCoreData().queueRows.find((item) => item.id === target.dataset.pipelineQueueId) || null), null, 2);
+      await copyTextToClipboard(payload);
+      setFormStatus("Webhook Payload 已复制", "good");
+      return;
+    }
     if (action === "pipeline-copy-package") {
       await copyTextToClipboard(target.dataset.pipelinePackage || pipelineQueuePackageText());
       setFormStatus("发布 / 加载包已复制", "good");
@@ -9843,6 +10011,7 @@ function setupWorkspaceContextMenu() {
     await executeContextAction(button.dataset.contextAction, target);
   });
   document.addEventListener("click", (event) => {
+    if (typeof event.button === "number" && event.button !== 0) return;
     if (event.target.closest("#workspaceContextMenu")) return;
     hideWorkspaceContextMenu();
   });
@@ -9857,6 +10026,13 @@ function setupPipelineCoreActions() {
   const container = document.querySelector("#pipelineCore");
   if (!container) return;
   container.addEventListener("click", async (event) => {
+    const triggerButton = event.target.closest("[data-pipeline-trigger]");
+    if (triggerButton) {
+      const data = pipelineCoreData();
+      const row = data.queueRows.find((item) => item.id === triggerButton.dataset.pipelineQueueId) || data.queueRows[0] || null;
+      recordPipelineEvent(triggerButton.dataset.pipelineTrigger || "publish", row);
+      return;
+    }
     const actionButton = event.target.closest("[data-pipeline-action]");
     if (!actionButton) return;
     const action = actionButton.dataset.pipelineAction;
@@ -9868,6 +10044,11 @@ function setupPipelineCoreActions() {
     if (action === "copy-package") {
       await copyTextToClipboard(pipelineQueuePackageText());
       setFormStatus("发布 / 加载队列已复制", "good");
+      return;
+    }
+    if (action === "emit-webhook") {
+      const data = pipelineCoreData();
+      recordPipelineEvent(data.queueRows[0]?.kind === "load" ? "load" : data.queueRows[0]?.kind === "gate" ? "audit" : "publish", data.queueRows[0] || null);
       return;
     }
     if (action === "publish-version") {

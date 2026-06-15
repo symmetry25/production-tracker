@@ -13,7 +13,7 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=pipeline-queue-2" />
+    <link rel="stylesheet" href="./styles.css?v=pipeline-events-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -337,6 +337,15 @@
                   <div class="pipeline-queue-summary" id="pipelineQueueSummary"></div>
                   <div class="pipeline-queue-list" id="pipelineQueueList"></div>
                 </section>
+                <section class="pipeline-core-section pipeline-event-section" aria-labelledby="pipelineEventTitle">
+                  <div class="tracking-section-head">
+                    <span>Action Menu / Webhook</span>
+                    <h4 id="pipelineEventTitle">动作触发器</h4>
+                  </div>
+                  <div class="pipeline-action-grid" id="pipelineActionGrid"></div>
+                  <div class="pipeline-event-log" id="pipelineEventLog"></div>
+                  <div class="pipeline-payload-preview" id="pipelinePayloadPreview"></div>
+                </section>
                 <section class="pipeline-core-section pipeline-folder-section" aria-labelledby="pipelineFolderTitle">
                   <div class="tracking-section-head">
                     <span>Bootstrap</span>
@@ -348,6 +357,7 @@
                     <button class="icon-button ghost" type="button" data-pipeline-action="copy-package">复制队列</button>
                     <button class="icon-button ghost" type="button" data-pipeline-action="publish-version">发布版本</button>
                     <button class="icon-button ghost" type="button" data-pipeline-action="load-delivery">加载交付</button>
+                    <button class="icon-button ghost" type="button" data-pipeline-action="emit-webhook">触发事件</button>
                     <button class="icon-button ghost" type="button" data-pipeline-action="open-audit">打开审查</button>
                   </div>
                   <div class="pipeline-core-status" id="pipelineCoreStatus">等待管线数据。</div>
@@ -1962,6 +1972,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=pipeline-queue-2"></script>
+    <script src="./app.js?v=pipeline-events-1"></script>
   </body>
 </html>
