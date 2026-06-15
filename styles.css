@@ -818,6 +818,120 @@ h3 {
   padding: 11px;
 }
 
+.inspector-object-section {
+  border-color: color-mix(in srgb, var(--teal) 24%, var(--line));
+}
+
+.inspector-object-card {
+  display: grid;
+  gap: 4px;
+  padding: 11px;
+  border-bottom: 1px solid var(--line);
+  box-shadow: inset 4px 0 0 var(--teal);
+}
+
+.inspector-object-card.warning {
+  box-shadow: inset 4px 0 0 var(--red);
+}
+
+.inspector-object-card.note {
+  box-shadow: inset 4px 0 0 var(--amber);
+}
+
+.inspector-object-card strong,
+.inspector-object-card span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inspector-object-card strong {
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.inspector-object-card span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.inspector-object-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line);
+}
+
+.inspector-object-facts div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px 10px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.inspector-object-facts div:nth-child(2n) {
+  border-right: 0;
+}
+
+.inspector-object-facts div:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.inspector-object-facts span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.inspector-object-facts strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-object-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+}
+
+.inspector-object-actions button {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  background: var(--control);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.inspectable-row,
+[data-context-kind] {
+  scroll-margin-top: 160px;
+}
+
+.inspectable-row {
+  cursor: pointer;
+}
+
+.inspector-selected {
+  outline: 2px solid color-mix(in srgb, var(--teal) 46%, transparent);
+  outline-offset: -2px;
+}
+
+tr.inspector-selected {
+  background: color-mix(in srgb, var(--teal) 10%, var(--surface-strong));
+}
+
 main {
   max-width: 1680px;
   margin: 0 auto;
@@ -6889,6 +7003,43 @@ body.schedule-dragging .schedule-bar.selected {
     position: static;
     width: auto;
     margin: 16px auto 0;
+  }
+
+  .module-dashboard-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .module-dashboard-layout .module-summary-panel,
+  .module-dashboard-layout .module-main-panel,
+  .module-dashboard-layout .module-department-panel,
+  .module-dashboard-layout .module-risk-panel,
+  #audit .audit-summary-panel,
+  #audit .audit-filter-panel,
+  #audit .audit-wide,
+  #audit .audit-rules-panel,
+  #audit .audit-brief-panel,
+  #audit .audit-vfx-panel,
+  #audit .audit-version-panel,
+  #personnel .module-spotlight-panel {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  .personnel-card-panel .personnel-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #audit .audit-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #audit .vfx-version-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #audit .vfx-version-notes,
+  #audit .vfx-version-actions {
+    grid-column: 1 / -1;
   }
 
   .pipeline-core {

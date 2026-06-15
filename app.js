@@ -645,6 +645,7 @@ let currentProjectId = defaultProjectId;
 let projectLibrary = [];
 let selectedScheduleTaskId = "";
 let scheduleDragState = null;
+let selectedInspectorTarget = null;
 
 let displaySettings = {
   darkMode: false,
@@ -1817,6 +1818,10 @@ function personRoleDisplay(person) {
 
 function equipmentTotal(item) {
   return item.daily * item.days + item.deposit;
+}
+
+function equipmentWorkKey(item, index = equipment.indexOf(item)) {
+  return `${item?.name || "未命名器材"}|${item?.vendor || ""}|${item?.dept || ""}|${index}`;
 }
 
 function normalizeGrade(value) {
@@ -4614,7 +4619,7 @@ function renderAuditModule() {
     .slice(0, 24)
     .map(
       (item) => `
-        <tr>
+        <tr class="inspectable-row" data-context-kind="audit-item" data-context-title="${escapeHtml(item.name)}" data-context-meta="${escapeHtml(`${item.kind} · ${auditRiskLabel(item.risk)} · ${money.format(item.amount)}`)}" data-audit-kind="${escapeHtml(item.kind)}" data-audit-amount="${escapeHtml(money.format(item.amount))}" data-audit-reason="${escapeHtml(item.reason)}" data-audit-evidence="${escapeHtml(item.evidence)}" data-workspace-view="audit" data-workspace-focus="auditTableBody">
           <td><span class="status-text ${item.risk === "high" ? "over" : "tight"}">${auditRiskLabel(item.risk)}</span></td>
           <td><strong>${escapeHtml(item.name)}</strong><div class="audit-item-meta">${escapeHtml(item.kind)} · ${escapeHtml(item.status)}</div></td>
           <td>${escapeHtml(item.source)}</td>
@@ -5911,6 +5916,201 @@ function activeViewLabel() {
   return activeTab?.textContent?.trim() || "总览";
 }
 
+function defaultInspectorTarget() {
+  return {
+    kind: "project",
+    title: project.title || "当前项目",
+    meta: `${money.format(project.budget || 0)} · D${project.currentDay}/${project.plannedDays}`,
+    tone: analysisMetrics().health.className,
+    view: "overview",
+    focus: "producerWorkspace",
+    facts: [
+      { label: "项目", value: project.title || "未命名项目" },
+      { label: "总预算", value: money.format(project.budget || 0) },
+      { label: "周期", value: `D${project.currentDay}/${project.plannedDays}` },
+    ],
+  };
+}
+
+function inspectorTargetFromElement(target) {
+  if (!target) return null;
+  const kind = target.dataset.contextKind || "object";
+  const title = target.dataset.contextTitle || target.querySelector("strong")?.textContent?.trim() || "当前对象";
+  const meta = target.dataset.contextMeta || target.querySelector("small, span")?.textContent?.trim() || "";
+  const facts = [];
+  if (target.dataset.contextPersonKey) {
+    const person = findPersonByWorkKey(target.dataset.contextPersonKey);
+    if (person) {
+      const fit = budgetFit("person", person.grade, person.dayRate);
+      facts.push(
+        { label: "部门", value: getDept(person.dept).name },
+        { label: "岗位", value: personRoleDisplay(person) },
+        { label: "公司/供应商", value: person.vendor || "个人 / 自由职业" },
+        { label: "成本", value: money.format(personTotal(person)) },
+        { label: "等级", value: isRatingEnabled() ? `${gradeLabel(person.grade, "人")} / ${gradeLabel(person.companyGrade, "司")}` : "评分关闭" },
+        { label: "信任", value: isRatingEnabled() ? `${normalizeTrust(person.trust)} · ${fit.label}` : "评分关闭" },
+      );
+    }
+  }
+  if (target.dataset.contextEquipmentKey) {
+    const item = equipment.find((row, index) => equipmentWorkKey(row, index) === target.dataset.contextEquipmentKey);
+    if (item) {
+      const fit = budgetFit("company", item.companyGrade, item.daily);
+      facts.push(
+        { label: "部门", value: getDept(item.dept).name },
+        { label: "公司/供应商", value: item.vendor || "未登记公司" },
+        { label: "日租", value: money.format(item.daily) },
+        { label: "天数", value: `${item.days} 天` },
+        { label: "总成本", value: money.format(equipmentTotal(item)) },
+        { label: "信任", value: isRatingEnabled() ? `${normalizeTrust(item.trust)} · ${fit.label}` : "评分关闭" },
+      );
+    }
+  }
+  if (target.dataset.contextReviewId) {
+    const review = vfxReviewRows().find((row) => row.id === target.dataset.contextReviewId);
+    if (review) {
+      facts.push(
+        { label: "供应商", value: review.vendor },
+        { label: "版本", value: review.version },
+        { label: "通过", value: `${review.approvedCount}/${review.shotCount} · ${percentText(review.approvalRate)}` },
+        { label: "付款", value: vfxPaymentGateLabels[review.paymentGate] || review.paymentGate },
+        { label: "金额", value: review.amount > 0 ? money.format(review.amount) : "未匹配合同" },
+        { label: "审阅人", value: review.reviewer },
+      );
+    }
+  }
+  if (target.dataset.contextTaskId || target.dataset.scheduleId) {
+    const taskId = target.dataset.contextTaskId || target.dataset.scheduleId;
+    const task = productionScheduleRows().find((row) => row.id === taskId) || scheduleTaskById(taskId);
+    if (task) {
+      facts.push(
+        { label: "负责人", value: task.owner || "未指派" },
+        { label: "周期", value: `D${task.start}-D${task.end}` },
+        { label: "进度", value: percentText(task.progressRate || task.progress || 0) },
+        { label: "预算", value: money.format(task.budget || 0) },
+        { label: "状态", value: task.status || "进行中" },
+      );
+    }
+  }
+  if (target.dataset.pipelinePath) facts.push({ label: "路径", value: target.dataset.pipelinePath });
+  if (target.dataset.pipelineQueueKind) facts.push({ label: "队列类型", value: target.dataset.pipelineQueueKind });
+  if (target.dataset.pipelineTrigger) facts.push({ label: "触发器", value: target.dataset.pipelineTrigger });
+  if (target.dataset.pipelinePayload) facts.push({ label: "Payload", value: "可复制 JSON" });
+  if (target.dataset.auditAmount || target.dataset.auditReason || target.dataset.auditEvidence) {
+    facts.push(
+      { label: "类型", value: target.dataset.auditKind || kind },
+      { label: "金额", value: target.dataset.auditAmount || "--" },
+      { label: "原因", value: target.dataset.auditReason || "--" },
+      { label: "凭证", value: target.dataset.auditEvidence || "--" },
+    );
+  }
+  return {
+    kind,
+    title,
+    meta,
+    tone: target.classList.contains("warning") || target.classList.contains("high") ? "warning" : target.classList.contains("note") || target.classList.contains("medium") ? "note" : "good",
+    view: target.dataset.workspaceView || "",
+    focus: target.dataset.workspaceFocus || "",
+    path: target.dataset.pipelinePath || "",
+    payload: target.dataset.pipelinePayload || "",
+    trigger: target.dataset.pipelineTrigger || "",
+    queueId: target.dataset.pipelineQueueId || "",
+    summary: contextSummaryFromElement(target),
+    facts,
+  };
+}
+
+function selectInspectorTarget(target) {
+  selectedInspectorTarget = inspectorTargetFromElement(target) || defaultInspectorTarget();
+  document.querySelectorAll(".inspector-selected").forEach((item) => item.classList.remove("inspector-selected"));
+  target?.classList?.add("inspector-selected");
+  renderProductionInspector();
+}
+
+function inspectorObjectActions(target) {
+  const current = target || defaultInspectorTarget();
+  const actions = [{ label: "复制摘要", action: "copy-summary" }];
+  if (current.view) actions.push({ label: "打开关联视图", action: "open-view" });
+  if (current.path) actions.push({ label: "复制路径", action: "copy-path" });
+  if (current.payload) actions.push({ label: "复制 Payload", action: "copy-payload" });
+  if (current.kind === "vfx-review") actions.push({ label: "进入版本审阅", action: "open-vfx" });
+  if (current.kind === "pipeline-action") actions.push({ label: "触发动作", action: "trigger-pipeline" });
+  return actions;
+}
+
+function renderInspectorObject(target) {
+  const current = target || defaultInspectorTarget();
+  const facts = current.facts?.length ? current.facts : [{ label: "说明", value: current.meta || "点击左侧工作区对象后，这里会显示明细。" }];
+  return `
+    <section class="inspector-section inspector-object-section" aria-labelledby="inspectorObjectTitle">
+      <div class="inspector-section-head">
+        <span>${escapeHtml(current.kind || "Object")}</span>
+        <h3 id="inspectorObjectTitle">当前对象</h3>
+      </div>
+      <div class="inspector-object-card ${escapeHtml(current.tone || "good")}">
+        <strong>${escapeHtml(current.title || "当前对象")}</strong>
+        <span>${escapeHtml(current.meta || "点击对象查看详情")}</span>
+      </div>
+      <div class="inspector-object-facts">
+        ${facts
+          .slice(0, 8)
+          .map(
+            (item) => `
+              <div>
+                <span>${escapeHtml(item.label)}</span>
+                <strong>${escapeHtml(item.value)}</strong>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+      <div class="inspector-object-actions">
+        ${inspectorObjectActions(current)
+          .map((item) => `<button type="button" data-inspector-action="${escapeHtml(item.action)}">${escapeHtml(item.label)}</button>`)
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+async function executeInspectorAction(action) {
+  const current = selectedInspectorTarget || defaultInspectorTarget();
+  if (action === "copy-summary") {
+    await copyTextToClipboard(current.summary || `${current.title}\n${current.meta || ""}`);
+    setFormStatus("对象摘要已复制", "good");
+    return;
+  }
+  if (action === "open-view") {
+    if (current.view) {
+      document.querySelector(`.tab-button[data-view="${CSS.escape(current.view)}"]`)?.click();
+      window.setTimeout(() => focusWorkspaceTarget(current.focus), 120);
+      setFormStatus(`已打开关联视图：${current.title}`, "good");
+    }
+    return;
+  }
+  if (action === "copy-path") {
+    await copyTextToClipboard(current.path || current.summary || current.title);
+    setFormStatus("对象路径已复制", "good");
+    return;
+  }
+  if (action === "copy-payload") {
+    await copyTextToClipboard(current.payload || "");
+    setFormStatus("对象 Payload 已复制", "good");
+    return;
+  }
+  if (action === "open-vfx") {
+    document.querySelector('.tab-button[data-view="audit"]')?.click();
+    window.setTimeout(() => focusWorkspaceTarget("vfxVersionList"), 120);
+    setFormStatus("已进入版本审阅", "good");
+    return;
+  }
+  if (action === "trigger-pipeline") {
+    const data = pipelineCoreData();
+    const row = data.queueRows.find((item) => item.id === current.queueId) || data.queueRows[0] || null;
+    recordPipelineEvent(current.trigger || "publish", row);
+  }
+}
+
 function inspectorRiskRows(metrics, audit) {
   const rows = [];
   if (metrics.variance > 0) {
@@ -6014,6 +6214,10 @@ function renderProductionInspector() {
       `,
     )
     .join("");
+  const objectSlot = document.querySelector("#inspectorObjectSlot");
+  if (objectSlot) {
+    objectSlot.innerHTML = renderInspectorObject(selectedInspectorTarget);
+  }
   const actionRows = [
     { label: "打开通告", meta: "今日安排 / 车辆 / 酒店", view: "callsheet", focus: "callsheetDetail" },
     { label: "资金流向", meta: "公司 / 个人 / 供应商", view: "fundflow", focus: "fundFlowLargeChart" },
@@ -7984,8 +8188,9 @@ function renderPersonnelModule() {
     .map((person) => {
       const fit = budgetFit("person", person.grade, person.dayRate);
       const trust = normalizeTrust(person.trust);
+      const workKey = personWorkKey(person);
       return `
-        <tr>
+        <tr class="inspectable-row" data-context-kind="person" data-context-person-key="${escapeHtml(workKey)}" data-context-title="${escapeHtml(person.name)}" data-context-meta="${escapeHtml(`${personRoleDisplay(person)} · ${money.format(personTotal(person))}`)}" data-workspace-view="personnel" data-workspace-focus="personnelTable">
           <td><strong>${escapeHtml(person.name)}</strong></td>
           <td>${escapeHtml(getDept(person.dept).name)}</td>
           <td>${escapeHtml(personRoleDisplay(person))}</td>
@@ -8066,8 +8271,9 @@ function renderEquipmentModule() {
     .sort((a, b) => equipmentTotal(b) - equipmentTotal(a))
     .map((item) => {
       const fit = budgetFit("company", item.companyGrade, item.daily);
+      const workKey = equipmentWorkKey(item);
       return `
-        <tr>
+        <tr class="inspectable-row" data-context-kind="equipment" data-context-equipment-key="${escapeHtml(workKey)}" data-context-title="${escapeHtml(item.name)}" data-context-meta="${escapeHtml(`${item.vendor || "未登记公司"} · ${money.format(equipmentTotal(item))}`)}" data-workspace-view="equipment" data-workspace-focus="equipmentTable">
           <td><strong>${escapeHtml(item.name)}</strong></td>
           <td>${escapeHtml(getDept(item.dept).name)}</td>
           <td>${escapeHtml(item.vendor || "未登记公司")}</td>
@@ -9955,6 +10161,12 @@ function contextMenuItems(target) {
       { action: "pipeline-copy-path", label: "复制关联路径", hint: "事件绑定的文件或队列路径", key: "P" },
     ];
   }
+  if (["person", "equipment", "audit-item", "tracking"].includes(kind)) {
+    return [
+      { action: "copy", label: "复制对象摘要", hint: "名称、状态和关键说明", key: "⌘C" },
+      { action: "open", label: "打开关联视图", hint: "跳转到对应模块", key: "↵" },
+    ];
+  }
   return base;
 }
 
@@ -10145,6 +10357,16 @@ async function executeContextAction(action, target) {
 }
 
 function setupWorkspaceContextMenu() {
+  document.addEventListener("click", async (event) => {
+    const inspectorAction = event.target.closest("[data-inspector-action]");
+    if (inspectorAction) {
+      await executeInspectorAction(inspectorAction.dataset.inspectorAction);
+      return;
+    }
+    const target = event.target.closest("[data-context-kind]");
+    if (!target || event.target.closest("#workspaceContextMenu")) return;
+    selectInspectorTarget(target);
+  });
   document.addEventListener("contextmenu", (event) => {
     const target = event.target.closest("[data-context-kind]");
     if (!target) {
@@ -10152,6 +10374,7 @@ function setupWorkspaceContextMenu() {
       return;
     }
     event.preventDefault();
+    selectInspectorTarget(target);
     showWorkspaceContextMenu(event, target);
   });
   document.querySelector("#workspaceContextMenuBody")?.addEventListener("click", async (event) => {
