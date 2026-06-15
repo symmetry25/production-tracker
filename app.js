@@ -2372,6 +2372,12 @@ function selectedScheduleTask() {
 
 function updateScheduleTask(taskId, patch) {
   ensureEditableScheduleTasks();
+  if (!scheduleTasks.some((task) => task.id === taskId)) {
+    const autoTask = productionScheduleRows().find((row) => row.id === taskId);
+    if (autoTask) {
+      scheduleTasks.push({ ...autoTask, source: "manual", order: scheduleTasks.length });
+    }
+  }
   let updatedTask = null;
   scheduleTasks = scheduleTasks.map((task) => {
     if (task.id !== taskId) return task;
@@ -2380,6 +2386,28 @@ function updateScheduleTask(taskId, patch) {
   }).filter(Boolean);
   selectedScheduleTaskId = taskId;
   return updatedTask;
+}
+
+function duplicateScheduleTask(taskId) {
+  ensureEditableScheduleTasks();
+  const source = scheduleTasks.find((task) => task.id === taskId);
+  if (!source) return null;
+  const span = Math.max(1, (Number(source.end) || Number(source.start) || 1) - (Number(source.start) || 1) + 1);
+  const start = clampDay((Number(source.start) || 1) + 1);
+  const end = clampDay(Math.max(start, start + span - 1));
+  const copy = normalizeScheduleTask({
+    ...source,
+    id: `schedule-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    title: `${source.title} 副本`,
+    start,
+    end,
+    source: "manual",
+    order: scheduleTasks.length,
+  });
+  if (!copy) return null;
+  scheduleTasks.push(copy);
+  selectedScheduleTaskId = copy.id;
+  return copy;
 }
 
 function addScheduleTaskFromRange(start = project.currentDay || 1, span = 3) {
@@ -4488,7 +4516,7 @@ function renderVfxVersionReview() {
       const paymentLabel = vfxPaymentGateLabels[row.paymentGate] || "付款关口";
       const riskClass = row.risk === "high" ? "over" : row.risk === "medium" ? "tight" : "ok";
       return `
-        <div class="vfx-version-row ${row.risk}" data-review-id="${escapeHtml(row.id)}">
+        <div class="vfx-version-row ${row.risk}" data-context-kind="vfx-review" data-context-review-id="${escapeHtml(row.id)}" data-context-title="${escapeHtml(`${row.shotGroup} · ${row.version}`)}" data-context-meta="${escapeHtml(`${row.vendor} · ${vfxReviewStatusLabels[row.status]?.label || "待审"}`)}" data-review-id="${escapeHtml(row.id)}">
           <div class="vfx-version-main">
             <div>
               <strong>${escapeHtml(row.shotGroup)} · ${escapeHtml(row.version)}</strong>
@@ -6369,7 +6397,7 @@ function renderProductionTrackingConsole() {
       ? data.rows
           .map(
             (row) => `
-              <button class="tracking-row ${row.tone}" type="button" data-workspace-view="${escapeHtml(row.target)}" ${row.focus ? `data-workspace-focus="${escapeHtml(row.focus)}"` : ""}>
+              <button class="tracking-row ${row.tone}" type="button" data-context-kind="tracking" data-context-title="${escapeHtml(row.label)}" data-context-meta="${escapeHtml(`${row.type} · ${row.owner}`)}" data-workspace-view="${escapeHtml(row.target)}" ${row.focus ? `data-workspace-focus="${escapeHtml(row.focus)}"` : ""}>
                 <span class="tracking-row-type">${escapeHtml(row.type)}</span>
                 <span class="tracking-row-main">
                   <strong>${escapeHtml(row.label)}</strong>
@@ -6386,7 +6414,7 @@ function renderProductionTrackingConsole() {
   resources.innerHTML = data.resourceRows
     .map(
       (row) => `
-        <button class="tracking-resource-row" type="button" data-workspace-view="${escapeHtml(row.target)}" ${row.focus ? `data-workspace-focus="${escapeHtml(row.focus)}"` : ""}>
+        <button class="tracking-resource-row" type="button" data-context-kind="tracking" data-context-title="${escapeHtml(row.label)}" data-context-meta="${escapeHtml(row.detail)}" data-workspace-view="${escapeHtml(row.target)}" ${row.focus ? `data-workspace-focus="${escapeHtml(row.focus)}"` : ""}>
           <span>
             <strong>${escapeHtml(row.label)}</strong>
             <small>${escapeHtml(row.detail)}</small>
@@ -6402,7 +6430,7 @@ function renderProductionTrackingConsole() {
       ? data.reviewRows
           .map(
             (row) => `
-              <button class="tracking-review-row ${row.tone}" type="button" data-workspace-view="${escapeHtml(row.target)}" ${row.focus ? `data-workspace-focus="${escapeHtml(row.focus)}"` : ""}>
+              <button class="tracking-review-row ${row.tone}" type="button" data-context-kind="tracking" data-context-title="${escapeHtml(row.label)}" data-context-meta="${escapeHtml(row.detail)}" data-workspace-view="${escapeHtml(row.target)}" ${row.focus ? `data-workspace-focus="${escapeHtml(row.focus)}"` : ""}>
                 <span>
                   <strong>${escapeHtml(row.label)}</strong>
                   <small>${escapeHtml(row.detail)}</small>
@@ -7414,20 +7442,20 @@ function renderShotPipeline() {
       ${rows
         .map(
           (row) => `
-            <button class="pipeline-shot-cell ${row.riskTone}" type="button" data-workspace-view="callsheet" data-workspace-focus="callsheetDetail">
+            <button class="pipeline-shot-cell ${row.riskTone}" type="button" data-context-kind="pipeline" data-context-scene="${escapeHtml(row.code)}" data-context-title="${escapeHtml(`${row.code} · ${row.title}`)}" data-context-meta="${escapeHtml(`${row.location} · ${row.needsVfx ? "含 VFX" : "常规"}`)}" data-workspace-view="callsheet" data-workspace-focus="callsheetDetail">
               <strong>${escapeHtml(row.code)} · ${escapeHtml(row.title)}</strong>
               <span>${escapeHtml(row.location)} · ${row.shootDay ? `D${row.shootDay}` : "未排日"} · ${row.needsVfx ? "含 VFX/高风险" : "常规"}</span>
             </button>
             ${shotPipelineSteps
               .map(
                 (step) => `
-                  <button class="pipeline-step ${row.steps[step.id]}" type="button" data-workspace-view="${step.id === "vfx" || step.id === "review" ? "audit" : step.id === "edit" ? "progress" : "callsheet"}" data-workspace-focus="${step.id === "vfx" || step.id === "review" ? "vfxSupplierAudit" : step.id === "edit" ? "editProgressChart" : "callsheetDetail"}">
+                  <button class="pipeline-step ${row.steps[step.id]}" type="button" data-context-kind="pipeline-step" data-context-scene="${escapeHtml(row.code)}" data-context-step="${escapeHtml(step.id)}" data-context-title="${escapeHtml(`${row.code} · ${step.label}`)}" data-context-meta="${escapeHtml(`${row.title} · ${row.steps[step.id]}`)}" data-workspace-view="${step.id === "vfx" || step.id === "review" ? "audit" : step.id === "edit" ? "progress" : "callsheet"}" data-workspace-focus="${step.id === "vfx" || step.id === "review" ? "vfxSupplierAudit" : step.id === "edit" ? "editProgressChart" : "callsheetDetail"}">
                     <span>${escapeHtml(step.label)}</span>
                   </button>
                 `,
               )
               .join("")}
-            <button class="pipeline-status-cell ${row.riskTone}" type="button" data-workspace-view="${row.riskTone === "warning" ? "audit" : "progress"}" data-workspace-focus="${row.riskTone === "warning" ? "vfxSupplierAudit" : "productionScheduleBoard"}">
+            <button class="pipeline-status-cell ${row.riskTone}" type="button" data-context-kind="pipeline" data-context-scene="${escapeHtml(row.code)}" data-context-title="${escapeHtml(`${row.code} · ${row.title}`)}" data-context-meta="${escapeHtml(row.note)}" data-workspace-view="${row.riskTone === "warning" ? "audit" : "progress"}" data-workspace-focus="${row.riskTone === "warning" ? "vfxSupplierAudit" : "productionScheduleBoard"}">
               <strong>${Math.round(row.progressValue * 100)}%</strong>
               <span>${escapeHtml(row.note)}</span>
             </button>
@@ -7466,14 +7494,14 @@ function renderProductionSchedule() {
       ${rows
         .map(
           (row) => `
-            <button class="schedule-left schedule-row-button ${row.id === selectedScheduleTaskId ? "selected" : ""}" type="button" data-schedule-id="${escapeHtml(row.id)}">
+            <button class="schedule-left schedule-row-button ${row.id === selectedScheduleTaskId ? "selected" : ""}" type="button" data-context-kind="schedule" data-context-task-id="${escapeHtml(row.id)}" data-context-title="${escapeHtml(row.title)}" data-context-meta="${escapeHtml(`${row.owner} · D${row.start}-D${row.end}`)}" data-schedule-id="${escapeHtml(row.id)}">
               <strong>${escapeHtml(row.title)}</strong>
               <span>${escapeHtml(row.owner)}</span>
               <small>D${row.start}-D${row.end} · ${escapeHtml(row.status)} · ${row.progressLabel}</small>
             </button>
             <div class="schedule-lane" data-schedule-lane="${escapeHtml(row.id)}">
               <span class="schedule-today-line" style="grid-column:${today}"></span>
-              <button class="schedule-bar ${row.risk} ${row.span <= 2 ? "compact" : ""} ${row.id === selectedScheduleTaskId ? "selected" : ""}" type="button" data-schedule-id="${escapeHtml(row.id)}" data-drag-mode="move" aria-label="${escapeHtml(`${row.title}，D${row.start} 到 D${row.end}`)}" style="grid-column:${row.start} / span ${row.span}; --bar-color:${row.color}">
+              <button class="schedule-bar ${row.risk} ${row.span <= 2 ? "compact" : ""} ${row.id === selectedScheduleTaskId ? "selected" : ""}" type="button" data-context-kind="schedule" data-context-task-id="${escapeHtml(row.id)}" data-context-title="${escapeHtml(row.title)}" data-context-meta="${escapeHtml(`${row.owner} · D${row.start}-D${row.end}`)}" data-schedule-id="${escapeHtml(row.id)}" data-drag-mode="move" aria-label="${escapeHtml(`${row.title}，D${row.start} 到 D${row.end}`)}" style="grid-column:${row.start} / span ${row.span}; --bar-color:${row.color}">
                 <span class="schedule-handle left" data-drag-mode="resize-start" aria-hidden="true"></span>
                 <i style="width:${Math.round(Math.max(0.06, Math.min(row.progressRate, 1)) * 100)}%"></i>
                 <b>
@@ -9043,6 +9071,219 @@ function focusCallsheetNode(targetSelector) {
   }
 }
 
+function contextSummaryFromElement(target) {
+  const title = target?.dataset?.contextTitle || target?.querySelector?.("strong")?.textContent || "当前对象";
+  const meta = target?.dataset?.contextMeta || target?.querySelector?.("small, span")?.textContent || "";
+  return `${title}${meta ? `\n${meta}` : ""}`.trim();
+}
+
+function contextMenuItems(target) {
+  const kind = target?.dataset?.contextKind || "";
+  const base = [
+    { action: "open", label: "打开关联视图", hint: "跳转到对应模块", key: "↵" },
+    { action: "copy", label: "复制对象摘要", hint: "名称、状态和关键说明", key: "⌘C" },
+  ];
+  if (kind === "schedule") {
+    return [
+      { action: "schedule-edit", label: "编辑阶段", hint: "载入左侧排期表单", key: "E" },
+      { action: "schedule-complete", label: "标记完成", hint: "进度设为 100%", key: "✓" },
+      { action: "schedule-pause", label: "标记暂停", hint: "进入风险关注", key: "!" },
+      { action: "schedule-duplicate", label: "复制阶段", hint: "生成一个相邻副本", key: "D" },
+      { action: "copy", label: "复制阶段摘要", hint: "阶段、负责人和天数", key: "⌘C" },
+    ];
+  }
+  if (kind === "vfx-review") {
+    return [
+      { action: "vfx-edit", label: "编辑版本", hint: "载入版本审阅表单", key: "E" },
+      { action: "vfx-approve", label: "标记通过", hint: "通过数量设为全量", key: "✓" },
+      { action: "vfx-block", label: "标记阻塞", hint: "付款关口暂缓", key: "!" },
+      { action: "copy", label: "复制版本摘要", hint: "供应商、版本、批注", key: "⌘C" },
+      { action: "vfx-delete", label: "删除版本", hint: "移出审阅记录", key: "Del", danger: true },
+    ];
+  }
+  if (kind === "pipeline" || kind === "pipeline-step") {
+    return [
+      { action: "open", label: "打开关联视图", hint: kind === "pipeline-step" ? "进入该步骤对应模块" : "查看通告或审查", key: "↵" },
+      { action: "pipeline-review", label: "进入版本审阅", hint: "打开 VFX / 审查区域", key: "R" },
+      { action: "copy", label: "复制镜头摘要", hint: "场次、步骤和状态", key: "⌘C" },
+    ];
+  }
+  return base;
+}
+
+function showWorkspaceContextMenu(event, target) {
+  const menu = document.querySelector("#workspaceContextMenu");
+  const title = document.querySelector("#workspaceContextMenuTitle");
+  const meta = document.querySelector("#workspaceContextMenuMeta");
+  const body = document.querySelector("#workspaceContextMenuBody");
+  if (!menu || !title || !meta || !body || !target) return;
+  const items = contextMenuItems(target);
+  title.textContent = target.dataset.contextTitle || "当前对象";
+  meta.textContent = target.dataset.contextMeta || "右键操作";
+  body.innerHTML = items
+    .map(
+      (item) => `
+        <button class="workspace-context-menu-item ${item.danger ? "danger" : ""}" type="button" data-context-action="${escapeHtml(item.action)}">
+          <span><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.hint)}</small></span>
+          <span class="workspace-context-menu-kbd">${escapeHtml(item.key || "")}</span>
+        </button>
+      `,
+    )
+    .join("");
+  menu.__contextTarget = target;
+  menu.hidden = false;
+  const rect = menu.getBoundingClientRect();
+  const left = Math.min(Math.max(8, event.clientX), window.innerWidth - rect.width - 8);
+  const top = Math.min(Math.max(8, event.clientY), window.innerHeight - rect.height - 8);
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
+function hideWorkspaceContextMenu() {
+  const menu = document.querySelector("#workspaceContextMenu");
+  if (!menu) return;
+  menu.hidden = true;
+  menu.__contextTarget = null;
+}
+
+function openContextTarget(target) {
+  const view = target?.dataset?.workspaceView;
+  if (!view) return false;
+  document.querySelector(`.tab-button[data-view="${CSS.escape(view)}"]`)?.click();
+  window.setTimeout(() => focusWorkspaceTarget(target.dataset.workspaceFocus), 120);
+  return true;
+}
+
+async function copyContextTarget(target) {
+  await copyTextToClipboard(contextSummaryFromElement(target));
+  setFormStatus("对象摘要已复制", "good");
+}
+
+function updateVfxReviewById(reviewId, patch) {
+  let changed = false;
+  vfxReviewVersions = normalizeVfxReviewVersions(vfxReviewVersions).map((row) => {
+    if (row.id !== reviewId) return row;
+    changed = true;
+    return { ...row, ...patch };
+  });
+  if (!changed) return null;
+  vfxReviewVersions = normalizeVfxReviewVersions(vfxReviewVersions);
+  return vfxReviewVersions.find((row) => row.id === reviewId) || null;
+}
+
+async function executeContextAction(action, target) {
+  if (!target) return;
+  if (action === "open") {
+    openContextTarget(target);
+    return;
+  }
+  if (action === "copy") {
+    await copyContextTarget(target);
+    return;
+  }
+  if (action === "pipeline-review") {
+    document.querySelector('.tab-button[data-view="audit"]')?.click();
+    window.setTimeout(() => focusWorkspaceTarget("vfxVersionList"), 120);
+    return;
+  }
+  if (action.startsWith("schedule-")) {
+    const taskId = target.dataset.contextTaskId || target.dataset.scheduleId;
+    const task = productionScheduleRows().find((row) => row.id === taskId) || scheduleTaskById(taskId);
+    if (!task) return;
+    ensureEditableScheduleTasks();
+    if (action === "schedule-edit") {
+      selectedScheduleTaskId = taskId;
+      renderProductionSchedule();
+      document.querySelector('.tab-button[data-view="progress"]')?.click();
+      window.setTimeout(() => focusWorkspaceTarget("productionScheduleForm"), 120);
+      return;
+    }
+    if (action === "schedule-complete") {
+      updateScheduleTask(taskId, { progressRate: 1, status: "完成" });
+      saveData();
+      refreshAll();
+      setFormStatus(`阶段已完成：${task.title}`, "good");
+      return;
+    }
+    if (action === "schedule-pause") {
+      updateScheduleTask(taskId, { status: "暂停" });
+      saveData();
+      refreshAll();
+      setFormStatus(`阶段已暂停：${task.title}`, "warning");
+      return;
+    }
+    if (action === "schedule-duplicate") {
+      const copy = duplicateScheduleTask(taskId);
+      if (copy) {
+        saveData();
+        refreshAll();
+        setFormStatus(`已复制阶段：${copy.title}`, "good");
+      }
+      return;
+    }
+  }
+  if (action.startsWith("vfx-")) {
+    const reviewId = target.dataset.contextReviewId || target.dataset.reviewId;
+    const row = normalizeVfxReviewVersions(vfxReviewVersions).find((item) => item.id === reviewId);
+    if (!row) return;
+    if (action === "vfx-edit") {
+      document.querySelector('.tab-button[data-view="audit"]')?.click();
+      window.setTimeout(() => fillVfxReviewForm(reviewId), 120);
+      return;
+    }
+    if (action === "vfx-approve") {
+      updateVfxReviewById(reviewId, { status: "approved", approvedCount: row.shotCount, paymentGate: row.paymentGate === "hold" ? "milestone" : row.paymentGate });
+      saveData();
+      refreshAll();
+      setFormStatus(`版本已通过：${row.shotGroup} · ${row.version}`, "good");
+      return;
+    }
+    if (action === "vfx-block") {
+      updateVfxReviewById(reviewId, { status: "blocked", paymentGate: "hold" });
+      saveData();
+      refreshAll();
+      setFormStatus(`版本已标记阻塞：${row.shotGroup} · ${row.version}`, "warning");
+      return;
+    }
+    if (action === "vfx-delete") {
+      vfxReviewVersions = normalizeVfxReviewVersions(vfxReviewVersions).filter((item) => item.id !== reviewId);
+      saveData();
+      refreshAll();
+      resetVfxReviewForm();
+      setFormStatus(`已删除版本：${row.shotGroup} · ${row.version}`, "warning");
+    }
+  }
+}
+
+function setupWorkspaceContextMenu() {
+  document.addEventListener("contextmenu", (event) => {
+    const target = event.target.closest("[data-context-kind]");
+    if (!target) {
+      hideWorkspaceContextMenu();
+      return;
+    }
+    event.preventDefault();
+    showWorkspaceContextMenu(event, target);
+  });
+  document.querySelector("#workspaceContextMenuBody")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-context-action]");
+    if (!button) return;
+    const menu = document.querySelector("#workspaceContextMenu");
+    const target = menu?.__contextTarget;
+    hideWorkspaceContextMenu();
+    await executeContextAction(button.dataset.contextAction, target);
+  });
+  document.addEventListener("click", (event) => {
+    if (event.target.closest("#workspaceContextMenu")) return;
+    hideWorkspaceContextMenu();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") hideWorkspaceContextMenu();
+  });
+  window.addEventListener("scroll", hideWorkspaceContextMenu, true);
+  window.addEventListener("resize", hideWorkspaceContextMenu);
+}
+
 function renderProjectForm() {
   const form = document.querySelector("#projectForm");
   form.elements.title.value = project.title;
@@ -10434,6 +10675,7 @@ function init() {
   setupBudgetShareControls();
   setupAuditFilters();
   setupVfxReviewControls();
+  setupWorkspaceContextMenu();
   setupInputPreferences();
   setupInputForms();
   setupChartViewControls();

@@ -490,6 +490,106 @@ h3 {
   background: var(--surface-raised);
 }
 
+.workspace-context-menu {
+  position: fixed;
+  z-index: 80;
+  width: min(292px, calc(100vw - 24px));
+  padding: 8px;
+  border: 1px solid var(--line-strong);
+  background: color-mix(in srgb, var(--surface-strong) 94%, #ffffff);
+  border-radius: 8px;
+  box-shadow: 0 16px 36px rgba(18, 24, 28, 0.18);
+  backdrop-filter: blur(12px);
+}
+
+.workspace-context-menu[hidden] {
+  display: none;
+}
+
+.workspace-context-menu-head {
+  padding: 6px 8px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.workspace-context-menu-head strong,
+.workspace-context-menu-head span {
+  display: block;
+}
+
+.workspace-context-menu-head strong {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.workspace-context-menu-head span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.workspace-context-menu-body {
+  display: grid;
+  gap: 2px;
+  padding-top: 6px;
+}
+
+.workspace-context-menu-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 0;
+  color: var(--ink);
+  background: transparent;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.workspace-context-menu-item:hover {
+  background: var(--surface);
+}
+
+.workspace-context-menu-copy,
+.workspace-context-menu-item.danger b {
+  color: var(--red);
+}
+
+.workspace-context-menu-item b,
+.workspace-context-menu-item small {
+  display: block;
+  min-width: 0;
+}
+
+.workspace-context-menu-item b {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-context-menu-item small {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-context-menu-kbd {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
 main {
   max-width: 1680px;
   margin: 0 auto;
