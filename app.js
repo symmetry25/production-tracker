@@ -7089,6 +7089,94 @@ function renderProgress() {
   `;
 }
 
+const shotPipelineSteps = [
+  { id: "shoot", label: "拍摄" },
+  { id: "dit", label: "素材" },
+  { id: "edit", label: "剪辑" },
+  { id: "vfx", label: "VFX" },
+  { id: "review", label: "审查" },
+  { id: "delivery", label: "交付" },
+];
+
+function scenePipelineRows() {
+  const vfxProgressRows = customProgressRows().filter(isVfxProgressRow);
+  const vfxRate = vfxProgressRows.length > 0 ? averageNumbers(vfxProgressRows.map((row) => row.rate), activeProgressStats().rate || 0) : activeProgressStats().rate || 0;
+  return scenes.map((scene) => {
+    const relatedSheets = callSheets.filter((sheet) => Array.isArray(sheet.scenes) && sheet.scenes.includes(scene.code));
+    const shootDay = relatedSheets.length > 0 ? Math.min(...relatedSheets.map((sheet) => sheet.day)) : null;
+    const isShot = scene.status === "done" || (shootDay !== null && shootDay <= project.currentDay);
+    const needsVfx = scene.risk === "warning" || /工厂|追逐|雨|夜|天台|冲突|爆|特技|VFX|调色/u.test(`${scene.title} ${scene.location}`);
+    const editRate = isShot ? Math.min(1, 0.38 + Math.max(0, project.currentDay - (shootDay || project.currentDay)) * 0.1) : 0;
+    const reviewIssue = scene.risk === "warning" || (needsVfx && vfxRate < 0.55 && isShot);
+    const steps = {
+      shoot: isShot ? "done" : shootDay === project.currentDay ? "current" : "todo",
+      dit: isShot ? "done" : "todo",
+      edit: editRate >= 0.92 ? "done" : isShot ? "current" : "todo",
+      vfx: needsVfx ? (vfxRate >= 0.85 ? "done" : isShot ? (vfxRate < 0.45 ? "issue" : "current") : "todo") : isShot ? "done" : "todo",
+      review: reviewIssue ? "issue" : isShot && editRate >= 0.68 ? "current" : "todo",
+      delivery: isShot && editRate >= 0.96 && (!needsVfx || vfxRate >= 0.95) ? "done" : "todo",
+    };
+    const riskTone = Object.values(steps).includes("issue") ? "warning" : Object.values(steps).includes("current") ? "note" : "good";
+    const progressValue = Object.values(steps).reduce((sum, status) => sum + (status === "done" ? 1 : status === "current" ? 0.55 : status === "issue" ? 0.35 : 0), 0) / shotPipelineSteps.length;
+    return {
+      scene,
+      code: scene.code,
+      title: scene.title,
+      location: scene.location,
+      shootDay,
+      steps,
+      needsVfx,
+      riskTone,
+      progressValue,
+      note: reviewIssue ? "需复核镜头、版本或 VFX 交付" : isShot ? "素材已进入后期流转" : "等待拍摄",
+    };
+  });
+}
+
+function renderShotPipeline() {
+  const board = document.querySelector("#shotPipelineBoard");
+  const status = document.querySelector("#shotPipelineStatus");
+  if (!board || !status) return;
+  const rows = scenePipelineRows();
+  const issueCount = rows.filter((row) => row.riskTone === "warning").length;
+  const currentCount = rows.filter((row) => row.riskTone === "note").length;
+  status.textContent = `${rows.length} 组镜头 · ${issueCount} 项风险 · ${currentCount} 项进行中`;
+  if (rows.length === 0) {
+    board.innerHTML = `<div class="production-empty">暂无场次。录入场次后会生成镜头 / 资产管线。</div>`;
+    return;
+  }
+  board.innerHTML = `
+    <div class="shot-pipeline-grid">
+      <div class="pipeline-head pipeline-shot-head">镜头 / 场次</div>
+      ${shotPipelineSteps.map((step) => `<div class="pipeline-head">${escapeHtml(step.label)}</div>`).join("")}
+      <div class="pipeline-head">状态</div>
+      ${rows
+        .map(
+          (row) => `
+            <button class="pipeline-shot-cell ${row.riskTone}" type="button" data-workspace-view="callsheet" data-workspace-focus="callsheetDetail">
+              <strong>${escapeHtml(row.code)} · ${escapeHtml(row.title)}</strong>
+              <span>${escapeHtml(row.location)} · ${row.shootDay ? `D${row.shootDay}` : "未排日"} · ${row.needsVfx ? "含 VFX/高风险" : "常规"}</span>
+            </button>
+            ${shotPipelineSteps
+              .map(
+                (step) => `
+                  <button class="pipeline-step ${row.steps[step.id]}" type="button" data-workspace-view="${step.id === "vfx" || step.id === "review" ? "audit" : step.id === "edit" ? "progress" : "callsheet"}" data-workspace-focus="${step.id === "vfx" || step.id === "review" ? "vfxSupplierAudit" : step.id === "edit" ? "editProgressChart" : "callsheetDetail"}">
+                    <span>${escapeHtml(step.label)}</span>
+                  </button>
+                `,
+              )
+              .join("")}
+            <button class="pipeline-status-cell ${row.riskTone}" type="button" data-workspace-view="${row.riskTone === "warning" ? "audit" : "progress"}" data-workspace-focus="${row.riskTone === "warning" ? "vfxSupplierAudit" : "productionScheduleBoard"}">
+              <strong>${Math.round(row.progressValue * 100)}%</strong>
+              <span>${escapeHtml(row.note)}</span>
+            </button>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function renderProductionSchedule() {
   const board = document.querySelector("#productionScheduleBoard");
   const status = document.querySelector("#productionScheduleStatus");
@@ -9082,6 +9170,7 @@ function refreshAll(options = {}) {
   renderPersonnelModule();
   renderEquipmentModule();
   renderProgress();
+  renderShotPipeline();
   renderProductionOps();
   renderDepartmentInputs();
   renderInputPreferences();

@@ -13,7 +13,7 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=production-tracking-1" />
+    <link rel="stylesheet" href="./styles.css?v=shot-pipeline-1" />
   </head>
   <body>
     <div class="app-shell">
@@ -862,6 +862,21 @@
               </div>
               <canvas id="editProgressChart" width="960" height="360" aria-label="剪辑进度与完成场次图表"></canvas>
               <div class="edit-progress-summary" id="editProgressSummary"></div>
+            </article>
+
+            <article class="panel shot-pipeline-panel">
+              <div class="panel-heading">
+                <div>
+                  <h3>镜头 / 资产管线</h3>
+                  <span id="shotPipelineStatus">拍摄 / 素材 / 剪辑 / VFX / 审查</span>
+                </div>
+                <div class="mini-legend">
+                  <span class="legend-item"><i class="pipeline-dot done"></i>完成</span>
+                  <span class="legend-item"><i class="pipeline-dot current"></i>进行</span>
+                  <span class="legend-item"><i class="pipeline-dot issue"></i>风险</span>
+                </div>
+              </div>
+              <div class="shot-pipeline-board" id="shotPipelineBoard"></div>
             </article>
 
             <article class="panel production-schedule-panel">
@@ -1801,6 +1816,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=production-tracking-1"></script>
+    <script src="./app.js?v=shot-pipeline-1"></script>
   </body>
 </html>

@@ -2724,6 +2724,11 @@ tbody tr:hover td {
   grid-column: 1 / -1;
 }
 
+.shot-pipeline-panel {
+  grid-column: 1 / -1;
+  padding-bottom: 14px;
+}
+
 .edit-progress-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2748,6 +2753,169 @@ tbody tr:hover td {
 .edit-progress-card span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.pipeline-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.pipeline-dot.done {
+  background: var(--green);
+}
+
+.pipeline-dot.current {
+  background: var(--blue);
+}
+
+.pipeline-dot.issue {
+  background: var(--red);
+}
+
+.shot-pipeline-board {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+.shot-pipeline-grid {
+  display: grid;
+  grid-template-columns: 310px repeat(6, minmax(82px, 1fr)) minmax(220px, 0.9fr);
+  min-width: 1120px;
+}
+
+.pipeline-head {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 9px 10px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--surface-raised);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.pipeline-shot-head {
+  color: var(--ink);
+}
+
+.pipeline-shot-cell,
+.pipeline-step,
+.pipeline-status-cell {
+  min-width: 0;
+  min-height: 58px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.pipeline-shot-cell {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 10px 12px;
+  box-shadow: inset 4px 0 0 var(--teal);
+}
+
+.pipeline-shot-cell.warning {
+  box-shadow: inset 4px 0 0 var(--red);
+}
+
+.pipeline-shot-cell.note {
+  box-shadow: inset 4px 0 0 var(--amber);
+}
+
+.pipeline-shot-cell strong,
+.pipeline-shot-cell span,
+.pipeline-status-cell strong,
+.pipeline-status-cell span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pipeline-shot-cell strong {
+  font-size: 13px;
+}
+
+.pipeline-shot-cell span,
+.pipeline-status-cell span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.pipeline-step {
+  display: grid;
+  place-items: center;
+  padding: 8px;
+}
+
+.pipeline-step span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 28px;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.pipeline-step.done span {
+  border-color: color-mix(in srgb, var(--green) 36%, var(--line));
+  color: var(--green);
+  background: rgba(71, 122, 56, 0.09);
+}
+
+.pipeline-step.current span {
+  border-color: color-mix(in srgb, var(--blue) 36%, var(--line));
+  color: var(--blue);
+  background: rgba(46, 95, 134, 0.1);
+}
+
+.pipeline-step.issue span {
+  border-color: color-mix(in srgb, var(--red) 42%, var(--line));
+  color: var(--red);
+  background: rgba(200, 76, 57, 0.1);
+}
+
+.pipeline-status-cell {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.pipeline-status-cell strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pipeline-status-cell.warning strong {
+  color: var(--red);
+}
+
+.pipeline-status-cell.note strong {
+  color: var(--amber);
+}
+
+.pipeline-shot-cell:hover,
+.pipeline-step:hover,
+.pipeline-status-cell:hover {
+  background: var(--surface-strong);
 }
 
 .production-schedule-panel,
@@ -4981,6 +5149,9 @@ body.schedule-dragging .schedule-bar.selected {
 .tracking-section-head,
 .tracking-section-head span,
 .tracking-row-type,
+.shot-pipeline-board,
+.pipeline-head,
+.pipeline-step span,
 .production-schedule-board,
 .work-hour-kpis > div,
 .production-data-kpis > div,
@@ -5064,7 +5235,10 @@ body.schedule-dragging .schedule-bar.selected {
 :root.dark-mode .tracking-console-section,
 :root.dark-mode .tracking-section-head,
 :root.dark-mode .tracking-section-head span,
-:root.dark-mode .tracking-row-type {
+:root.dark-mode .tracking-row-type,
+:root.dark-mode .shot-pipeline-board,
+:root.dark-mode .pipeline-head,
+:root.dark-mode .pipeline-step span {
   background: #20262d;
 }
 
@@ -5074,7 +5248,10 @@ body.schedule-dragging .schedule-bar.selected {
 :root.dark-mode .tracking-row:hover,
 :root.dark-mode .tracking-resource-row:hover,
 :root.dark-mode .tracking-review-row:hover,
-:root.dark-mode .tracking-kpi:hover {
+:root.dark-mode .tracking-kpi:hover,
+:root.dark-mode .pipeline-shot-cell:hover,
+:root.dark-mode .pipeline-step:hover,
+:root.dark-mode .pipeline-status-cell:hover {
   background: #252c33;
 }
 
@@ -5130,6 +5307,7 @@ body.schedule-dragging .schedule-bar.selected {
 }
 
 :root.dark-mode .production-schedule-board,
+:root.dark-mode .shot-pipeline-board,
 :root.dark-mode .schedule-task-form,
 :root.dark-mode .work-hour-chart,
 :root.dark-mode .work-log-form {
@@ -5468,6 +5646,7 @@ body.schedule-dragging .schedule-bar.selected {
 }
 
 #progress .progress-edit-panel,
+#progress .shot-pipeline-panel,
 #progress .production-schedule-panel,
 #progress .work-hours-panel,
 #progress .production-dashboard-panel {
@@ -6164,6 +6343,7 @@ body.schedule-dragging .schedule-bar.selected {
   #progress .scene-panel,
   #progress .risk-panel,
   #progress .progress-edit-panel,
+  #progress .shot-pipeline-panel,
   #progress .production-schedule-panel,
   #progress .work-hours-panel,
   #progress .production-dashboard-panel {
