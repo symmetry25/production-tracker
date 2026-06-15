@@ -6461,6 +6461,156 @@ function pipelineToneFromIssueCount(count, hasWarnings = false) {
   return "good";
 }
 
+function pipelineQueueRows(input) {
+  const {
+    projectToken,
+    shotToken,
+    deptToken,
+    dateToken,
+    reviewRows,
+    production,
+    flow,
+    audit,
+    activeDepartment,
+  } = input;
+  const rows = [];
+  const toneWeight = { warning: 0, note: 1, good: 2 };
+
+  reviewRows.slice(0, 6).forEach((row) => {
+    const versionToken = pipelinePathSegment(row.version || "v001", "v001");
+    const shotGroupToken = pipelinePathSegment(row.shotGroup || shotToken, "shot");
+    const vendorToken = pipelinePathSegment(row.vendor || "vendor", "vendor");
+    const status = vfxReviewStatusLabels[row.status]?.label || "待审";
+    const payment = vfxPaymentGateLabels[row.paymentGate] || "付款关口";
+    rows.push({
+      id: `review-${row.id}`,
+      kind: "review",
+      type: "Review",
+      label: `${row.shotGroup} · ${row.version}`,
+      owner: row.vendor,
+      stage: `${status} / ${payment}`,
+      amount: row.amount > 0 ? money.format(row.amount) : "未匹配金额",
+      amountValue: row.amount || 0,
+      progress: row.approvalRate,
+      progressLabel: `${row.approvedCount}/${row.shotCount} 通过`,
+      action: row.action,
+      path: `项目/${projectToken}/reviews/${vendorToken}/${shotGroupToken}/${versionToken}`,
+      tone: row.risk === "high" ? "warning" : row.risk === "medium" ? "note" : "good",
+      target: "audit",
+      focus: "vfxVersionList",
+      reviewId: row.id,
+      packageText: [
+        `Review: ${row.shotGroup} ${row.version}`,
+        `Vendor: ${row.vendor}`,
+        `Status: ${status} / ${payment}`,
+        `Approval: ${row.approvedCount}/${row.shotCount}`,
+        `Path: 项目/${projectToken}/reviews/${vendorToken}/${shotGroupToken}/${versionToken}`,
+        `Action: ${row.action}`,
+      ].join("\n"),
+    });
+  });
+
+  production.schedule.slice(0, 5).forEach((task) => {
+    const taskToken = pipelinePathSegment(task.title || "task", "task");
+    const taskPath = `项目/${projectToken}/shots/${shotToken}/${deptToken}/${taskToken}/work`;
+    rows.push({
+      id: `work-${task.id}`,
+      kind: "work",
+      type: "Work",
+      label: task.title,
+      owner: task.owner || activeDepartment.name || "未指派",
+      stage: `${task.status} / 工作文件`,
+      amount: task.progressLabel || percentText(task.progressRate || 0),
+      amountValue: 0,
+      progress: task.progressRate || 0,
+      progressLabel: task.progressLabel || percentText(task.progressRate || 0),
+      action: task.progressRate >= 1 ? "可发布阶段快照，归档工作文件和通告依据。" : "阶段未完成，先同步负责人、工时和当天交付状态。",
+      path: taskPath,
+      tone: task.risk === "over" || task.risk === "high" ? "warning" : task.risk === "tight" || (task.progressRate || 0) < 0.45 ? "note" : "good",
+      target: "progress",
+      focus: "productionScheduleBoard",
+      taskId: task.id,
+      packageText: [
+        `Work: ${task.title}`,
+        `Owner: ${task.owner || "未指派"}`,
+        `Range: D${task.start}-D${task.end}`,
+        `Status: ${task.status} / ${task.progressLabel || percentText(task.progressRate || 0)}`,
+        `Path: ${taskPath}`,
+      ].join("\n"),
+    });
+  });
+
+  flow.detailRows.slice(0, 6).forEach((detail) => {
+    const vendorToken = pipelinePathSegment(detail.label || "vendor", "vendor");
+    const detailPath = `项目/${projectToken}/deliveries/${vendorToken}/${dateToken}`;
+    rows.push({
+      id: `load-${pipelinePathSegment(`${detail.department}-${detail.type}-${detail.label}`, "detail")}`,
+      kind: "load",
+      type: "Load",
+      label: detail.label,
+      owner: detail.department,
+      stage: detail.type,
+      amount: money.format(detail.value),
+      amountValue: detail.value || 0,
+      progress: Math.min(1, Math.max(0.08, detail.share || 0)),
+      progressLabel: percentText(detail.share || 0),
+      action: "加载供应商交付，核对合同、发票、资源数量和付款节点。",
+      path: detailPath,
+      tone: detail.share > 0.18 ? "note" : "good",
+      target: "fundflow",
+      focus: "fundFlowDetailTable",
+      packageText: [
+        `Load: ${detail.label}`,
+        `Department: ${detail.department}`,
+        `Type: ${detail.type}`,
+        `Amount: ${money.format(detail.value)}`,
+        `Path: ${detailPath}`,
+      ].join("\n"),
+    });
+  });
+
+  audit.items
+    .filter((item) => item.risk === "high" || item.risk === "medium")
+    .slice(0, 4)
+    .forEach((item) => {
+      const itemToken = pipelinePathSegment(item.name || "audit", "audit");
+      const gatePath = `项目/${projectToken}/finance/audit/${itemToken}/evidence`;
+      rows.push({
+        id: `gate-${itemToken}`,
+        kind: "gate",
+        type: "Gate",
+        label: item.name,
+        owner: item.kind,
+        stage: auditRiskLabel(item.risk),
+        amount: money.format(item.amount),
+        amountValue: item.amount || 0,
+        progress: item.risk === "high" ? 0.24 : 0.56,
+        progressLabel: item.evidence || "待补凭证",
+        action: item.reason,
+        path: gatePath,
+        tone: item.risk === "high" ? "warning" : "note",
+        target: "audit",
+        focus: "auditTableBody",
+        packageText: [
+          `Gate: ${item.name}`,
+          `Kind: ${item.kind}`,
+          `Risk: ${auditRiskLabel(item.risk)}`,
+          `Amount: ${money.format(item.amount)}`,
+          `Evidence: ${item.evidence}`,
+          `Path: ${gatePath}`,
+          `Reason: ${item.reason}`,
+        ].join("\n"),
+      });
+    });
+
+  return rows
+    .sort((a, b) => {
+      const toneSort = (toneWeight[a.tone] ?? 2) - (toneWeight[b.tone] ?? 2);
+      return toneSort || (b.amountValue || 0) - (a.amountValue || 0);
+    })
+    .slice(0, 14);
+}
+
 function pipelineCoreData() {
   const metrics = analysisMetrics();
   const audit = auditSummaryData();
@@ -6655,6 +6805,24 @@ function pipelineCoreData() {
     `  06_reports/`,
     `    producer_weekly/`,
   ];
+  const queueRows = pipelineQueueRows({
+    projectToken,
+    shotToken,
+    deptToken,
+    dateToken,
+    reviewRows,
+    production,
+    flow,
+    audit,
+    activeDepartment,
+  });
+  const queueSummary = {
+    total: queueRows.length,
+    warning: queueRows.filter((row) => row.tone === "warning").length,
+    note: queueRows.filter((row) => row.tone === "note").length,
+    ready: queueRows.filter((row) => row.tone === "good").length,
+    amount: queueRows.reduce((sum, row) => sum + (Number(row.amountValue) || 0), 0),
+  };
   const issueCount = hooks.filter((hook) => hook.tone === "warning").length;
   const noteCount = hooks.filter((hook) => hook.tone === "note").length;
   return {
@@ -6663,6 +6831,8 @@ function pipelineCoreData() {
     templates,
     hooks,
     modules,
+    queueRows,
+    queueSummary,
     folderTree,
     issueCount,
     noteCount,
@@ -6674,6 +6844,14 @@ function pipelineFolderTreeText() {
   return pipelineCoreData().folderTree.join("\n");
 }
 
+function pipelineQueuePackageText(rows = null) {
+  const queueRows = rows || pipelineCoreData().queueRows;
+  if (!queueRows.length) return "暂无发布 / 加载队列。";
+  return queueRows
+    .map((row, index) => [`#${index + 1} ${row.type} · ${row.label}`, row.packageText || contextSummaryFromElement({ dataset: { contextTitle: row.label, contextMeta: row.action } })].join("\n"))
+    .join("\n\n---\n\n");
+}
+
 function renderPipelineCore() {
   const container = document.querySelector("#pipelineCore");
   const badge = document.querySelector("#pipelineCoreBadge");
@@ -6681,9 +6859,11 @@ function renderPipelineCore() {
   const templateList = document.querySelector("#pipelineTemplateList");
   const hookList = document.querySelector("#pipelineHookList");
   const moduleGrid = document.querySelector("#pipelineModuleGrid");
+  const queueSummary = document.querySelector("#pipelineQueueSummary");
+  const queueList = document.querySelector("#pipelineQueueList");
   const folderOutput = document.querySelector("#pipelineFolderOutput");
   const status = document.querySelector("#pipelineCoreStatus");
-  if (!container || !badge || !contextGrid || !templateList || !hookList || !moduleGrid || !folderOutput || !status) return;
+  if (!container || !badge || !contextGrid || !templateList || !hookList || !moduleGrid || !queueSummary || !queueList || !folderOutput || !status) return;
   const data = pipelineCoreData();
   const badgeTone = pipelineToneFromIssueCount(data.issueCount, data.noteCount > 0);
   badge.textContent = data.issueCount > 0 ? `${data.issueCount} 个 Hook 阻塞` : data.noteCount > 0 ? `${data.noteCount} 个 Hook 关注` : "管线可用";
@@ -6740,8 +6920,36 @@ function renderPipelineCore() {
       `,
     )
     .join("");
+  queueSummary.innerHTML = `
+    <div><span>队列</span><strong>${data.queueSummary.total}</strong><small>发布 / 加载 / 关口</small></div>
+    <div><span>阻塞</span><strong>${data.queueSummary.warning}</strong><small>需先处理</small></div>
+    <div><span>待复核</span><strong>${data.queueSummary.note}</strong><small>需要确认</small></div>
+    <div><span>涉及金额</span><strong>${money.format(data.queueSummary.amount)}</strong><small>队列估算</small></div>
+  `;
+  queueList.innerHTML =
+    data.queueRows.length > 0
+      ? data.queueRows
+          .map(
+            (row) => `
+              <button class="pipeline-queue-row ${row.tone}" type="button" data-context-kind="pipeline-queue" data-context-title="${escapeHtml(row.label)}" data-context-meta="${escapeHtml(`${row.type} · ${row.stage} · ${row.action}`)}" data-pipeline-package="${escapeHtml(row.packageText)}" data-pipeline-path="${escapeHtml(row.path)}" data-pipeline-queue-kind="${escapeHtml(row.kind)}" ${row.reviewId ? `data-context-review-id="${escapeHtml(row.reviewId)}"` : ""} ${row.taskId ? `data-context-task-id="${escapeHtml(row.taskId)}"` : ""} data-workspace-view="${escapeHtml(row.target)}" data-workspace-focus="${escapeHtml(row.focus || "")}">
+                <span class="pipeline-queue-type">${escapeHtml(row.type)}</span>
+                <span class="pipeline-queue-main">
+                  <strong>${escapeHtml(row.label)}</strong>
+                  <small>${escapeHtml(row.owner)} · ${escapeHtml(row.stage)}</small>
+                </span>
+                <span class="pipeline-queue-meter" aria-hidden="true"><i style="width:${Math.round(Math.max(0.04, Math.min(row.progress || 0, 1)) * 100)}%"></i></span>
+                <span class="pipeline-queue-meta">
+                  <b>${escapeHtml(row.amount)}</b>
+                  <small>${escapeHtml(row.progressLabel)}</small>
+                </span>
+                <em>${escapeHtml(row.action)}</em>
+              </button>
+            `,
+          )
+          .join("")
+      : `<div class="producer-empty">暂无发布 / 加载队列。录入版本、排期或供应商交付后会显示。</div>`;
   folderOutput.innerHTML = `<pre>${escapeHtml(data.folderTree.join("\n"))}</pre>`;
-  status.textContent = `${data.configId} · ${data.templates.length} 个模板 · ${data.hooks.length} 个 Hook · ${data.modules.length} 个模块`;
+  status.textContent = `${data.configId} · ${data.templates.length} 个模板 · ${data.hooks.length} 个 Hook · ${data.modules.length} 个模块 · ${data.queueRows.length} 个队列项`;
 }
 
 function renderCallsheetSelect(preferredDay = null) {
@@ -7348,8 +7556,12 @@ function professionalReportPrompt() {
 
 async function copyTextToClipboard(text) {
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch (error) {
+      console.warn("剪贴板权限受限，已尝试备用复制。", error);
+    }
   }
   const textarea = document.createElement("textarea");
   textarea.value = text;
@@ -9417,6 +9629,25 @@ function contextMenuItems(target) {
       { action: "pipeline-delivery", label: "加载供应商交付", hint: "进入资金流和供应商明细", key: "D" },
     ];
   }
+  if (kind === "pipeline-queue") {
+    const items = [
+      { action: "open", label: "打开关联视图", hint: "进入这个队列项对应模块", key: "↵" },
+      { action: "pipeline-copy-package", label: "复制发布包", hint: "名称、路径、金额和下一步", key: "B" },
+      { action: "pipeline-copy-path", label: "复制路径", hint: "复制队列输出路径", key: "P" },
+    ];
+    if (target?.dataset?.contextReviewId) {
+      items.push(
+        { action: "vfx-edit", label: "编辑版本", hint: "载入版本审阅表单", key: "E" },
+        { action: "vfx-approve", label: "标记通过", hint: "通过后可进入付款判断", key: "✓" },
+        { action: "vfx-block", label: "标记阻塞", hint: "暂停付款关口", key: "!" },
+      );
+    }
+    if (target?.dataset?.contextTaskId) {
+      items.push({ action: "schedule-complete", label: "阶段完成", hint: "把工作阶段设为 100%", key: "✓" });
+    }
+    items.push({ action: "pipeline-delivery", label: "查看交付 / 资金流", hint: "进入供应商明细", key: "D" });
+    return items;
+  }
   return base;
 }
 
@@ -9496,6 +9727,11 @@ async function executeContextAction(action, target) {
     return;
   }
   if (action.startsWith("pipeline-")) {
+    if (action === "pipeline-copy-package") {
+      await copyTextToClipboard(target.dataset.pipelinePackage || pipelineQueuePackageText());
+      setFormStatus("发布 / 加载包已复制", "good");
+      return;
+    }
     if (action === "pipeline-copy-path") {
       await copyTextToClipboard(target.dataset.pipelinePath || contextSummaryFromElement(target));
       setFormStatus("管线路径已复制", "good");
@@ -9627,6 +9863,11 @@ function setupPipelineCoreActions() {
     if (action === "copy-tree") {
       await copyTextToClipboard(pipelineFolderTreeText());
       setFormStatus("项目文件夹结构已复制", "good");
+      return;
+    }
+    if (action === "copy-package") {
+      await copyTextToClipboard(pipelineQueuePackageText());
+      setFormStatus("发布 / 加载队列已复制", "good");
       return;
     }
     if (action === "publish-version") {

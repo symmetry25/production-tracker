@@ -13,7 +13,7 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=pipeline-core-1" />
+    <link rel="stylesheet" href="./styles.css?v=pipeline-queue-2" />
   </head>
   <body>
     <div class="app-shell">
@@ -329,6 +329,14 @@
                   </div>
                   <div class="pipeline-module-grid" id="pipelineModuleGrid"></div>
                 </section>
+                <section class="pipeline-core-section pipeline-queue-section" aria-labelledby="pipelineQueueTitle">
+                  <div class="tracking-section-head">
+                    <span>Publish / Load</span>
+                    <h4 id="pipelineQueueTitle">发布与加载队列</h4>
+                  </div>
+                  <div class="pipeline-queue-summary" id="pipelineQueueSummary"></div>
+                  <div class="pipeline-queue-list" id="pipelineQueueList"></div>
+                </section>
                 <section class="pipeline-core-section pipeline-folder-section" aria-labelledby="pipelineFolderTitle">
                   <div class="tracking-section-head">
                     <span>Bootstrap</span>
@@ -337,6 +345,7 @@
                   <div class="pipeline-folder-output" id="pipelineFolderOutput"></div>
                   <div class="pipeline-core-actions">
                     <button class="icon-button primary" type="button" data-pipeline-action="copy-tree">复制结构</button>
+                    <button class="icon-button ghost" type="button" data-pipeline-action="copy-package">复制队列</button>
                     <button class="icon-button ghost" type="button" data-pipeline-action="publish-version">发布版本</button>
                     <button class="icon-button ghost" type="button" data-pipeline-action="load-delivery">加载交付</button>
                     <button class="icon-button ghost" type="button" data-pipeline-action="open-audit">打开审查</button>
@@ -1953,6 +1962,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=pipeline-core-1"></script>
+    <script src="./app.js?v=pipeline-queue-2"></script>
   </body>
 </html>
