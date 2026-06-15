@@ -13,7 +13,7 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=layout-clean-1" />
+    <link rel="stylesheet" href="./styles.css?v=schedule-timeline-2" />
   </head>
   <body>
     <div class="app-shell">
@@ -833,6 +833,52 @@
                 <h3>制片排期</h3>
                 <span id="productionScheduleStatus">按阶段 / 部门 / 负责人</span>
               </div>
+              <form class="schedule-task-form" id="productionScheduleForm">
+                <input name="id" type="hidden" />
+                <label>
+                  <span>阶段</span>
+                  <input name="title" type="text" placeholder="如：主拍 / VFX 交付" />
+                </label>
+                <label>
+                  <span>负责人</span>
+                  <input name="owner" type="text" placeholder="部门 / 人员" />
+                </label>
+                <label>
+                  <span>开始日</span>
+                  <input name="start" type="number" min="1" step="1" />
+                </label>
+                <label>
+                  <span>结束日</span>
+                  <input name="end" type="number" min="1" step="1" />
+                </label>
+                <label>
+                  <span>进度 %</span>
+                  <input name="progress" type="number" min="0" max="100" step="1" />
+                </label>
+                <label>
+                  <span>状态</span>
+                  <select name="status">
+                    <option value="未开始">未开始</option>
+                    <option value="进行中">进行中</option>
+                    <option value="完成">完成</option>
+                    <option value="延期">延期</option>
+                    <option value="暂停">暂停</option>
+                  </select>
+                </label>
+                <div class="schedule-task-actions">
+                  <button class="icon-button primary" type="submit">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+                      <path d="M17 21v-8H7v8M7 3v5h8" />
+                    </svg>
+                    <span>保存阶段</span>
+                  </button>
+                  <button class="icon-button ghost" id="newScheduleTask" type="button">新增阶段</button>
+                  <button class="icon-button danger" id="deleteScheduleTask" type="button">删除阶段</button>
+                  <button class="icon-button ghost" id="resetScheduleTasks" type="button">恢复自动</button>
+                </div>
+              </form>
+              <div class="schedule-editor-status" id="productionScheduleEditorStatus">选择阶段后可编辑起止时间。</div>
               <div class="production-schedule-board" id="productionScheduleBoard"></div>
             </article>
 
@@ -1719,6 +1765,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=layout-clean-1"></script>
+    <script src="./app.js?v=schedule-timeline-2"></script>
   </body>
 </html>

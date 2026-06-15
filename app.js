@@ -574,6 +574,8 @@ function applyFullDemoData(options = {}) {
     { id: "full-demo-progress-vfx-color", name: "调色版本验收", done: 1, target: 4, unit: "版" },
   ];
   workLogs = [];
+  scheduleTasks = [];
+  selectedScheduleTaskId = "";
   currentProjectId = keepProjectId ? previousProjectId : `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   lastSavedPersonId = "";
   lastPersonFeedback = null;
@@ -592,8 +594,11 @@ let scenes = blankMode ? [] : clone(defaultScenes);
 let callSheets = blankMode ? [] : clone(defaultCallSheets);
 let customProgressItems = [];
 let workLogs = [];
+let scheduleTasks = [];
 let currentProjectId = defaultProjectId;
 let projectLibrary = [];
+let selectedScheduleTaskId = "";
+let scheduleDragState = null;
 
 let displaySettings = {
   darkMode: false,
@@ -986,6 +991,7 @@ function createProjectSnapshot(id = currentProjectId, name = project.title) {
       callSheets: clone(callSheets),
       customProgressItems: clone(customProgressItems),
       workLogs: clone(workLogs),
+      scheduleTasks: clone(scheduleTasks),
     },
   };
 }
@@ -1008,6 +1014,7 @@ function normalizeProjectSnapshot(snapshot) {
       callSheets: Array.isArray(data.callSheets) ? data.callSheets : [],
       customProgressItems: normalizeCustomProgressItems(data.customProgressItems),
       workLogs: normalizeWorkLogs(data.workLogs),
+      scheduleTasks: normalizeScheduleTasks(data.scheduleTasks),
     },
   };
 }
@@ -1024,6 +1031,8 @@ function applyProjectSnapshot(snapshot) {
   callSheets = clone(normalized.data.callSheets);
   customProgressItems = clone(normalized.data.customProgressItems);
   workLogs = clone(normalized.data.workLogs);
+  scheduleTasks = clone(normalized.data.scheduleTasks);
+  selectedScheduleTaskId = scheduleTasks[0]?.id || "";
   lastSavedPersonId = "";
   lastPersonFeedback = null;
   professionalReportState.source = "local";
@@ -1364,6 +1373,8 @@ function loadSavedData() {
       callSheets = saved.callSheets || callSheets;
       customProgressItems = normalizeCustomProgressItems(saved.customProgressItems);
       workLogs = normalizeWorkLogs(saved.workLogs);
+      scheduleTasks = normalizeScheduleTasks(saved.scheduleTasks);
+      selectedScheduleTaskId = scheduleTasks[0]?.id || "";
     }
   } catch (error) {
     console.warn("本地数据读取失败，已使用样例数据。", error);
@@ -1390,6 +1401,8 @@ function applyStarterData(options = {}) {
   callSheets = blankMode ? [] : clone(defaultCallSheets);
   customProgressItems = [];
   workLogs = [];
+  scheduleTasks = [];
+  selectedScheduleTaskId = "";
   currentProjectId = keepProjectId ? previousProjectId : `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   lastSavedPersonId = "";
   lastPersonFeedback = null;
@@ -1409,6 +1422,8 @@ function applyNewProjectData(title = "新项目") {
   callSheets = [];
   customProgressItems = [];
   workLogs = [];
+  scheduleTasks = [];
+  selectedScheduleTaskId = "";
   currentProjectId = `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   lastSavedPersonId = "";
   lastPersonFeedback = null;
@@ -1565,6 +1580,7 @@ function saveData() {
         callSheets,
         customProgressItems,
         workLogs,
+        scheduleTasks,
       }),
     );
   } catch (error) {
@@ -2165,7 +2181,52 @@ function clampDay(value) {
   return Math.max(1, Math.min(Math.max(project.plannedDays || 1, 1), Math.round(Number(value) || 1)));
 }
 
-function productionScheduleRows() {
+function scheduleTaskRisk(task) {
+  if (task.status === "延期") return "over";
+  if (task.status === "暂停") return "tight";
+  if (task.end < (project.currentDay || 1) && task.progressRate < 1) return "over";
+  if (task.progressRate < 0.55 && (project.currentDay || 1) > task.start) return "tight";
+  return "ok";
+}
+
+function normalizeScheduleTask(row, index = 0) {
+  if (!row || typeof row !== "object") return null;
+  const start = clampDay(row.start);
+  const end = clampDay(Math.max(start, Number(row.end) || start));
+  const progressRate = Math.max(0, Math.min(1, Number(row.progressRate ?? row.progress ?? 0) || 0));
+  const title = String(row.title || "").trim();
+  if (!title) return null;
+  const task = {
+    id: String(row.id || `schedule-${Date.now()}-${index}`),
+    title,
+    owner: String(row.owner || "未指派").trim(),
+    start,
+    end,
+    progressRate,
+    taskCount: Math.max(1, Math.round(Number(row.taskCount) || 1)),
+    color: String(row.color || activeCategoryColor("production")).trim(),
+    status: String(row.status || (progressRate >= 1 ? "完成" : "进行中")).trim(),
+    source: row.source === "manual" ? "manual" : "auto",
+    order: Number.isFinite(Number(row.order)) ? Number(row.order) : index,
+  };
+  return {
+    ...task,
+    risk: scheduleTaskRisk(task),
+    span: Math.max(1, end - start + 1),
+    progressLabel: percentText(progressRate),
+  };
+}
+
+function normalizeScheduleTasks(rows, options = {}) {
+  if (!Array.isArray(rows)) return [];
+  const normalized = rows.map(normalizeScheduleTask).filter(Boolean);
+  if (options.sortByStart) {
+    return normalized.sort((a, b) => a.start - b.start || a.end - b.end || a.order - b.order);
+  }
+  return normalized.sort((a, b) => a.order - b.order);
+}
+
+function automaticProductionScheduleRows() {
   const rows = [];
   activeBudgetDepartments().forEach((department, index) => {
     const sheets = callSheets.filter((sheet) => sheet.departments.includes(department.id));
@@ -2185,7 +2246,7 @@ function productionScheduleRows() {
       taskCount: sheets.length,
       color: activeDepartmentColor(department, index),
       status: end < project.currentDay && progressRate < 1 ? "延期" : progressRate >= 1 ? "完成" : "进行中",
-      risk: end < project.currentDay && progressRate < 1 ? "over" : progressRate < 0.55 && project.currentDay > start ? "tight" : "ok",
+      source: "auto",
     });
   });
   customProgressRows().forEach((row, index) => {
@@ -2201,17 +2262,154 @@ function productionScheduleRows() {
       taskCount: Math.round(row.target),
       color: row.color,
       status: row.rate >= 1 ? "完成" : row.rate >= 0.65 ? "推进" : "偏慢",
-      risk: row.rate >= 0.65 ? "ok" : row.rate >= 0.35 ? "tight" : "over",
+      source: "auto",
     });
   });
-  return rows
-    .map((row) => ({
-      ...row,
-      span: Math.max(1, row.end - row.start + 1),
-      progressLabel: percentText(row.progressRate),
-    }))
-    .sort((a, b) => a.start - b.start || a.end - b.end)
-    .slice(0, 14);
+  return normalizeScheduleTasks(rows, { sortByStart: true }).slice(0, 14);
+}
+
+function productionScheduleRows() {
+  const manualRows = normalizeScheduleTasks(scheduleTasks);
+  return (manualRows.length > 0 ? manualRows : automaticProductionScheduleRows()).slice(0, 24);
+}
+
+function ensureEditableScheduleTasks() {
+  scheduleTasks = normalizeScheduleTasks(scheduleTasks);
+  if (scheduleTasks.length === 0) {
+    scheduleTasks = automaticProductionScheduleRows().map((row) => ({ ...row, source: "manual" }));
+  }
+  if (!selectedScheduleTaskId || !scheduleTasks.some((row) => row.id === selectedScheduleTaskId)) {
+    selectedScheduleTaskId = scheduleTasks[0]?.id || "";
+  }
+  return scheduleTasks;
+}
+
+function selectedScheduleTask() {
+  return productionScheduleRows().find((row) => row.id === selectedScheduleTaskId) || productionScheduleRows()[0] || null;
+}
+
+function updateScheduleTask(taskId, patch) {
+  ensureEditableScheduleTasks();
+  let updatedTask = null;
+  scheduleTasks = scheduleTasks.map((task) => {
+    if (task.id !== taskId) return task;
+    updatedTask = normalizeScheduleTask({ ...task, ...patch, source: "manual" });
+    return updatedTask;
+  }).filter(Boolean);
+  selectedScheduleTaskId = taskId;
+  return updatedTask;
+}
+
+function addScheduleTaskFromRange(start = project.currentDay || 1, span = 3) {
+  ensureEditableScheduleTasks();
+  const safeStart = clampDay(start);
+  const safeEnd = clampDay(Math.max(safeStart, safeStart + span - 1));
+  const task = normalizeScheduleTask({
+    id: `schedule-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    title: "新增阶段",
+    owner: "未指派",
+    start: safeStart,
+    end: safeEnd,
+    progressRate: 0,
+    taskCount: 1,
+    color: activeCategoryColor("production"),
+    status: "未开始",
+    source: "manual",
+    order: scheduleTasks.length,
+  });
+  if (task) {
+    scheduleTasks.push(task);
+    selectedScheduleTaskId = task.id;
+  }
+  return task;
+}
+
+function scheduleLaneMetrics(lane) {
+  const rect = lane.getBoundingClientRect();
+  const styles = getComputedStyle(lane);
+  const paddingLeft = Number.parseFloat(styles.paddingLeft) || 0;
+  const paddingRight = Number.parseFloat(styles.paddingRight) || 0;
+  const width = Math.max(1, rect.width - paddingLeft - paddingRight);
+  return {
+    left: rect.left + paddingLeft,
+    width,
+    dayWidth: width / Math.max(1, Number(project.plannedDays) || 1),
+  };
+}
+
+function scheduleDayFromPointer(event, lane) {
+  const metrics = scheduleLaneMetrics(lane);
+  const cols = Math.max(1, Number(project.plannedDays) || 1);
+  const x = Math.max(0, Math.min(metrics.width, event.clientX - metrics.left));
+  return clampDay(Math.floor((x / Math.max(metrics.width, 1)) * cols) + 1);
+}
+
+function schedulePointerDeltaDays(event) {
+  if (!scheduleDragState) return 0;
+  return Math.round((event.clientX - scheduleDragState.clientX) / Math.max(scheduleDragState.dayWidth, 1));
+}
+
+function scheduleTaskById(taskId) {
+  return scheduleTasks.find((task) => task.id === taskId) || null;
+}
+
+function scheduleDragUpdateBar(task, bar) {
+  if (!task || !bar?.isConnected) return;
+  bar.style.gridColumn = `${task.start} / span ${task.span}`;
+  bar.classList.toggle("tight", task.risk === "tight");
+  bar.classList.toggle("over", task.risk === "over");
+  bar.classList.toggle("ok", task.risk === "ok");
+  bar.classList.toggle("compact", task.span <= 2);
+  const range = bar.querySelector(".schedule-clip-range");
+  const progress = bar.querySelector(".schedule-clip-progress");
+  const fill = bar.querySelector("i");
+  if (range) range.textContent = `D${task.start}-D${task.end}`;
+  if (progress) progress.textContent = task.progressLabel;
+  if (fill) fill.style.width = `${Math.round(Math.max(0.06, Math.min(task.progressRate, 1)) * 100)}%`;
+}
+
+function scheduleDragUpdateForm(task) {
+  const form = document.querySelector("#productionScheduleForm");
+  if (!form || !task) return;
+  form.elements.id.value = task.id;
+  form.elements.start.value = task.start;
+  form.elements.end.value = task.end;
+  form.elements.progress.value = Math.round(task.progressRate * 100);
+  form.elements.status.value = ["未开始", "进行中", "完成", "延期", "暂停"].includes(task.status) ? task.status : "进行中";
+}
+
+function scheduleDragPreviewText(task) {
+  const status = document.querySelector("#productionScheduleEditorStatus");
+  if (status && task) {
+    status.textContent = `${task.title} · D${task.start}-${task.end}，松开鼠标保存。`;
+  }
+}
+
+function resetScheduleForm(task = selectedScheduleTask()) {
+  const form = document.querySelector("#productionScheduleForm");
+  const status = document.querySelector("#productionScheduleEditorStatus");
+  const deleteButton = document.querySelector("#deleteScheduleTask");
+  if (!form) return;
+  if (!task) {
+    form.reset();
+    form.elements.id.value = "";
+    form.elements.start.value = "1";
+    form.elements.end.value = String(Math.max(1, project.plannedDays || 1));
+    form.elements.progress.value = "0";
+    form.elements.status.value = "进行中";
+    if (status) status.textContent = "暂无阶段。新增后可以拖动排期条。";
+    if (deleteButton) deleteButton.disabled = true;
+    return;
+  }
+  form.elements.id.value = task.id;
+  form.elements.title.value = task.title;
+  form.elements.owner.value = task.owner;
+  form.elements.start.value = task.start;
+  form.elements.end.value = task.end;
+  form.elements.progress.value = Math.round(task.progressRate * 100);
+  form.elements.status.value = ["未开始", "进行中", "完成", "延期", "暂停"].includes(task.status) ? task.status : "进行中";
+  if (status) status.textContent = `${task.title} · D${task.start}-${task.end}，可拖动条块移动，拖左右边缘调整时间。`;
+  if (deleteButton) deleteButton.disabled = scheduleTasks.length === 0 && task.source === "auto";
 }
 
 function productionDashboardData() {
@@ -6685,10 +6883,15 @@ function renderProductionSchedule() {
   const rows = productionScheduleRows();
   const cols = Math.max(1, Number(project.plannedDays) || 1);
   const today = clampDay(project.currentDay || 1);
-  status.textContent = rows.length > 0 ? `${rows.length} 个阶段 · D${today}/${cols}` : "暂无排期";
+  const manualMode = normalizeScheduleTasks(scheduleTasks).length > 0;
+  status.textContent = rows.length > 0 ? `${rows.length} 个阶段 · D${today}/${cols} · ${manualMode ? "手动排期" : "自动生成"}` : "暂无排期";
   if (rows.length === 0) {
     board.innerHTML = `<div class="production-empty">录入通告单、部门或自定义进度后，这里会生成制片排期。</div>`;
+    resetScheduleForm(null);
     return;
+  }
+  if (!selectedScheduleTaskId || !rows.some((row) => row.id === selectedScheduleTaskId)) {
+    selectedScheduleTaskId = rows[0].id;
   }
 
   const ticks = Array.from({ length: cols }, (_, index) => index + 1)
@@ -6701,23 +6904,31 @@ function renderProductionSchedule() {
       ${rows
         .map(
           (row) => `
-            <div class="schedule-left">
+            <button class="schedule-left schedule-row-button ${row.id === selectedScheduleTaskId ? "selected" : ""}" type="button" data-schedule-id="${escapeHtml(row.id)}">
               <strong>${escapeHtml(row.title)}</strong>
               <span>${escapeHtml(row.owner)}</span>
               <small>D${row.start}-D${row.end} · ${escapeHtml(row.status)} · ${row.progressLabel}</small>
-            </div>
-            <div class="schedule-lane">
+            </button>
+            <div class="schedule-lane" data-schedule-lane="${escapeHtml(row.id)}">
               <span class="schedule-today-line" style="grid-column:${today}"></span>
-              <span class="schedule-bar ${row.risk}" style="grid-column:${row.start} / span ${row.span}; --bar-color:${row.color}">
+              <button class="schedule-bar ${row.risk} ${row.span <= 2 ? "compact" : ""} ${row.id === selectedScheduleTaskId ? "selected" : ""}" type="button" data-schedule-id="${escapeHtml(row.id)}" data-drag-mode="move" aria-label="${escapeHtml(`${row.title}，D${row.start} 到 D${row.end}`)}" style="grid-column:${row.start} / span ${row.span}; --bar-color:${row.color}">
+                <span class="schedule-handle left" data-drag-mode="resize-start" aria-hidden="true"></span>
                 <i style="width:${Math.round(Math.max(0.06, Math.min(row.progressRate, 1)) * 100)}%"></i>
-                <b>${escapeHtml(row.progressLabel)}</b>
-              </span>
+                <b>
+                  <span class="schedule-clip-title">${escapeHtml(row.title)}</span>
+                  <span class="schedule-clip-meta">${escapeHtml(row.owner)}</span>
+                  <span class="schedule-clip-range">D${row.start}-D${row.end}</span>
+                  <span class="schedule-clip-progress">${row.progressLabel}</span>
+                </b>
+                <span class="schedule-handle right" data-drag-mode="resize-end" aria-hidden="true"></span>
+              </button>
             </div>
           `,
         )
         .join("")}
     </div>
   `;
+  resetScheduleForm(selectedScheduleTask());
 }
 
 function renderWorkHourDashboard() {
@@ -8984,6 +9195,162 @@ function setupInputForms() {
     const node = event.target.closest(".callsheet-node");
     if (!node) return;
     focusCallsheetNode(node.dataset.target);
+  });
+
+  document.querySelector("#productionScheduleForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const title = form.elements.title.value.trim();
+    if (!title) {
+      setFormStatus("请先填写阶段名称", "warning");
+      return;
+    }
+    ensureEditableScheduleTasks();
+    const existingId = form.elements.id.value || selectedScheduleTaskId;
+    const start = clampDay(getFormNumber(form, "start"));
+    const end = clampDay(Math.max(start, getFormNumber(form, "end")));
+    const patch = {
+      id: existingId || `schedule-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      title,
+      owner: form.elements.owner.value.trim() || "未指派",
+      start,
+      end,
+      progressRate: Math.max(0, Math.min(100, getFormNumber(form, "progress"))) / 100,
+      status: form.elements.status.value,
+      source: "manual",
+    };
+    if (scheduleTasks.some((task) => task.id === patch.id)) {
+      updateScheduleTask(patch.id, patch);
+    } else {
+      const nextTask = normalizeScheduleTask(patch);
+      if (nextTask) {
+        scheduleTasks.push(nextTask);
+        selectedScheduleTaskId = nextTask.id;
+      }
+    }
+    saveData();
+    refreshAll();
+    setFormStatus(`排期已保存：${title} · D${start}-${end}`, "good");
+  });
+
+  document.querySelector("#newScheduleTask")?.addEventListener("click", () => {
+    const task = addScheduleTaskFromRange(project.currentDay || 1, 3);
+    saveData();
+    refreshAll();
+    setFormStatus(`已新增阶段：${task?.title || "新增阶段"}`, "good");
+  });
+
+  document.querySelector("#deleteScheduleTask")?.addEventListener("click", () => {
+    ensureEditableScheduleTasks();
+    const target = scheduleTasks.find((task) => task.id === selectedScheduleTaskId);
+    if (!target) {
+      setFormStatus("请先选择要删除的阶段", "warning");
+      return;
+    }
+    scheduleTasks = scheduleTasks.filter((task) => task.id !== selectedScheduleTaskId);
+    selectedScheduleTaskId = scheduleTasks[0]?.id || "";
+    saveData();
+    refreshAll();
+    setFormStatus(`已删除阶段：${target.title}`, "warning");
+  });
+
+  document.querySelector("#resetScheduleTasks")?.addEventListener("click", () => {
+    scheduleTasks = [];
+    selectedScheduleTaskId = "";
+    saveData();
+    refreshAll();
+    setFormStatus("制片排期已恢复为自动生成", "good");
+  });
+
+  document.querySelector("#productionScheduleBoard")?.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-schedule-id]");
+    if (!target) return;
+    selectedScheduleTaskId = target.dataset.scheduleId;
+    renderProductionSchedule();
+  });
+
+  document.querySelector("#productionScheduleBoard")?.addEventListener("dblclick", (event) => {
+    const lane = event.target.closest("[data-schedule-lane]");
+    if (!lane || event.target.closest(".schedule-bar")) return;
+    const day = scheduleDayFromPointer(event, lane);
+    const task = addScheduleTaskFromRange(day, 3);
+    saveData();
+    refreshAll();
+    setFormStatus(`已在 D${day} 新增阶段：${task?.title || "新增阶段"}`, "good");
+  });
+
+  document.querySelector("#productionScheduleBoard")?.addEventListener("pointerdown", (event) => {
+    const bar = event.target.closest(".schedule-bar");
+    if (!bar || (event.button !== undefined && event.button !== 0)) return;
+    const lane = bar.closest("[data-schedule-lane]");
+    const task = productionScheduleRows().find((row) => row.id === bar.dataset.scheduleId);
+    if (!lane || !task) return;
+    const mode = event.target.dataset.dragMode || bar.dataset.dragMode || "move";
+    const metrics = scheduleLaneMetrics(lane);
+    scheduleDragState = {
+      id: task.id,
+      mode,
+      bar,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      start: task.start,
+      end: task.end,
+      span: task.span,
+      dayWidth: metrics.dayWidth,
+      moved: false,
+      committed: false,
+    };
+    selectedScheduleTaskId = task.id;
+    bar.setPointerCapture?.(event.pointerId);
+    document.body.classList.add("schedule-dragging");
+    event.preventDefault();
+  });
+
+  document.addEventListener("pointermove", (event) => {
+    if (!scheduleDragState) return;
+    const delta = schedulePointerDeltaDays(event);
+    const original = scheduleDragState;
+    const pixelDelta = Math.hypot(event.clientX - original.clientX, event.clientY - original.clientY);
+    if (!original.moved && pixelDelta < 4) return;
+    let start = original.start;
+    let end = original.end;
+    if (original.mode === "resize-start") {
+      start = clampDay(Math.min(original.end, original.start + delta));
+    } else if (original.mode === "resize-end") {
+      end = clampDay(Math.max(original.start, original.end + delta));
+    } else {
+      start = clampDay(original.start + delta);
+      end = clampDay(start + original.span - 1);
+      if (end > (project.plannedDays || end)) {
+        end = clampDay(project.plannedDays);
+        start = clampDay(end - original.span + 1);
+      }
+    }
+    if (start === original.currentStart && end === original.currentEnd && original.moved) return;
+    const task = updateScheduleTask(original.id, { start, end });
+    if (task) {
+      scheduleDragUpdateBar(task, original.bar);
+      scheduleDragUpdateForm(task);
+      scheduleDragPreviewText(task);
+    }
+    scheduleDragState = { ...original, moved: true, committed: true, currentStart: start, currentEnd: end };
+  });
+
+  document.addEventListener("pointerup", () => {
+    if (!scheduleDragState) return;
+    const target = scheduleTaskById(scheduleDragState.id);
+    const moved = scheduleDragState.moved;
+    scheduleDragState = null;
+    document.body.classList.remove("schedule-dragging");
+    if (moved) {
+      saveData();
+      refreshAll();
+    } else {
+      renderProductionSchedule();
+    }
+    if (moved && target) {
+      setFormStatus(`排期已调整：${target.title} · D${target.start}-${target.end}`, "good");
+    }
   });
 
   document.querySelector("#equipmentForm").addEventListener("submit", (event) => {

@@ -2509,6 +2509,67 @@ tbody tr:hover td {
   border: 1px solid var(--line);
   background: var(--surface);
   border-radius: 8px;
+  overscroll-behavior-x: contain;
+}
+
+body.schedule-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.schedule-task-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.2fr) minmax(160px, 1fr) repeat(4, minmax(92px, 0.55fr)) minmax(390px, auto);
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-raised);
+  border-radius: 8px;
+}
+
+.schedule-task-form label {
+  display: grid;
+  gap: 5px;
+}
+
+.schedule-task-form label > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.schedule-task-form input,
+.schedule-task-form select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  background: var(--control);
+  border-radius: 7px;
+}
+
+.schedule-task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.schedule-task-actions .icon-button {
+  min-height: 34px;
+  padding-inline: 10px;
+}
+
+.schedule-editor-status {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .schedule-grid {
@@ -2535,6 +2596,26 @@ tbody tr:hover td {
   border-bottom: 1px solid var(--line);
 }
 
+.schedule-row-button {
+  width: 100%;
+  border-top: 0;
+  border-left: 0;
+  border-radius: 0;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.schedule-row-button:hover,
+.schedule-row-button.selected {
+  background: rgba(21, 122, 110, 0.08);
+}
+
+.schedule-row-button.selected {
+  box-shadow: inset 3px 0 0 var(--teal);
+}
+
 .schedule-left strong,
 .schedule-left span,
 .schedule-left small {
@@ -2555,7 +2636,7 @@ tbody tr:hover td {
 .schedule-lane {
   display: grid;
   grid-template-columns: repeat(var(--schedule-cols), minmax(36px, 1fr));
-  min-height: 66px;
+  min-height: 72px;
   border-bottom: 1px solid var(--line);
   background:
     repeating-linear-gradient(90deg, rgba(30, 37, 35, 0.045) 0 1px, transparent 1px 36px),
@@ -2603,27 +2684,132 @@ tbody tr:hover td {
   display: flex;
   align-items: center;
   min-width: 0;
-  height: 28px;
+  height: 42px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(46, 95, 134, 0.22);
-  border-radius: 6px;
+  padding: 0;
+  border: 1px solid rgba(20, 30, 33, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0)),
+    color-mix(in srgb, var(--bar-color, var(--teal)) 42%, var(--surface));
+  border-radius: 7px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 8px 18px rgba(23, 30, 32, 0.12);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.schedule-bar:active,
+body.schedule-dragging .schedule-bar.selected {
+  cursor: grabbing;
+}
+
+.schedule-bar.selected {
+  outline: 2px solid rgba(93, 199, 182, 0.7);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.16);
 }
 
 .schedule-bar i {
   position: absolute;
   inset: 0 auto 0 0;
-  background: var(--bar-color, var(--teal));
-  opacity: 0.9;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--bar-color, var(--teal)) 94%, #ffffff), var(--bar-color, var(--teal)));
+  opacity: 0.94;
+  pointer-events: none;
 }
 
 .schedule-bar b {
   position: relative;
   z-index: 1;
-  padding: 0 9px;
+  display: grid;
+  grid-template-areas:
+    "title range"
+    "meta progress";
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 22px 5px 22px;
   color: #fff;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.15;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.schedule-clip-title,
+.schedule-clip-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-clip-title {
+  grid-area: title;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.schedule-clip-meta {
+  grid-area: meta;
+  opacity: 0.84;
+  font-weight: 700;
+}
+
+.schedule-clip-range {
+  grid-area: range;
+}
+
+.schedule-clip-progress {
+  grid-area: progress;
+}
+
+.schedule-clip-range,
+.schedule-clip-progress {
+  justify-self: end;
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+}
+
+.schedule-bar.compact b {
+  grid-template-areas: "title range";
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.schedule-bar.compact .schedule-clip-meta,
+.schedule-bar.compact .schedule-clip-progress {
+  display: none;
+}
+
+.schedule-handle {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  z-index: 3;
+  width: 13px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(20, 30, 33, 0.12);
+  cursor: ew-resize;
+  pointer-events: auto;
+}
+
+.schedule-handle::after {
+  position: absolute;
+  inset: 4px 3px;
+  border-left: 1px solid rgba(0, 0, 0, 0.42);
+  border-right: 1px solid rgba(0, 0, 0, 0.42);
+  content: "";
+}
+
+.schedule-handle.left {
+  left: 4px;
+}
+
+.schedule-handle.right {
+  right: 4px;
 }
 
 .schedule-bar.tight i {
@@ -4674,12 +4860,15 @@ tbody tr:hover td {
 }
 
 :root.dark-mode .production-schedule-board,
+:root.dark-mode .schedule-task-form,
 :root.dark-mode .work-hour-chart,
 :root.dark-mode .work-log-form {
   background: var(--surface);
 }
 
 :root.dark-mode .schedule-head,
+:root.dark-mode .schedule-row-button:hover,
+:root.dark-mode .schedule-row-button.selected,
 :root.dark-mode .work-hour-kpis > div,
 :root.dark-mode .production-data-kpis > div,
 :root.dark-mode .work-person-row,
@@ -5168,6 +5357,15 @@ tbody tr:hover td {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .schedule-task-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .schedule-task-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
   .work-log-form .icon-button {
     grid-column: 1 / -1;
     justify-content: center;
@@ -5521,8 +5719,14 @@ tbody tr:hover td {
   .custom-progress-item,
   .edit-progress-summary,
   .work-log-form,
+  .schedule-task-form,
   .input-stats,
   .comparison-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-task-actions {
+    display: grid;
     grid-template-columns: 1fr;
   }
 
