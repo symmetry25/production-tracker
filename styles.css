@@ -1970,7 +1970,7 @@ main {
   grid-area: progress;
 }
 
-.tracking-detail-progress span {
+.tracking-detail-progress > span {
   display: block;
   height: 10px;
   overflow: hidden;
@@ -1979,7 +1979,7 @@ main {
   border-radius: 999px;
 }
 
-.tracking-detail-progress b {
+.tracking-detail-progress > span > b {
   display: block;
   height: 100%;
   background: linear-gradient(90deg, var(--teal), var(--blue));
@@ -2049,6 +2049,29 @@ main {
   font-family: "SFMono-Regular", "Cascadia Code", "Menlo", monospace;
   font-size: 15px;
   font-weight: 950;
+}
+
+.tracking-version-frame.has-preview {
+  min-height: 84px;
+  overflow: hidden;
+  padding: 0;
+  background: #050709;
+}
+
+.tracking-version-frame.has-preview span {
+  position: absolute;
+  z-index: 1;
+  margin-top: 7px;
+  padding: 2px 5px;
+  background: rgba(0, 0, 0, 0.58);
+  border-radius: 4px;
+  color: #fff;
+}
+
+.tracking-version-frame img {
+  width: 100%;
+  height: 86px;
+  object-fit: cover;
 }
 
 .tracking-version-player small {
@@ -2139,6 +2162,52 @@ main {
 
 .tracking-note-submit {
   justify-self: start;
+}
+
+.tracking-version-submit {
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-strong) 72%, transparent);
+  border-radius: 6px;
+}
+
+.tracking-version-submit div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px;
+  gap: 7px;
+}
+
+.tracking-version-submit label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tracking-version-submit input {
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--control);
+  border-radius: 5px;
+  font: inherit;
+  font-size: 10.5px;
+}
+
+.tracking-version-submit button {
+  justify-self: start;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  color: #fff;
+  background: var(--ink);
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 950;
 }
 
 .tracking-detail-action {
@@ -2351,6 +2420,144 @@ main {
   min-width: 0;
   border-top: 1px solid var(--line);
   background: var(--surface);
+}
+
+.tracking-prd-status {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1.4fr);
+  min-width: 0;
+  border-top: 1px solid var(--line);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--teal) 7%, transparent), transparent 42%),
+    var(--surface);
+}
+
+.tracking-prd-status-head {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+}
+
+.tracking-prd-status-head div {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  min-width: 0;
+}
+
+.tracking-prd-status-head span,
+.tracking-prd-status-card span {
+  padding: 3px 6px;
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+  background: var(--surface-strong);
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 950;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tracking-prd-status-head strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-prd-status-head p,
+.tracking-prd-status-head em {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.tracking-prd-status-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  min-width: 0;
+}
+
+.tracking-prd-status-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.tracking-prd-status-card:last-child {
+  border-right: 0;
+}
+
+.tracking-prd-status-card.good {
+  background: color-mix(in srgb, var(--green) 8%, transparent);
+}
+
+.tracking-prd-status-card.note {
+  background: color-mix(in srgb, var(--amber) 9%, transparent);
+}
+
+.tracking-prd-status-card.warning {
+  background: color-mix(in srgb, var(--red) 7%, transparent);
+}
+
+.tracking-prd-status-card strong,
+.tracking-prd-status-card small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tracking-prd-status-card strong {
+  font-size: 12px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.tracking-prd-status-card i {
+  display: block;
+  height: 5px;
+  overflow: hidden;
+  background: var(--track);
+  border-radius: 999px;
+}
+
+.tracking-prd-status-card i b {
+  display: block;
+  height: 100%;
+  background: var(--teal);
+  border-radius: inherit;
+}
+
+.tracking-prd-status-card.warning i b {
+  background: var(--red);
+}
+
+.tracking-prd-status-card.note i b {
+  background: var(--amber);
+}
+
+.tracking-prd-status-card small {
+  display: -webkit-box;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.35;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .tracking-prd-panel {
@@ -4333,6 +4540,15 @@ main {
   grid-column: 1 / -1;
 }
 
+.vfx-version-fields .vfx-version-file {
+  grid-column: 1 / -1;
+}
+
+.vfx-version-fields input[type="file"] {
+  padding-top: 7px;
+  color: var(--muted);
+}
+
 @media (max-width: 1280px) {
   .vfx-version-fields .vfx-version-notes {
     grid-column: 1 / -1;
@@ -4446,6 +4662,39 @@ main {
 .vfx-version-meta {
   flex-wrap: wrap;
   justify-content: flex-start;
+}
+
+.vfx-version-media {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  border-radius: 6px;
+}
+
+.vfx-version-media span {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  color: var(--muted);
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-family: "SFMono-Regular", "Cascadia Code", "Menlo", monospace;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.vfx-version-media strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .vfx-version-meter > div:first-child strong {

@@ -379,6 +379,13 @@ const defaultVfxReviewVersions = [
     reviewer: "邵青 / 林夏",
     paymentGate: "hold",
     notes: "爆点合成边缘和雨夜调色需要返修，下一笔付款先等 v003。",
+    media: {
+      fileName: "factory_chase_comp_v002.mp4",
+      fileType: "video/mp4",
+      fileSize: 186000000,
+      uploadedBy: "蓝线调色棚",
+      uploadedAt: "2026-05-18T10:24:00.000Z",
+    },
   },
   {
     id: "vfx-review-rain-v001",
@@ -392,6 +399,13 @@ const defaultVfxReviewVersions = [
     reviewer: "监制 / 摄影指导",
     paymentGate: "hold",
     notes: "等导演批注，重点看雨效方向和肤色一致性。",
+    media: {
+      fileName: "river_rain_v001.mov",
+      fileType: "video/quicktime",
+      fileSize: 242000000,
+      uploadedBy: "蓝线调色棚",
+      uploadedAt: "2026-05-19T14:08:00.000Z",
+    },
   },
   {
     id: "vfx-review-title-v001",
@@ -405,6 +419,13 @@ const defaultVfxReviewVersions = [
     reviewer: "制片主任",
     paymentGate: "milestone",
     notes: "包装方向确认，可进入批量套版。",
+    media: {
+      fileName: "title_package_v001.png",
+      fileType: "image/png",
+      fileSize: 4800000,
+      uploadedBy: "云桥后期统筹",
+      uploadedAt: "2026-05-17T18:30:00.000Z",
+    },
   },
 ];
 
@@ -1319,6 +1340,8 @@ function normalizeVfxReviewVersions(items) {
     .map((item, index) => {
       const shotCount = Math.max(1, Number(item?.shotCount) || 1);
       const approvedCount = Math.max(0, Math.min(shotCount, Number(item?.approvedCount) || 0));
+      const fallbackMedia = defaultVfxReviewVersions.find((row) => row.id === String(item?.id || ""))?.media || null;
+      const media = normalizeVfxReviewMedia(item?.media || fallbackMedia);
       return {
         id: String(item?.id || `vfx-review-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`),
         vendor: String(item?.vendor || "").trim() || "未登记供应商",
@@ -1331,9 +1354,25 @@ function normalizeVfxReviewVersions(items) {
         reviewer: String(item?.reviewer || "").trim() || "未指派",
         paymentGate: normalizeVfxPaymentGate(item?.paymentGate),
         notes: String(item?.notes || "").trim(),
+        media,
       };
     })
     .filter((item) => item.vendor && item.shotGroup && item.version);
+}
+
+function normalizeVfxReviewMedia(media) {
+  if (!media || typeof media !== "object") return null;
+  const fileName = String(media.fileName || "").trim();
+  if (!fileName) return null;
+  const previewUrl = String(media.previewUrl || "").trim();
+  return {
+    fileName,
+    fileType: String(media.fileType || "application/octet-stream").trim(),
+    fileSize: Math.max(0, Number(media.fileSize) || 0),
+    uploadedBy: String(media.uploadedBy || "").trim() || "本地上传",
+    uploadedAt: String(media.uploadedAt || "").trim() || new Date().toISOString(),
+    previewUrl: previewUrl.startsWith("data:image/") ? previewUrl : "",
+  };
 }
 
 function normalizePipelineEvents(items) {
@@ -4554,6 +4593,8 @@ function renderVfxVersionReview() {
       const statusMeta = vfxReviewStatusLabels[row.status] || vfxReviewStatusLabels.submitted;
       const paymentLabel = vfxPaymentGateLabels[row.paymentGate] || "付款关口";
       const riskClass = row.risk === "high" ? "over" : row.risk === "medium" ? "tight" : "ok";
+      const media = row.media;
+      const mediaLabel = media ? `${media.fileName} · ${formatFileSize(media.fileSize)}` : "未上传媒体";
       return `
         <div class="vfx-version-row ${row.risk}" data-context-kind="vfx-review" data-context-review-id="${escapeHtml(row.id)}" data-context-title="${escapeHtml(`${row.shotGroup} · ${row.version}`)}" data-context-meta="${escapeHtml(`${row.vendor} · ${vfxReviewStatusLabels[row.status]?.label || "待审"}`)}" data-review-id="${escapeHtml(row.id)}">
           <div class="vfx-version-main">
@@ -4571,6 +4612,10 @@ function renderVfxVersionReview() {
             <span>${escapeHtml(paymentLabel)}</span>
             <span class="status-text ${riskClass}">${row.risk === "high" ? "高风险" : row.risk === "medium" ? "待复核" : "稳定"}</span>
             <span>${row.amount > 0 ? money.format(row.amount) : "未匹配合同金额"}</span>
+          </div>
+          <div class="vfx-version-media">
+            <span>${escapeHtml(media?.fileType || "No media")}</span>
+            <strong>${escapeHtml(mediaLabel)}</strong>
           </div>
           <p>${escapeHtml(row.notes || row.action)}</p>
           <div class="vfx-version-row-actions">
@@ -5891,6 +5936,14 @@ function compactMoney(value) {
     return `${Math.round(value / 1000) / 10}万`;
   }
   return number.format(Math.round(value));
+}
+
+function formatFileSize(bytes) {
+  const value = Math.max(0, Number(bytes) || 0);
+  if (value >= 1024 * 1024 * 1024) return `${(value / (1024 * 1024 * 1024)).toFixed(1).replace(/\.0$/u, "")} GB`;
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1).replace(/\.0$/u, "")} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${Math.round(value)} B`;
 }
 
 function compactChartValue(value, rowsOrRow = null) {
@@ -7271,6 +7324,60 @@ function trackerPrdSuiteData(tracker) {
   };
 }
 
+function trackerPrdStatusRows(tracker) {
+  const reportRows = trackerReportRows(tracker);
+  const versionsWithMedia = vfxReviewRows().filter((row) => row.media?.fileName).length;
+  const notesCount = vfxReviewRows().filter((row) => row.notes).length;
+  const apiConceptCount = reportRows.length;
+  const rows = [
+    { key: "shot-grid", label: "ShotGrid", value: tracker.summary.totalShots, target: Math.max(5, tracker.summary.totalShots), detail: "镜头 / 任务矩阵、筛选、展开任务", stage: "demo", tone: tracker.summary.totalShots > 0 ? "good" : "note" },
+    { key: "tasks", label: "任务详情", value: tracker.summary.totalTasks, target: Math.max(12, tracker.summary.totalTasks), detail: "状态、负责人、批注、下一步动作", stage: "demo", tone: tracker.summary.totalTasks > 0 ? "good" : "note" },
+    { key: "versions", label: "版本审阅", value: tracker.summary.versionCount, target: Math.max(4, tracker.summary.versionCount), detail: "版本提交、通过率、付款关口", stage: "demo", tone: tracker.summary.versionCount > 0 ? "good" : "note" },
+    { key: "media", label: "上传/播放器", value: versionsWithMedia, target: Math.max(3, tracker.summary.versionCount), detail: "当前保存文件信息，小图可预览；正式上传待后端", stage: "partial", tone: versionsWithMedia > 0 ? "note" : "warning" },
+    { key: "notes", label: "NoteThread", value: notesCount, target: Math.max(3, tracker.summary.versionCount), detail: "批注可写入版本记录，暂未做账号归属", stage: "demo", tone: notesCount > 0 ? "good" : "note" },
+    { key: "reports", label: "Reports API", value: apiConceptCount, target: 5, detail: "报表端点概念已映射，真实 API 待 Next.js", stage: "concept", tone: "note" },
+    { key: "auth-db", label: "登录 / 数据库", value: 0, target: 4, detail: "NextAuth、Prisma、PostgreSQL、权限保护尚未工程化", stage: "todo", tone: "warning" },
+  ];
+  const weighted = rows.map((row) => ({ ...row, rate: Math.max(0, Math.min((Number(row.value) || 0) / Math.max(Number(row.target) || 1, 1), 1)) }));
+  const score = weighted.reduce((sum, row) => sum + row.rate, 0) / Math.max(weighted.length, 1);
+  return {
+    rows: weighted,
+    score,
+    readyCount: weighted.filter((row) => row.rate >= 0.95 && row.stage === "demo").length,
+    blockedCount: weighted.filter((row) => row.stage === "todo" || row.tone === "warning").length,
+  };
+}
+
+function renderTrackerPrdStatus(tracker) {
+  const node = document.querySelector("#trackingPrdStatus");
+  if (!node) return;
+  const data = trackerPrdStatusRows(tracker);
+  node.innerHTML = `
+    <div class="tracking-prd-status-head">
+      <div>
+        <span>PRD Progress</span>
+        <strong>静态原型完成度 ${percentText(data.score)}</strong>
+      </div>
+      <p>当前页面已完成可演示闭环；正式 PRD 仍需要 Next.js、Prisma、登录、真实 API 和文件存储。</p>
+      <em>${data.readyCount} 项可演示 · ${data.blockedCount} 项待工程化</em>
+    </div>
+    <div class="tracking-prd-status-grid">
+      ${data.rows
+        .map(
+          (row) => `
+            <button class="tracking-prd-status-card ${row.tone}" type="button" data-context-kind="prd-status" data-context-title="${escapeHtml(row.label)}" data-context-meta="${escapeHtml(row.detail)}" data-workspace-view="${row.key === "versions" || row.key === "media" ? "audit" : "overview"}" data-workspace-focus="${row.key === "versions" || row.key === "media" ? "vfxVersionList" : row.key === "reports" ? "trackingReportBoard" : "productionTrackingConsole"}">
+              <span>${escapeHtml(row.stage)}</span>
+              <strong>${escapeHtml(row.label)}</strong>
+              <i><b style="width:${Math.round(row.rate * 100)}%"></b></i>
+              <small>${escapeHtml(row.detail)}</small>
+            </button>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function trackerTaskStatusPatch(status) {
   if (status === "APPROVED") return { status: "approved", paymentGate: "milestone" };
   if (status === "CHANGES_REQUESTED") return { status: "notes", paymentGate: "hold" };
@@ -7320,6 +7427,58 @@ function trackerAddNote(taskId, content) {
   return true;
 }
 
+function trackerDefaultVendorForTask(task) {
+  const department = task?.department || "vfx_color";
+  const departmentName = getDept(department).name;
+  const vendor =
+    people.find((person) => person.dept === department && person.vendor && person.vendor !== "个人 / 自由职业")?.vendor ||
+    equipment.find((item) => item.dept === department && item.vendor && item.vendor !== "未登记公司")?.vendor ||
+    vfxSupplierAuditRows()[0]?.vendor ||
+    task?.assignee ||
+    departmentName;
+  return vendor || "未登记供应商";
+}
+
+function trackerNextVersionLabel(task) {
+  const current = Math.max(0, Number(task?.versionCount) || 0) + 1;
+  return `v${String(current).padStart(3, "0")}`;
+}
+
+function trackerSubmitTaskVersion(taskId, formNode) {
+  const tracker = productionTrackerWorkflowData();
+  const task = tracker.allTasks.find((row) => row.id === taskId);
+  if (!task) return false;
+  const form = formNode || document.querySelector(`[data-tracker-version-form="${CSS.escape(taskId)}"]`);
+  const vendor = form?.elements?.vendor?.value?.trim() || trackerDefaultVendorForTask(task);
+  const version = form?.elements?.version?.value?.trim() || trackerNextVersionLabel(task);
+  const notes = form?.elements?.notes?.value?.trim() || "从任务详情提交的新版本，等待审阅。";
+  const existing = vfxReviewRows().find((row) => row.shotGroup.includes(task.shotCode) && row.version === version && row.vendor === vendor);
+  const nextRow = {
+    id: existing?.id || `vfx-review-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    vendor,
+    shotGroup: `${task.shotCode} ${task.shotTitle || task.name}`,
+    version,
+    status: "submitted",
+    shotCount: Math.max(1, sceneCount(task.shotCode) || 1),
+    approvedCount: 0,
+    date: reportDateLabel(),
+    reviewer: "监制 / Reviewer",
+    paymentGate: "hold",
+    notes,
+    media: null,
+  };
+  if (existing?.media) nextRow.media = existing.media;
+  const existingIndex = vfxReviewVersions.findIndex((item) => item.id === nextRow.id);
+  if (existingIndex >= 0) vfxReviewVersions[existingIndex] = nextRow;
+  else vfxReviewVersions.push(nextRow);
+  vfxReviewVersions = normalizeVfxReviewVersions(vfxReviewVersions);
+  selectedInspectorTarget = { kind: "tracker-task", trackerTaskId: taskId, title: `${task.shotCode} · ${task.name}`, meta: `${trackerStatusLabel("PENDING_REVIEW")} · ${task.assignee}` };
+  saveData();
+  refreshAll();
+  setFormStatus(`版本已提交：${nextRow.shotGroup} · ${nextRow.version}`, "good");
+  return true;
+}
+
 function trackerTaskDetailTarget(tracker) {
   const producerActions = trackerProducerActionRows(tracker);
   if (selectedInspectorTarget?.trackerTaskId) {
@@ -7360,6 +7519,11 @@ function renderTrackerTaskDetail(task, tracker) {
   const approval = version ? `${version.approvedCount}/${version.shotCount} · ${percentText(version.approvalRate)}` : `${Math.round((task.progress || 0) * 100)}%`;
   const frameStart = shot?.frameStart || 1001;
   const frameEnd = shot?.frameEnd || frameStart + 99;
+  const media = version?.media || null;
+  const mediaLabel = media ? `${media.fileName} · ${formatFileSize(media.fileSize)}` : "暂无媒体文件";
+  const mediaPreview = media?.previewUrl
+    ? `<img src="${escapeHtml(media.previewUrl)}" alt="${escapeHtml(media.fileName)}" />`
+    : `<strong>${escapeHtml(isProducerAction ? "PROJECT" : version ? version.version : "No Version")}</strong>`;
   return `
     <div class="tracking-detail-identity">
       <span class="tracker-status ${statusClass}">${escapeHtml(statusLabel)}</span>
@@ -7379,11 +7543,12 @@ function renderTrackerTaskDetail(task, tracker) {
       <span><b style="width:${Math.round(Math.max(0.04, Math.min(task.progress || 0, 1)) * 100)}%"></b></span>
       <em>${Math.round((task.progress || 0) * 100)}%</em>
       <div class="tracking-version-player" data-context-kind="tracker-task" data-context-title="${escapeHtml(`${task.shotCode} · ${task.name}`)}" data-context-meta="${escapeHtml(version ? `${version.version} · ${version.vendor}` : "暂无版本")}" data-tracker-task-id="${escapeHtml(task.id)}">
-        <div class="tracking-version-frame">
+        <div class="tracking-version-frame ${media?.previewUrl ? "has-preview" : ""}">
           <span>${escapeHtml(task.label || "Task")}</span>
-          <strong>${escapeHtml(isProducerAction ? "PROJECT" : version ? version.version : "No Version")}</strong>
+          ${mediaPreview}
         </div>
         <small>${escapeHtml(isProducerAction ? task.detail || "项目级制片任务" : `Frame ${frameStart}-${frameEnd} · ${version ? versionStatus : "等待提交"}`)}</small>
+        ${!isProducerAction ? `<small>${escapeHtml(mediaLabel)}</small>` : ""}
       </div>
     </div>
     <div class="tracking-detail-grid">
@@ -7421,6 +7586,18 @@ function renderTrackerTaskDetail(task, tracker) {
         <textarea rows="2" placeholder="写给供应商、艺术家或审阅人的批注" data-tracker-note-input="${escapeHtml(task.id)}"></textarea>
       </label>
       ${isProducerAction ? `<button class="tracking-note-submit" type="button" data-workspace-view="${escapeHtml(task.target || "analysis")}" data-workspace-focus="${escapeHtml(task.focus || "")}">进入处理</button>` : `<button class="tracking-note-submit" type="button" data-tracker-note-submit="${escapeHtml(task.id)}">保存批注</button>`}
+      ${
+        isProducerAction
+          ? ""
+          : `<form class="tracking-version-submit" data-tracker-version-form="${escapeHtml(task.id)}">
+              <div>
+                <label><span>供应商</span><input name="vendor" type="text" value="${escapeHtml(version?.vendor || trackerDefaultVendorForTask(task))}" /></label>
+                <label><span>版本号</span><input name="version" type="text" value="${escapeHtml(trackerNextVersionLabel(task))}" /></label>
+              </div>
+              <label><span>提交说明</span><input name="notes" type="text" value="${escapeHtml(version ? `基于 ${version.version} 提交下一版。` : "首次提交版本，等待审阅。")}" /></label>
+              <button type="submit" data-tracker-version-submit="${escapeHtml(task.id)}">${version ? "提交下一版" : "提交版本"}</button>
+            </form>`
+      }
     </div>
     <div class="tracking-detail-action">
       <span>Next Action</span>
@@ -7749,6 +7926,7 @@ function renderProductionTrackingConsole() {
   const taskStack = document.querySelector("#trackingTaskStack");
   const workloadPanel = document.querySelector("#trackingWorkloadPanel");
   const taskDetail = document.querySelector("#trackingTaskDetail");
+  const prdStatus = document.querySelector("#trackingPrdStatus");
   const assetBoard = document.querySelector("#trackingAssetBoard");
   const prdSuite = document.querySelector("#trackingPrdSuite");
   const projectBoard = document.querySelector("#trackingProjectBoard");
@@ -7758,7 +7936,7 @@ function renderProductionTrackingConsole() {
   const table = document.querySelector("#trackingConsoleTable");
   const resources = document.querySelector("#trackingResourceList");
   const reviews = document.querySelector("#trackingReviewList");
-  if (!container || !badge || !kpiNode || !workflowBadge || !shotGrid || !taskStack || !workloadPanel || !taskDetail || !assetBoard || !prdSuite || !projectBoard || !myTaskBoard || !userBoard || !reportBoard || !table || !resources || !reviews) return;
+  if (!container || !badge || !kpiNode || !workflowBadge || !shotGrid || !taskStack || !workloadPanel || !taskDetail || !prdStatus || !assetBoard || !prdSuite || !projectBoard || !myTaskBoard || !userBoard || !reportBoard || !table || !resources || !reviews) return;
   const data = productionTrackingData();
   const warningCount = data.rows.filter((row) => row.tone === "warning").length + data.reviewRows.filter((row) => row.tone === "warning").length;
   const noteCount = data.rows.filter((row) => row.tone === "note").length + data.reviewRows.filter((row) => row.tone === "note").length;
@@ -7896,6 +8074,7 @@ function renderProductionTrackingConsole() {
           .join("")}`
       : `<div class="producer-empty">暂无待处理任务。</div>`;
   taskDetail.innerHTML = renderTrackerTaskDetail(trackerTaskDetailTarget(tracker), tracker);
+  renderTrackerPrdStatus(tracker);
   assetBoard.innerHTML = `
     <div class="tracking-asset-head">
       <div>
@@ -10639,6 +10818,7 @@ function fillVfxReviewForm(reviewId) {
   form.elements.reviewer.value = row.reviewer;
   form.elements.paymentGate.value = row.paymentGate;
   form.elements.notes.value = row.notes;
+  if (form.elements.mediaFile) form.elements.mediaFile.value = "";
   form.scrollIntoView({ behavior: "smooth", block: "center" });
   window.setTimeout(() => form.elements.shotGroup.focus({ preventScroll: true }), 220);
   return true;
@@ -10650,7 +10830,7 @@ function setupVfxReviewControls() {
   if (!form || !list) return;
   resetVfxReviewForm();
 
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const shotCount = Math.max(1, getFormNumber(form, "shotCount"));
     const approvedCount = Math.max(0, Math.min(shotCount, getFormNumber(form, "approvedCount")));
@@ -10661,6 +10841,9 @@ function setupVfxReviewControls() {
       setFormStatus("请填写镜头组和版本号", "warning");
       return;
     }
+    const existingRow = vfxReviewVersions.find((item) => item.id === form.elements.id.value);
+    const mediaFile = form.elements.mediaFile?.files?.[0] || null;
+    const media = mediaFile ? await vfxMediaFromFile(mediaFile, vendor) : existingRow?.media || null;
     const nextRow = {
       id: form.elements.id.value || `vfx-review-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       vendor,
@@ -10673,6 +10856,7 @@ function setupVfxReviewControls() {
       reviewer: getFormText(form, "reviewer") || "未指派",
       paymentGate: normalizeVfxPaymentGate(form.elements.paymentGate.value),
       notes: getFormText(form, "notes"),
+      media,
     };
     const existingIndex = vfxReviewVersions.findIndex((item) => item.id === nextRow.id);
     if (existingIndex >= 0) {
@@ -11624,6 +11808,14 @@ function setupWorkspaceContextMenu() {
       trackerAddNote(taskId, input?.value || "");
       return;
     }
+    const trackerVersionSubmit = event.target.closest("[data-tracker-version-submit]");
+    if (trackerVersionSubmit) {
+      event.preventDefault();
+      const taskId = trackerVersionSubmit.dataset.trackerVersionSubmit;
+      const form = trackerVersionSubmit.closest("[data-tracker-version-form]");
+      trackerSubmitTaskVersion(taskId, form);
+      return;
+    }
     const inspectorAction = event.target.closest("[data-inspector-action]");
     if (inspectorAction) {
       await executeInspectorAction(inspectorAction.dataset.inspectorAction);
@@ -11935,6 +12127,26 @@ function parseDataUrl(dataUrl, fallbackMimeType = "image/jpeg") {
 
 function isImageFile(file) {
   return Boolean(file?.type?.startsWith("image/") || /\.(png|jpe?g|webp|gif|heic|heif)$/i.test(file?.name || ""));
+}
+
+async function vfxMediaFromFile(file, uploadedBy = "") {
+  if (!file) return null;
+  let previewUrl = "";
+  if (isImageFile(file) && file.size <= 1024 * 1024 * 2) {
+    try {
+      previewUrl = String(await fileToDataUrl(file));
+    } catch (error) {
+      console.warn("版本图片预览读取失败。", error);
+    }
+  }
+  return normalizeVfxReviewMedia({
+    fileName: file.name,
+    fileType: file.type || "application/octet-stream",
+    fileSize: file.size,
+    uploadedBy: uploadedBy || "本地上传",
+    uploadedAt: new Date().toISOString(),
+    previewUrl,
+  });
 }
 
 function parseAiJsonResult(text) {
@@ -12949,7 +13161,7 @@ function setupProducerWorkspace() {
   workspace.addEventListener("click", (event) => {
     const target = event.target.closest("[data-workspace-view]");
     if (!target) return;
-    if (target.closest(".tracking-workflow-section") && !target.closest(".tracking-detail-action")) return;
+    if (target.closest(".tracking-workflow-section") && !target.closest(".tracking-detail-action") && !target.closest(".tracking-prd-status")) return;
     const view = target.dataset.workspaceView;
     document.querySelector(`.tab-button[data-view="${CSS.escape(view)}"]`)?.click();
     window.setTimeout(() => focusWorkspaceTarget(target.dataset.workspaceFocus), 120);
@@ -12987,6 +13199,12 @@ function setupProductionTrackerControls() {
     trackerUiState = { status: "all", assignee: "all", expandedShotCode: "", role: "all" };
     renderProductionTrackingConsole();
     setFormStatus("ShotGrid 筛选已重置", "good");
+  });
+  container.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-tracker-version-form]");
+    if (!form) return;
+    event.preventDefault();
+    trackerSubmitTaskVersion(form.dataset.trackerVersionForm, form);
   });
 }
 
