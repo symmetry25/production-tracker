@@ -688,6 +688,9 @@ let trackerUiState = {
   v2ResourceSelectedKey: "",
   v2ResourceSelectedWeek: 0,
   v2TaskDateEditor: "",
+  v2ProjectView: "grid",
+  v2ProjectSort: "recent",
+  v2ProjectQuery: "",
 };
 
 let displaySettings = {
@@ -7891,6 +7894,90 @@ function trackingV2ProjectCards(tracker) {
   return [...rows, ...demoCards].slice(0, 6);
 }
 
+function trackingV2VisibleProjectCards(cards) {
+  const query = String(trackerUiState.v2ProjectQuery || "").trim().toLowerCase();
+  const filtered = (Array.isArray(cards) ? cards : []).filter((card) => {
+    if (!query) return true;
+    return `${card.name || ""} ${card.code || ""} ${card.status || ""}`.toLowerCase().includes(query);
+  });
+  const sorted = filtered.slice().sort((a, b) => {
+    if (trackerUiState.v2ProjectSort === "name") return String(a.name || "").localeCompare(String(b.name || ""));
+    if (trackerUiState.v2ProjectSort === "progress") return (Number(b.progress) || 0) - (Number(a.progress) || 0);
+    if (trackerUiState.v2ProjectSort === "shots") return (Number(b.shotCount) || 0) - (Number(a.shotCount) || 0);
+    const toneWeight = { warning: 0, note: 1, good: 2 };
+    return (toneWeight[a.tone] ?? 1) - (toneWeight[b.tone] ?? 1) || String(a.name || "").localeCompare(String(b.name || ""));
+  });
+  return sorted;
+}
+
+function trackingV2ProjectStatusLabel(card) {
+  if (card.tone === "warning") return "Needs review";
+  if (card.tone === "note") return "Watch";
+  return "Active";
+}
+
+function trackingV2ProjectCode(card, index = 0) {
+  const raw = String(card?.code || "").trim();
+  if (raw && raw !== card?.name) return raw;
+  return pipelinePathSegment(card?.name || `project-${index + 1}`, `project-${index + 1}`).slice(0, 10).toUpperCase();
+}
+
+function trackingV2ProjectViewMarkup(cards) {
+  const view = trackerUiState.v2ProjectView || "grid";
+  if (cards.length === 0) return `<div class="v2-empty-mini">No matching projects</div>`;
+  if (view === "table") {
+    return `
+      <div class="v2-project-table">
+        <div class="v2-project-table-head"><span>Code</span><span>Project</span><span>Status</span><span>Shots</span><span>Assets</span><span>Progress</span></div>
+        ${cards
+          .map(
+            (card, index) => `
+              <button class="v2-project-row ${card.tone || "good"}" type="button" data-context-kind="tracker-project" data-context-title="${escapeHtml(card.name)}" data-context-meta="${escapeHtml(`${card.code} · ${card.shotCount} shots · ${card.assetCount} assets`)}">
+                <b>${escapeHtml(trackingV2ProjectCode(card, index))}</b>
+                <strong>${escapeHtml(card.name)}<small>${escapeHtml(card.template ? "Template / demo project" : "Current local project")}</small></strong>
+                <span>${escapeHtml(trackingV2ProjectStatusLabel(card))}</span>
+                <span>${card.shotCount || 0}</span>
+                <span>${card.assetCount || 0}</span>
+                <em><i style="width:${Math.round(Math.max(0.02, Math.min(card.progress || 0, 1)) * 100)}%"></i>${percentText(card.progress || 0)}</em>
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
+    `;
+  }
+  if (view === "list") {
+    return `
+      <div class="v2-project-list">
+        ${cards
+          .map(
+            (card, index) => `
+              <button class="v2-project-list-row ${card.tone || "good"}" type="button" data-context-kind="tracker-project" data-context-title="${escapeHtml(card.name)}" data-context-meta="${escapeHtml(`${trackingV2ProjectCode(card, index)} · ${card.shotCount} shots · ${card.assetCount} assets`)}">
+                <span class="v2-project-thumb">${card.template ? "Upload Thumbnail" : escapeHtml(trackingV2ProjectCode(card, index))}</span>
+                <strong>${escapeHtml(card.name)}<small>${escapeHtml(trackingV2ProjectCode(card, index))} · ${escapeHtml(trackingV2ProjectStatusLabel(card))}</small></strong>
+                <b>${card.shotCount || 0}<small>shots</small></b>
+                <b>${card.assetCount || 0}<small>assets</small></b>
+                <em>${percentText(card.progress || 0)}</em>
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
+    `;
+  }
+  return cards
+    .map(
+      (card, index) => `
+        <button class="v2-project-card ${card.tone || "good"}" type="button" data-context-kind="tracker-project" data-context-title="${escapeHtml(card.name)}" data-context-meta="${escapeHtml(`${trackingV2ProjectCode(card, index)} · ${card.shotCount} shots · ${card.assetCount} assets`)}">
+          <span class="v2-project-thumb">${card.template ? "Upload Thumbnail" : escapeHtml(trackingV2ProjectCode(card, index))}</span>
+          <strong>${escapeHtml(card.name)}</strong>
+          <small>${escapeHtml(trackingV2ProjectCode(card, index))} · ${card.shotCount || 0} shots · ${card.assetCount || 0} assets · ${percentText(card.progress || 0)}</small>
+        </button>
+      `,
+    )
+    .join("");
+}
+
 function trackingV2ShotRows(tracker) {
   return tracker.shotRows.map((shot, index) => {
     const code = trackingV2ShotCode(shot.code, index);
@@ -8022,6 +8109,9 @@ function resetTrackerUiState() {
     v2ResourceSelectedKey: "",
     v2ResourceSelectedWeek: 0,
     v2TaskDateEditor: "",
+    v2ProjectView: "grid",
+    v2ProjectSort: "recent",
+    v2ProjectQuery: "",
   };
 }
 
@@ -8780,29 +8870,32 @@ function renderTrackingV2Surface(tracker) {
   if (!surface || !toolbar || !projectGrid || !insights || !tabs || !shotTable || !assetTable || !taskGantt || !resourcePlanning || !mediaCenter || !phaseBoard || !workOrderBoard || !inboxBoard || !adminBoard) return;
   const data = trackingV2Data(tracker);
   const activePanel = surface.dataset.activePanel || "projects";
+  const visibleProjectCards = trackingV2VisibleProjectCards(data.projectCards);
+  const projectView = trackerUiState.v2ProjectView || "grid";
 
   toolbar.innerHTML = `
     <button type="button" data-workspace-view="overview" data-workspace-focus="trackingV2ProjectGrid">Add Project</button>
-    <button type="button">Sort</button>
-    <button type="button">Group</button>
-    <button type="button">Fields</button>
-    <button type="button">More</button>
-    <label><span>Search</span><input type="search" placeholder="shot / asset / vendor" /></label>
-    <button type="button">Filter</button>
-    <span>1 - ${data.projectCards.length} of ${Math.max(data.projectCards.length, 12)} Projects</span>
+    <div class="v2-view-toggle" aria-label="Project view">
+      <button type="button" class="${projectView === "grid" ? "active" : ""}" data-v2-project-view="grid" title="Grid view">▦</button>
+      <button type="button" class="${projectView === "table" ? "active" : ""}" data-v2-project-view="table" title="Table view">☷</button>
+      <button type="button" class="${projectView === "list" ? "active" : ""}" data-v2-project-view="list" title="List view">☰</button>
+    </div>
+    <label><span>Sort</span><select data-v2-project-sort>
+      <option value="recent" ${trackerUiState.v2ProjectSort === "recent" ? "selected" : ""}>Risk first</option>
+      <option value="name" ${trackerUiState.v2ProjectSort === "name" ? "selected" : ""}>Name</option>
+      <option value="progress" ${trackerUiState.v2ProjectSort === "progress" ? "selected" : ""}>Progress</option>
+      <option value="shots" ${trackerUiState.v2ProjectSort === "shots" ? "selected" : ""}>Shot count</option>
+    </select></label>
+    <button type="button" data-v2-project-action="group">Group</button>
+    <button type="button" data-v2-project-action="fields">Fields</button>
+    <button type="button" data-v2-project-action="more">More</button>
+    <label><span>Search</span><input type="search" data-v2-project-search placeholder="project / code / status" value="${escapeHtml(trackerUiState.v2ProjectQuery || "")}" /></label>
+    <button type="button" data-v2-project-action="filter">Filter</button>
+    <span>1 - ${visibleProjectCards.length} of ${Math.max(data.projectCards.length, 12)} Projects</span>
   `;
 
-  projectGrid.innerHTML = data.projectCards
-    .map(
-      (card, index) => `
-        <button class="v2-project-card ${card.tone || "good"}" type="button" data-context-kind="tracker-project" data-context-title="${escapeHtml(card.name)}" data-context-meta="${escapeHtml(`${card.code} · ${card.shotCount} shots · ${card.assetCount} assets`)}">
-          <span class="v2-project-thumb">${card.template ? "Upload Thumbnail" : escapeHtml(card.code || `P${index + 1}`)}</span>
-          <strong>${escapeHtml(card.name)}</strong>
-          <small>${escapeHtml(card.code || "PROJECT")} · ${card.shotCount || 0} shots · ${card.assetCount || 0} assets · ${percentText(card.progress || 0)}</small>
-        </button>
-      `,
-    )
-    .join("");
+  projectGrid.dataset.view = projectView;
+  projectGrid.innerHTML = trackingV2ProjectViewMarkup(visibleProjectCards);
 
   insights.innerHTML = data.insights
     .map(
@@ -14740,7 +14833,23 @@ function setupProductionTrackerControls() {
       trackerUiState.assignee = assigneeFilter.value || "all";
       trackerUiState.expandedShotCode = "";
       renderProductionTrackingConsole();
+      return;
     }
+    const v2ProjectSort = event.target.closest("[data-v2-project-sort]");
+    if (v2ProjectSort) {
+      trackerUiState.v2ProjectSort = v2ProjectSort.value || "recent";
+      const surface = document.querySelector("#trackingV2Surface");
+      if (surface) surface.dataset.activePanel = "projects";
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+    }
+  });
+  container.addEventListener("input", (event) => {
+    const v2ProjectSearch = event.target.closest("[data-v2-project-search]");
+    if (!v2ProjectSearch) return;
+    trackerUiState.v2ProjectQuery = v2ProjectSearch.value || "";
+    const surface = document.querySelector("#trackingV2Surface");
+    if (surface) surface.dataset.activePanel = "projects";
+    renderTrackingV2Surface(productionTrackerWorkflowData());
   });
   container.addEventListener("click", (event) => {
     const v2PanelButton = event.target.closest("[data-tracking-v2-panel]");
@@ -14750,6 +14859,21 @@ function setupProductionTrackerControls() {
         surface.dataset.activePanel = v2PanelButton.dataset.trackingV2Panel || "projects";
         renderTrackingV2Surface(productionTrackerWorkflowData());
       }
+      return;
+    }
+    const v2ProjectView = event.target.closest("[data-v2-project-view]");
+    if (v2ProjectView) {
+      trackerUiState.v2ProjectView = v2ProjectView.dataset.v2ProjectView || "grid";
+      const surface = document.querySelector("#trackingV2Surface");
+      if (surface) surface.dataset.activePanel = "projects";
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      setFormStatus(`项目视图：${trackerUiState.v2ProjectView}`, "good");
+      return;
+    }
+    const v2ProjectAction = event.target.closest("[data-v2-project-action]");
+    if (v2ProjectAction) {
+      const action = v2ProjectAction.dataset.v2ProjectAction || "filter";
+      setFormStatus(`Project ${action} 已准备，可继续接字段配置`, "good");
       return;
     }
     const v2ResourceChart = event.target.closest("[data-v2-resource-chart]");
