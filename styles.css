@@ -2175,11 +2175,32 @@ main {
   background: color-mix(in srgb, var(--red) 9%, transparent);
 }
 
+.v2-task-row.selected {
+  box-shadow: inset 3px 0 0 var(--blue);
+  background: color-mix(in srgb, var(--blue) 10%, var(--surface));
+}
+
 .v2-task-row strong,
 .v2-task-row span,
-.v2-task-row b {
+.v2-task-row b,
+.v2-date-chip {
   font-size: 10.5px;
   line-height: 1.2;
+}
+
+.v2-date-chip {
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--control);
+  border-radius: 4px;
+  font-weight: 900;
+  text-align: left;
+}
+
+.v2-date-chip:hover {
+  border-color: var(--blue);
 }
 
 .v2-task-row b {
@@ -2236,6 +2257,133 @@ main {
   background: var(--red);
 }
 
+.v2-task-workbench {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.65fr) minmax(360px, 1fr);
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 84%, var(--surface-strong));
+}
+
+.v2-date-editor,
+.v2-dependency-board,
+.v2-task-popover {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.v2-date-editor {
+  display: grid;
+  gap: 9px;
+  padding: 9px;
+}
+
+.v2-date-editor > div:first-child,
+.v2-dependency-board > div,
+.v2-task-popover > div:first-child {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.v2-date-editor span,
+.v2-dependency-board span,
+.v2-task-popover span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.v2-date-editor strong,
+.v2-dependency-board strong,
+.v2-task-popover strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-date-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.v2-date-grid button {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--control);
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.v2-date-grid button.selected {
+  border-color: color-mix(in srgb, var(--blue) 55%, var(--line));
+  color: #fff;
+  background: var(--blue);
+}
+
+.v2-date-editor small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.v2-dependency-board {
+  display: grid;
+}
+
+.v2-dependency-board > div {
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-raised);
+}
+
+.v2-dependency-board p {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 90px;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line);
+}
+
+.v2-dependency-board p:last-child {
+  border-bottom: 0;
+}
+
+.v2-dependency-board b,
+.v2-dependency-board em {
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.v2-dependency-board p.blocked b,
+.v2-dependency-board p.tight b {
+  color: var(--red);
+}
+
+.v2-dependency-board p.ok b {
+  color: var(--green);
+}
+
+.v2-dependency-board em {
+  color: var(--muted);
+  text-align: right;
+}
+
 .v2-capacity-chart {
   display: flex;
   height: 116px;
@@ -2277,6 +2425,12 @@ main {
   border-radius: 5px;
   font-size: 10px;
   font-weight: 900;
+}
+
+.v2-resource-toolbar button.active {
+  border-color: color-mix(in srgb, var(--blue) 52%, var(--line));
+  color: #fff;
+  background: var(--blue);
 }
 
 .v2-inspect-grid {
@@ -2360,6 +2514,8 @@ main {
   justify-items: center;
   gap: 5px;
   min-width: 34px;
+  border: 0;
+  background: transparent;
 }
 
 .v2-capacity-week span,
@@ -2390,8 +2546,102 @@ main {
   background: var(--red);
 }
 
+.v2-capacity-week.selected i {
+  outline: 2px solid color-mix(in srgb, var(--blue) 70%, transparent);
+  outline-offset: 3px;
+}
+
+.v2-workload-heatmap {
+  display: grid;
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.v2-heatmap-head,
+.v2-heatmap-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.68fr) repeat(6, minmax(92px, 1fr));
+  min-width: 720px;
+}
+
+.v2-heatmap-head {
+  background: var(--surface-strong);
+}
+
+.v2-heatmap-head span,
+.v2-heatmap-row strong,
+.v2-heatmap-row button {
+  min-width: 0;
+  padding: 7px 9px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-size: 10.5px;
+  font-weight: 950;
+}
+
+.v2-heatmap-head span {
+  color: var(--muted);
+  font-size: 9.5px;
+  text-transform: uppercase;
+}
+
+.v2-heatmap-row strong {
+  overflow: hidden;
+  color: var(--ink);
+  background: var(--surface);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-heatmap-row button {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
+.v2-heatmap-row button.over {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 14%, transparent);
+}
+
+.v2-heatmap-row button.none {
+  color: var(--muted);
+  background: var(--surface);
+}
+
+.v2-heatmap-row small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.v2-heatmap-legend {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 720px;
+  padding: 8px 10px;
+  color: var(--muted);
+  background: var(--surface-strong);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.v2-heatmap-legend i {
+  display: block;
+  width: 140px;
+  height: 8px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 48%, transparent), var(--surface), color-mix(in srgb, var(--red) 48%, transparent));
+  border-radius: 999px;
+}
+
 .v2-resource-grid {
   display: grid;
+  overflow-x: auto;
 }
 
 .v2-resource-head,
@@ -2424,7 +2674,8 @@ main {
 }
 
 .v2-resource-row strong,
-.v2-resource-row > span {
+.v2-resource-row > span,
+.v2-resource-row > button {
   min-width: 0;
   padding: 7px 9px;
   border-right: 1px solid var(--line);
@@ -2438,27 +2689,133 @@ main {
   white-space: nowrap;
 }
 
-.v2-resource-row > span {
+.v2-resource-row > span,
+.v2-resource-row > button {
   display: grid;
   gap: 2px;
   justify-items: end;
+  border-top: 0;
+  border-bottom: 0;
+  border-left: 0;
   color: var(--blue);
   background: color-mix(in srgb, var(--blue) 8%, transparent);
   font-weight: 950;
 }
 
-.v2-resource-row > span.over {
+.v2-resource-row > span.over,
+.v2-resource-row > button.over {
   color: var(--red);
   background: color-mix(in srgb, var(--red) 11%, transparent);
 }
 
-.v2-resource-row > span.none {
+.v2-resource-row > span.none,
+.v2-resource-row > button.none {
   color: var(--muted);
   background: var(--surface);
 }
 
+.v2-resource-row > button.selected {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--blue) 60%, transparent);
+}
+
+.v2-resource-row > button.exception {
+  background:
+    repeating-linear-gradient(135deg, color-mix(in srgb, var(--amber) 20%, transparent) 0 5px, transparent 5px 10px),
+    var(--surface);
+}
+
 .v2-resource-row small {
   font-size: 9px;
+}
+
+.v2-task-popover {
+  display: grid;
+  gap: 0;
+  margin: 10px;
+}
+
+.v2-task-popover > div:first-child {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-raised);
+}
+
+.v2-task-popover small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.v2-mini-gantt {
+  display: grid;
+  min-width: 0;
+  padding: 8px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 calc(100% / 7 - 1px), color-mix(in srgb, var(--line) 66%, transparent) calc(100% / 7 - 1px) calc(100% / 7)),
+    var(--surface);
+}
+
+.v2-mini-gantt button {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(130px, 0.48fr) minmax(180px, 1fr) 110px;
+  gap: 8px;
+  align-items: center;
+  min-height: 30px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.v2-mini-gantt button:last-child {
+  border-bottom: 0;
+}
+
+.v2-mini-gantt span,
+.v2-mini-gantt em {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-mini-gantt i {
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  grid-column: 2;
+  background: var(--green);
+  border-radius: 4px;
+}
+
+.v2-mini-gantt i.waiting,
+.v2-mini-gantt i.ready {
+  background: color-mix(in srgb, var(--line-strong) 72%, var(--surface));
+}
+
+.v2-mini-gantt i.pending {
+  background: var(--amber);
+}
+
+.v2-mini-gantt i.hold,
+.v2-mini-gantt i.changes,
+.v2-mini-gantt i.omit {
+  background: var(--red);
+}
+
+.v2-mini-gantt p {
+  margin: 0;
+  padding: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
 }
 
 .v2-filmstrip {

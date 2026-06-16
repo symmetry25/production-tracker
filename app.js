@@ -667,11 +667,18 @@ let projectLibrary = [];
 let selectedScheduleTaskId = "";
 let scheduleDragState = null;
 let selectedInspectorTarget = null;
+let trackingV2TaskEdits = {};
 let trackerUiState = {
   status: "all",
   assignee: "all",
   expandedShotCode: "",
   role: "all",
+  v2ResourceChart: "area",
+  v2InspectGroup: "department",
+  v2InspectWeek: 0,
+  v2ResourceSelectedKey: "",
+  v2ResourceSelectedWeek: 0,
+  v2TaskDateEditor: "",
 };
 
 let displaySettings = {
@@ -7934,8 +7941,11 @@ function trackingV2TaskRows(tracker) {
       const estimatedCost = sourceAmount > 0 ? Math.round(sourceAmount / Math.max(tracker.summary.totalTasks || 1, 1)) : Math.round(bid * dayCost);
       const actualCost = Math.round(logged * dayCost);
       const costOverUnder = actualCost - estimatedCost;
-      const start = clampDay(Math.max(1, task.dueDay - bid + 1));
-      const end = clampDay(task.dueDay);
+      const editedDates = trackingV2TaskEdits[task.id] || {};
+      const defaultStart = clampDay(Math.max(1, task.dueDay - bid + 1));
+      const defaultEnd = clampDay(task.dueDay);
+      const start = clampDay(editedDates.start || defaultStart);
+      const end = clampDay(Math.max(start, editedDates.end || defaultEnd));
       return {
         ...task,
         status: trackingV2TaskStatus(task.status),
@@ -7958,12 +7968,120 @@ function trackingV2TaskRows(tracker) {
     });
 }
 
-function trackingV2ResourceData() {
+function trackingV2TaskDependencies(tasks) {
+  return tasks.slice(1, 8).map((task, index) => {
+    const predecessor = tasks[index];
+    const lag = Math.max(0, task.start - predecessor.end - 1);
+    const risk = task.status === "ON_HOLD" || predecessor.status === "ON_HOLD" ? "blocked" : lag === 0 ? "tight" : "ok";
+    return {
+      id: `dep-${predecessor.id}-${task.id}`,
+      predecessor,
+      successor: task,
+      type: index % 3 === 0 ? "FS" : index % 3 === 1 ? "SS" : "FF",
+      lag,
+      risk,
+    };
+  });
+}
+
+function trackingV2SelectedTask(tasks) {
+  if (trackerUiState.v2TaskDateEditor) {
+    return tasks.find((task) => task.id === trackerUiState.v2TaskDateEditor) || tasks[0] || null;
+  }
+  return tasks.find((task) => task.status === "ON_HOLD" || task.overUnder > 0) || tasks[0] || null;
+}
+
+function trackingV2DateOptions(selectedTask) {
+  const totalDays = Math.max(project.plannedDays || 18, 1);
+  const anchorStart = selectedTask?.start || Math.max(1, project.currentDay || 1);
+  return Array.from({ length: Math.min(totalDays, 12) }, (_, index) => {
+    const day = clampDay(anchorStart - 2 + index);
+    return day;
+  }).filter((day, index, rows) => rows.indexOf(day) === index);
+}
+
+function resetTrackerUiState() {
+  trackerUiState = {
+    status: "all",
+    assignee: "all",
+    expandedShotCode: "",
+    role: "all",
+    v2ResourceChart: "area",
+    v2InspectGroup: "department",
+    v2InspectWeek: 0,
+    v2ResourceSelectedKey: "",
+    v2ResourceSelectedWeek: 0,
+    v2TaskDateEditor: "",
+  };
+}
+
+function trackingV2ResourceTaskRows(tracker, rowId, week) {
+  const weekStart = week.index * 7 + 1;
+  const weekEnd = week.index * 7 + 7;
+  const rowKey = String(rowId || "");
+  const isDepartmentRow = rowKey.startsWith("dept:");
+  const departmentId = rowKey.replace(/^dept:/u, "");
+  const related = tracker.allTasks
+    .filter((task) => (!isDepartmentRow || task.department === departmentId) && task.dueDay >= weekStart && task.dueDay <= weekEnd)
+    .slice()
+    .sort((a, b) => a.dueDay - b.dueDay || a.sort - b.sort)
+    .slice(0, 5);
+  const sourceRows =
+    related.length > 0
+      ? related
+      : [
+          ...productionScheduleRows()
+            .filter((task) => task.start <= weekEnd && task.end >= weekStart && (!isDepartmentRow || task.id === `dept-${departmentId}` || task.title === getDept(departmentId).name))
+            .map((task) => ({
+              id: `resource-schedule-${task.id}-${week.index}`,
+              shotCode: task.title,
+              name: "Schedule",
+              label: task.status || "排期",
+              assignee: task.owner,
+              department: departmentId,
+              status: task.risk === "over" ? "ON_HOLD" : task.progressRate >= 1 ? "APPROVED" : "IN_PROGRESS",
+              dueDay: Math.min(weekEnd, task.end),
+              startDay: Math.max(weekStart, task.start),
+            })),
+          ...callSheets
+            .filter((sheet) => sheet.day >= weekStart && sheet.day <= weekEnd && (!isDepartmentRow || sheet.departments.includes(departmentId)))
+            .slice(0, 3)
+            .map((sheet) => ({
+              id: `resource-callsheet-${sheet.code}-${departmentId}`,
+              shotCode: sheet.code,
+              name: "Call Sheet",
+              label: "通告",
+              assignee: sheet.callTime || "Call",
+              department: departmentId,
+              status: sheet.day < (project.currentDay || 1) ? "APPROVED" : sheet.day === (project.currentDay || 1) ? "IN_PROGRESS" : "READY_TO_START",
+              dueDay: sheet.day,
+              startDay: sheet.day,
+            })),
+        ].slice(0, 5);
+  return sourceRows.map((task, index) => {
+    const bid = Math.max(1, Math.round((task.dueDay % 4) + 1));
+    const start = clampDay(Math.max(weekStart, task.startDay || task.dueDay - bid + 1));
+    const end = clampDay(Math.min(weekEnd, task.dueDay));
+    return {
+      ...task,
+      start,
+      end,
+      lane: index,
+      left: `${Math.max(0, ((start - weekStart) / 7) * 100)}%`,
+      width: `${Math.max(12, ((end - start + 1) / 7) * 100)}%`,
+      status: trackingV2TaskStatus(task.status),
+    };
+  });
+}
+
+function trackingV2ResourceData(tracker = productionTrackerWorkflowData()) {
+  const planningHorizon = Math.max(project.plannedDays || 42, 42);
   const weeks = Array.from({ length: 6 }, (_, index) => {
     const start = index * 7 + 1;
-    const end = Math.min(project.plannedDays || 42, start + 6);
+    const end = Math.min(planningHorizon, start + 6);
     return { index, label: `W${index + 1}`, range: `D${start}-${end}` };
   });
+  const exceptions = trackingV2CalendarExceptionRows();
   const departmentsForRows = activeBudgetDepartments().slice(0, 9);
   const rows = departmentsForRows.map((department, departmentIndex) => {
     const members = people.filter((person) => person.dept === department.id);
@@ -7973,9 +8091,17 @@ function trackingV2ResourceData() {
       const schedulePressure = productionScheduleRows().filter((task) => task.title === department.name && task.start <= week.index * 7 + 7 && task.end >= week.index * 7 + 1).length;
       const workload = Math.max(0, Math.round(sheetCount * 1.7 + schedulePressure * 2.4 + ((departmentIndex + week.index) % 4) - 1));
       const delta = workload - capacity;
-      return { ...week, capacity, workload, delta };
+      const exception = exceptions.find((item) => item.day >= week.index * 7 + 1 && item.day <= week.index * 7 + 7);
+      return {
+        ...week,
+        capacity,
+        workload,
+        delta,
+        exception,
+        tasks: trackingV2ResourceTaskRows(tracker, `dept:${department.id}`, week),
+      };
     });
-    return { department, members, capacity, cells };
+    return { id: `dept:${department.id}`, label: department.name, department, members, capacity, cells };
   });
   const totals = weeks.map((week) => {
     const capacity = rows.reduce((sum, row) => sum + row.capacity, 0);
@@ -7994,11 +8120,15 @@ function trackingV2ResourceData() {
       cells: weeks.map((week) => {
         const workload = Math.max(0, Math.round(base + ((week.index + cardIndex) % 4) - 1));
         const capacity = Math.max(3, base + 2);
-        return { ...week, workload, capacity, delta: workload - capacity };
+        return { ...week, workload, capacity, delta: workload - capacity, tasks: trackingV2ResourceTaskRows(tracker, card.id, week) };
       }),
     };
   });
-  return { weeks, rows, totals, unassigned, projectRows };
+  const selectedKey = trackerUiState.v2ResourceSelectedKey || rows[0]?.id || "";
+  const selectedWeek = Math.max(0, Math.min(weeks.length - 1, Number(trackerUiState.v2ResourceSelectedWeek) || 0));
+  const selectedRow = [...rows, ...projectRows].find((row) => row.id === selectedKey) || rows[0] || projectRows[0] || null;
+  const selectedCell = selectedRow?.cells?.[selectedWeek] || null;
+  return { weeks, rows, totals, unassigned, projectRows, selectedKey, selectedWeek, selectedRow, selectedCell };
 }
 
 function trackingV2PhaseRows(tracker) {
@@ -8380,7 +8510,7 @@ function trackingV2Data(tracker) {
     shots: trackingV2ShotRows(tracker),
     assets: trackingV2AssetRows(tracker),
     tasks: trackingV2TaskRows(tracker),
-    resource: trackingV2ResourceData(),
+    resource: trackingV2ResourceData(tracker),
     versions: vfxReviewRows(),
     insights: trackingV2InsightRows(tracker),
     phases: trackingV2PhaseRows(tracker),
@@ -8540,6 +8670,9 @@ function renderTrackingV2Surface(tracker) {
     </div>
   `;
 
+  const taskDependencies = trackingV2TaskDependencies(data.tasks);
+  const editableTask = trackingV2SelectedTask(data.tasks);
+  const dateOptions = trackingV2DateOptions(editableTask);
   taskGantt.innerHTML = `
     <div class="v2-panel-head"><span>Task Table + Gantt</span><strong>Gantt Display</strong></div>
     <div class="v2-task-gantt">
@@ -8550,15 +8683,15 @@ function renderTrackingV2Surface(tracker) {
         ${data.tasks
           .map(
             (task) => `
-              <button class="v2-task-row ${task.overUnder > 0 ? "over" : ""}" type="button" data-context-kind="tracker-task" data-context-title="${escapeHtml(`${task.shotCode} · ${task.name}`)}" data-context-meta="${escapeHtml(`${trackingV2StatusLabel(task.status)} · ${task.assignee}`)}" data-tracker-task-id="${escapeHtml(task.id)}">
+              <div class="v2-task-row ${task.overUnder > 0 ? "over" : ""}${editableTask?.id === task.id ? " selected" : ""}" data-context-kind="tracker-task" data-context-title="${escapeHtml(`${task.shotCode} · ${task.name}`)}" data-context-meta="${escapeHtml(`${trackingV2StatusLabel(task.status)} · ${task.assignee}`)}" data-tracker-task-id="${escapeHtml(task.id)}">
                 <strong>${escapeHtml(task.shotCode)} · ${escapeHtml(task.label)}</strong>
                 <span>${trackingV2StatusDot(task.status)}${escapeHtml(task.assignee)}</span>
                 <span>${escapeHtml(task.reviewer)}</span>
-                <em>${task.startDate} → ${task.dueDate}</em>
+                <button class="v2-date-chip" type="button" data-v2-date-editor="${escapeHtml(task.id)}">${task.startDate} → ${task.dueDate}</button>
                 <em>${task.bid}d</em>
                 <em>${formatProgressNumber(task.logged)}d · ${percentText(task.loggedPct)}</em>
                 <b>${task.costOverUnder > 0 ? "+" : ""}${money.format(task.costOverUnder)}</b>
-              </button>
+              </div>
             `,
           )
           .join("")}
@@ -8575,48 +8708,100 @@ function renderTrackingV2Surface(tracker) {
           .join("")}
       </div>
     </div>
+    <div class="v2-task-workbench">
+      <section class="v2-date-editor">
+        <div>
+          <span>Inline Date Picker</span>
+          <strong>${escapeHtml(editableTask ? `${editableTask.shotCode} · ${editableTask.label}` : "No task")}</strong>
+        </div>
+        <div class="v2-date-grid">
+          ${dateOptions
+            .map((day) => {
+              const selected = editableTask && day >= editableTask.start && day <= editableTask.end;
+              return `<button type="button" class="${selected ? "selected" : ""}" data-v2-date-set="${escapeHtml(editableTask?.id || "")}" data-v2-day="${day}">D${day}</button>`;
+            })
+            .join("")}
+        </div>
+        <small>${editableTask ? `${escapeHtml(editableTask.assignee)} · ${trackingV2StatusLabel(editableTask.status)} · ${editableTask.bid} bid days` : "Select a task row to edit dates."}</small>
+      </section>
+      <section class="v2-dependency-board">
+        <div><span>Task Dependencies</span><strong>${taskDependencies.length} links</strong></div>
+        ${taskDependencies
+          .map(
+            (link) => `
+              <p class="${escapeHtml(link.risk)}">
+                <b>${escapeHtml(link.type)}</b>
+                <span>${escapeHtml(link.predecessor.label)} → ${escapeHtml(link.successor.label)}</span>
+                <em>${link.lag > 0 ? `+${link.lag}d lag` : "same-day handoff"}</em>
+              </p>
+            `,
+          )
+          .join("")}
+      </section>
+    </div>
   `;
 
+  const inspectRows = trackerUiState.v2InspectGroup === "project" ? data.resource.projectRows : data.resource.rows;
+  const inspectWeek = data.resource.weeks[Math.max(0, Math.min(data.resource.weeks.length - 1, Number(trackerUiState.v2InspectWeek) || 0))] || data.resource.weeks[0];
+  const heatmapRows = trackerUiState.v2InspectGroup === "project" ? data.resource.projectRows : data.resource.rows;
   resourcePlanning.innerHTML = `
     <div class="v2-panel-head"><span>Resource Planning</span><strong>Weekly · Person Days</strong></div>
     <div class="v2-resource-toolbar">
       <span>Studio / All Departments</span>
       <button type="button">Weekly</button>
-      <button type="button">Line Chart</button>
+      <button type="button" class="${trackerUiState.v2ResourceChart === "area" ? "active" : ""}" data-v2-resource-chart="area">Area Chart</button>
+      <button type="button" class="${trackerUiState.v2ResourceChart === "heatmap" ? "active" : ""}" data-v2-resource-chart="heatmap">Workload Heatmap</button>
+      <button type="button" data-v2-inspect-group="${trackerUiState.v2InspectGroup === "project" ? "department" : "project"}">Inspect by ${trackerUiState.v2InspectGroup === "project" ? "Department" : "Project"}</button>
       <button type="button">Export</button>
     </div>
-    <div class="v2-capacity-chart">
-      ${data.resource.totals
-        .map(
-          (week) => `
-            <div class="v2-capacity-week ${week.delta > 0 ? "over" : "under"}">
-              <span>${escapeHtml(week.label)}</span>
-              <i style="height:${Math.max(8, Math.min(88, (week.workload / Math.max(week.capacity, 1)) * 64))}px"></i>
-              <b>${week.delta > 0 ? `+${week.delta}` : week.delta}</b>
-            </div>
-          `,
-        )
-        .join("")}
-    </div>
+    ${
+      trackerUiState.v2ResourceChart === "heatmap"
+        ? `<div class="v2-workload-heatmap">
+            <div class="v2-heatmap-head"><span>${trackerUiState.v2InspectGroup === "project" ? "Project" : "Department"}</span>${data.resource.weeks.map((week) => `<span>${escapeHtml(week.range)}</span>`).join("")}</div>
+            ${heatmapRows
+              .map(
+                (row) => `
+                  <div class="v2-heatmap-row">
+                    <strong>${escapeHtml(row.label || row.name)}</strong>
+                    ${row.cells.map((cell) => `<button type="button" class="${cell.delta > 0 ? "over" : cell.workload === 0 ? "none" : "under"}" data-v2-resource-cell="${escapeHtml(row.id)}" data-v2-week="${cell.index}" title="${escapeHtml(`${cell.range} · ${cell.workload}/${cell.capacity} days`)}">${cell.delta > 0 ? "+" : ""}${cell.delta}<small>${cell.workload}/${cell.capacity}</small></button>`).join("")}
+                  </div>
+                `,
+              )
+              .join("")}
+            <div class="v2-heatmap-legend"><span>Under Utilized</span><i></i><b>Over Utilized</b><em>Not Utilized</em></div>
+          </div>`
+        : `<div class="v2-capacity-chart">
+            ${data.resource.totals
+              .map(
+                (week) => `
+                  <button type="button" class="v2-capacity-week ${week.delta > 0 ? "over" : "under"}${week.index === data.resource.selectedWeek ? " selected" : ""}" data-v2-inspect-week="${week.index}">
+                    <span>${escapeHtml(week.label)}</span>
+                    <i style="height:${Math.max(8, Math.min(88, (week.workload / Math.max(week.capacity, 1)) * 64))}px"></i>
+                    <b>${week.delta > 0 ? `+${week.delta}` : week.delta}</b>
+                  </button>
+                `,
+              )
+              .join("")}
+          </div>`
+    }
     <div class="v2-inspect-grid">
       <div>
-        <span>Inspect Chart Data · Department</span>
-        ${data.resource.rows
+        <span>Inspect Chart Data · ${trackerUiState.v2InspectGroup === "project" ? "Project" : "Department"} · ${escapeHtml(inspectWeek?.range || "")}</span>
+        ${inspectRows
           .slice(0, 5)
           .map((row) => {
-            const week = row.cells[0];
-            return `<p><strong>${escapeHtml(row.department.name)}</strong><em>${week.capacity}</em><em>${week.workload}</em><b class="${week.delta > 0 ? "over" : "under"}">${week.delta > 0 ? "+" : ""}${week.delta}</b></p>`;
+            const week = row.cells[inspectWeek?.index || 0];
+            return `<p><strong>${escapeHtml(row.label || row.name)}</strong><em>${week.capacity}</em><em>${week.workload}</em><b class="${week.delta > 0 ? "over" : "under"}">${week.delta > 0 ? "+" : ""}${week.delta}</b></p>`;
           })
           .join("")}
       </div>
       <div>
-        <span>Inspect Chart Data · Project</span>
-        ${data.resource.projectRows
+        <span>${data.resource.selectedRow ? `Tasks · ${escapeHtml(data.resource.selectedRow.label || data.resource.selectedRow.name)}` : "Task Popover"}</span>
+        ${(data.resource.selectedCell?.tasks || [])
           .map((row) => {
-            const week = row.cells[0];
-            return `<p><strong>${escapeHtml(row.name)}</strong><em>${week.capacity}</em><em>${week.workload}</em><b class="${week.delta > 0 ? "over" : "under"}">${week.delta > 0 ? "+" : ""}${week.delta}</b></p>`;
+            return `<p><strong>${escapeHtml(`${row.shotCode} · ${row.label}`)}</strong><em>D${row.start}</em><em>D${row.end}</em><b class="${row.status === "ON_HOLD" ? "over" : "under"}">${escapeHtml(row.assignee)}</b></p>`;
           })
-          .join("")}
+          .join("") || `<p><strong>No assigned tasks</strong><em>0</em><em>0</em><b class="under">idle</b></p>`}
       </div>
     </div>
     <div class="v2-resource-grid">
@@ -8634,11 +8819,31 @@ function renderTrackingV2Surface(tracker) {
           (row) => `
             <div class="v2-resource-row">
               <strong>${escapeHtml(row.department.name)}</strong>
-              ${row.cells.map((cell) => `<span class="${cell.delta > 0 ? "over" : cell.workload === 0 ? "none" : "under"}">${cell.delta > 0 ? `+${cell.delta}` : cell.delta}<small>${cell.workload}/${cell.capacity}</small></span>`).join("")}
+              ${row.cells.map((cell) => `<button type="button" class="${cell.delta > 0 ? "over" : cell.workload === 0 ? "none" : "under"}${row.id === data.resource.selectedKey && cell.index === data.resource.selectedWeek ? " selected" : ""}${cell.exception ? " exception" : ""}" data-v2-resource-cell="${escapeHtml(row.id)}" data-v2-week="${cell.index}">${cell.delta > 0 ? `+${cell.delta}` : cell.delta}<small>${cell.exception ? `${cell.exception.label}` : `${cell.workload}/${cell.capacity}`}</small></button>`).join("")}
             </div>
           `,
         )
         .join("")}
+    </div>
+    <div class="v2-task-popover">
+      <div>
+        <span>Task Popover · ${escapeHtml(data.resource.weeks[data.resource.selectedWeek]?.range || "")}</span>
+        <strong>${escapeHtml(data.resource.selectedRow?.label || data.resource.selectedRow?.name || "No row selected")}</strong>
+        <small>${data.resource.selectedCell ? `${data.resource.selectedCell.workload} of ${data.resource.selectedCell.capacity} Days Assigned` : "Click a resource cell"}</small>
+      </div>
+      <div class="v2-mini-gantt">
+        ${(data.resource.selectedCell?.tasks || [])
+          .map(
+            (task) => `
+              <button type="button" data-context-kind="tracker-task" data-context-title="${escapeHtml(`${task.shotCode} · ${task.name}`)}" data-context-meta="${escapeHtml(`${trackingV2StatusLabel(task.status)} · ${task.assignee}`)}" data-tracker-task-id="${escapeHtml(task.id)}">
+                <span>${escapeHtml(`${task.shotCode} · ${task.label}`)}</span>
+                <i class="${trackingV2StatusClass(task.status)}" style="left:${task.left}; width:${task.width}"></i>
+                <em>${escapeHtml(task.assignee)}</em>
+              </button>
+            `,
+          )
+          .join("") || `<p>No tasks in this week.</p>`}
+      </div>
     </div>
   `;
 
@@ -14207,6 +14412,66 @@ function setupProductionTrackerControls() {
       }
       return;
     }
+    const v2ResourceChart = event.target.closest("[data-v2-resource-chart]");
+    if (v2ResourceChart) {
+      trackerUiState.v2ResourceChart = v2ResourceChart.dataset.v2ResourceChart || "area";
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      setFormStatus(`资源规划视图：${trackerUiState.v2ResourceChart === "heatmap" ? "Workload Heatmap" : "Area Chart"}`, "good");
+      return;
+    }
+    const v2InspectGroup = event.target.closest("[data-v2-inspect-group]");
+    if (v2InspectGroup) {
+      trackerUiState.v2InspectGroup = v2InspectGroup.dataset.v2InspectGroup === "project" ? "project" : "department";
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      setFormStatus(`Inspect Chart Data：${trackerUiState.v2InspectGroup === "project" ? "Project" : "Department"}`, "good");
+      return;
+    }
+    const v2InspectWeek = event.target.closest("[data-v2-inspect-week]");
+    if (v2InspectWeek) {
+      trackerUiState.v2InspectWeek = Number(v2InspectWeek.dataset.v2InspectWeek) || 0;
+      trackerUiState.v2ResourceSelectedWeek = trackerUiState.v2InspectWeek;
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      return;
+    }
+    const v2ResourceCell = event.target.closest("[data-v2-resource-cell]");
+    if (v2ResourceCell) {
+      trackerUiState.v2ResourceSelectedKey = v2ResourceCell.dataset.v2ResourceCell || "";
+      trackerUiState.v2ResourceSelectedWeek = Number(v2ResourceCell.dataset.v2Week) || 0;
+      trackerUiState.v2InspectWeek = trackerUiState.v2ResourceSelectedWeek;
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      setFormStatus("资源任务浮层已更新", "good");
+      return;
+    }
+    const v2DateEditor = event.target.closest("[data-v2-date-editor]");
+    if (v2DateEditor) {
+      trackerUiState.v2TaskDateEditor = v2DateEditor.dataset.v2DateEditor || "";
+      selectedInspectorTarget = {
+        kind: "tracker-task",
+        trackerTaskId: trackerUiState.v2TaskDateEditor,
+        title: v2DateEditor.closest("[data-context-title]")?.dataset.contextTitle || "任务",
+        meta: v2DateEditor.closest("[data-context-meta]")?.dataset.contextMeta || "日期编辑",
+      };
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      renderTrackerTaskDetailPanel();
+      return;
+    }
+    const v2DateSet = event.target.closest("[data-v2-date-set]");
+    if (v2DateSet) {
+      const taskId = v2DateSet.dataset.v2DateSet || "";
+      const day = clampDay(v2DateSet.dataset.v2Day);
+      const current = trackingV2TaskEdits[taskId] || {};
+      const tracker = productionTrackerWorkflowData();
+      const task = trackingV2TaskRows(tracker).find((row) => row.id === taskId);
+      const bid = task?.bid || 2;
+      const currentStart = current.start || task?.start || day;
+      const nextStart = day <= currentStart ? day : currentStart;
+      const nextEnd = day > currentStart ? day : clampDay(day + bid - 1);
+      trackingV2TaskEdits[taskId] = { start: nextStart, end: Math.max(nextStart, nextEnd) };
+      trackerUiState.v2TaskDateEditor = taskId;
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      setFormStatus(`任务日期已调整：D${nextStart} - D${Math.max(nextStart, nextEnd)}`, "good");
+      return;
+    }
     const roleFilter = event.target.closest("[data-tracker-role-filter]");
     if (roleFilter) {
       trackerUiState.role = roleFilter.dataset.trackerRoleFilter || "all";
@@ -14216,7 +14481,7 @@ function setupProductionTrackerControls() {
     }
     const reset = event.target.closest("[data-tracker-filter-reset]");
     if (!reset) return;
-    trackerUiState = { status: "all", assignee: "all", expandedShotCode: "", role: "all" };
+    resetTrackerUiState();
     renderProductionTrackingConsole();
     setFormStatus("ShotGrid 筛选已重置", "good");
   });
