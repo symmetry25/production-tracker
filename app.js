@@ -7975,6 +7975,225 @@ function trackingV2ResourceData() {
   return { weeks, rows, totals };
 }
 
+const trackingV2StatusColors = {
+  WAITING_TO_START: "#9ba39e",
+  READY_TO_START: "#378ADD",
+  IN_PROGRESS: "#639922",
+  PENDING_REVIEW: "#EF9F27",
+  FINAL: "#1d8d70",
+  ON_HOLD: "#7F77DD",
+  OMIT: "#E24B4A",
+};
+
+const trackingV2StatusOrder = ["WAITING_TO_START", "READY_TO_START", "IN_PROGRESS", "PENDING_REVIEW", "FINAL", "ON_HOLD", "OMIT"];
+
+function trackingV2CountBy(rows, getKey) {
+  return rows.reduce((result, row) => {
+    const key = getKey(row) || "Other";
+    result[key] = (result[key] || 0) + 1;
+    return result;
+  }, {});
+}
+
+function trackingV2StatusCounts(rows, getStatus = (row) => row.status) {
+  return rows.reduce((result, row) => {
+    const status = trackingV2TaskStatus(getStatus(row));
+    result[status] = (result[status] || 0) + 1;
+    return result;
+  }, {});
+}
+
+function trackingV2StackMarkup(counts) {
+  const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+  if (total <= 0) return `<div class="v2-empty-mini">No data</div>`;
+  return `
+    <div class="v2-stack-bar" aria-label="Status stacked bar">
+      ${trackingV2StatusOrder
+        .filter((status) => counts[status] > 0)
+        .map((status) => `<i class="${trackingV2StatusClass(status)}" style="width:${Math.max(4, (counts[status] / total) * 100)}%" title="${escapeHtml(`${trackingV2StatusLabel(status)} ${counts[status]}`)}"></i>`)
+        .join("")}
+    </div>
+    <div class="v2-mini-legend">
+      ${trackingV2StatusOrder
+        .filter((status) => counts[status] > 0)
+        .map((status) => `<span>${trackingV2StatusDot(status)}${escapeHtml(trackingV2StatusLabel(status))} ${counts[status]}</span>`)
+        .join("")}
+    </div>
+  `;
+}
+
+function trackingV2DonutMarkup(counts, centerLabel = "") {
+  const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+  if (total <= 0) return `<div class="v2-empty-mini">No data</div>`;
+  let cursor = 0;
+  const segments = trackingV2StatusOrder
+    .filter((status) => counts[status] > 0)
+    .map((status) => {
+      const start = cursor;
+      const degrees = (counts[status] / total) * 360;
+      cursor += degrees;
+      return `${trackingV2StatusColors[status] || "#9ba39e"} ${start.toFixed(1)}deg ${cursor.toFixed(1)}deg`;
+    });
+  return `
+    <div class="v2-donut-wrap">
+      <div class="v2-donut" style="background: conic-gradient(${segments.join(", ")})"><span>${escapeHtml(centerLabel || String(total))}</span></div>
+      <div class="v2-donut-legend">
+        ${trackingV2StatusOrder
+          .filter((status) => counts[status] > 0)
+          .map((status) => `<span>${trackingV2StatusDot(status)}${escapeHtml(trackingV2StatusLabel(status))} ${counts[status]}</span>`)
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
+function trackingV2ProgressRowsMarkup(rows, options = {}) {
+  const maxValue = Math.max(1, ...rows.map((row) => Number(row.value) || 0));
+  return `
+    <div class="v2-progress-list">
+      ${rows
+        .map((row) => {
+          const rate = row.rate ?? ((Number(row.value) || 0) / maxValue);
+          return `
+            <span>
+              <em>${escapeHtml(row.label)}</em>
+              <i><b style="width:${Math.max(2, Math.min(rate, 1) * 100)}%"></b></i>
+              <strong>${escapeHtml(row.valueText || String(row.value ?? ""))}</strong>
+            </span>
+          `;
+        })
+        .join("") || `<div class="v2-empty-mini">${escapeHtml(options.empty || "No rows")}</div>`}
+    </div>
+  `;
+}
+
+function trackingV2SparklineMarkup(values) {
+  const clean = values.map((value) => Number(value) || 0);
+  const maxValue = Math.max(1, ...clean);
+  const width = 148;
+  const height = 48;
+  const points = clean
+    .map((value, index) => {
+      const x = clean.length <= 1 ? width / 2 : (index / (clean.length - 1)) * width;
+      const y = height - (value / maxValue) * (height - 8) - 4;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return `
+    <svg class="v2-sparkline" viewBox="0 0 ${width} ${height}" role="img" aria-label="Velocity trend">
+      <polyline points="${points}" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
+      ${clean
+        .map((value, index) => {
+          const x = clean.length <= 1 ? width / 2 : (index / (clean.length - 1)) * width;
+          const y = height - (value / maxValue) * (height - 8) - 4;
+          return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.2"></circle>`;
+        })
+        .join("")}
+    </svg>
+    <div class="v2-spark-labels">${clean.map((value, index) => `<span>S${index + 1}<b>${value}</b></span>`).join("")}</div>
+  `;
+}
+
+function trackingV2InsightBody(item, data, tracker) {
+  if (item.kind === "hero") {
+    const rate = Math.max(0, Math.min((project.currentDay || 1) / Math.max(project.plannedDays || 1, 1), 1));
+    return `
+      <div class="v2-hero-mini">
+        <span>${escapeHtml((project.title || "PROJECT").slice(0, 8))}</span>
+        <i><b style="width:${Math.round(rate * 100)}%"></b></i>
+        <small>D${project.currentDay || 1}/${project.plannedDays || 1} · ${escapeHtml(project.title || "当前项目")}</small>
+      </div>
+    `;
+  }
+  if (item.kind === "assets") {
+    const rows = Object.entries(trackingV2CountBy(data.assets, (asset) => asset.typeLabel))
+      .map(([label, value]) => ({ label, value, valueText: value }))
+      .slice(0, 4);
+    return `${trackingV2ProgressRowsMarkup(rows)}${trackingV2StackMarkup(trackingV2StatusCounts(data.assets))}`;
+  }
+  if (item.kind === "shots" || item.kind === "shot-status") {
+    return trackingV2DonutMarkup(trackingV2StatusCounts(data.shots), `${data.shots.length} shots`);
+  }
+  if (item.kind === "tasks") {
+    const rows = activeBudgetDepartments()
+      .map((department) => {
+        const tasks = tracker.allTasks.filter((task) => task.department === department.id);
+        return {
+          label: department.name,
+          value: tasks.length,
+          rate: tasks.length / Math.max(tracker.summary.totalTasks || 1, 1),
+          valueText: `${tasks.filter((task) => trackingV2TaskStatus(task.status) === "FINAL").length}/${tasks.length}`,
+        };
+      })
+      .filter((row) => row.value > 0)
+      .slice(0, 5);
+    return `${trackingV2ProgressRowsMarkup(rows)}${trackingV2StackMarkup(trackingV2StatusCounts(tracker.allTasks))}`;
+  }
+  if (item.kind === "velocity") {
+    return trackingV2SparklineMarkup(item.series || []);
+  }
+  if (item.kind === "versions") {
+    const rows = [
+      { label: "Pending", value: item.versionStatus.pending, valueText: item.versionStatus.pending },
+      { label: "Viewed", value: item.versionStatus.viewed, valueText: item.versionStatus.viewed },
+      { label: "Approved", value: item.versionStatus.approved, valueText: item.versionStatus.approved },
+    ];
+    return trackingV2ProgressRowsMarkup(rows);
+  }
+  if (item.kind === "final") {
+    const rows = activeBudgetDepartments()
+      .map((department) => {
+        const tasks = tracker.allTasks.filter((task) => task.department === department.id);
+        const finalCount = tasks.filter((task) => trackingV2TaskStatus(task.status) === "FINAL").length;
+        const rate = tasks.length > 0 ? finalCount / tasks.length : 0;
+        return { label: department.name, value: finalCount, valueText: percentText(rate), rate };
+      })
+      .filter((row) => row.value > 0 || row.rate > 0)
+      .slice(0, 5);
+    return trackingV2ProgressRowsMarkup(rows, { empty: "No final tasks" });
+  }
+  if (item.kind === "crew") {
+    return `
+      <div class="v2-mini-table">
+        ${trackerUserRows(tracker)
+          .slice(0, 4)
+          .map((user) => `<span><b>${escapeHtml(user.name)}</b><em>${escapeHtml(trackerRoleLabel(user.role))}</em><small>${escapeHtml(user.email)}</small></span>`)
+          .join("")}
+      </div>
+    `;
+  }
+  if (item.kind === "sequences") {
+    const rows = Object.entries(
+      data.shots.reduce((result, shot) => {
+        if (!result[shot.sequence]) result[shot.sequence] = { total: 0, final: 0, hold: 0 };
+        result[shot.sequence].total += 1;
+        if (shot.status === "FINAL") result[shot.sequence].final += 1;
+        if (shot.status === "ON_HOLD") result[shot.sequence].hold += 1;
+        return result;
+      }, {}),
+    ).map(([label, row]) => ({ label, value: row.total, valueText: `${row.final} final · ${row.hold} hold`, rate: row.final / Math.max(row.total, 1) }));
+    return trackingV2ProgressRowsMarkup(rows);
+  }
+  if (item.kind === "asset-status") {
+    return trackingV2ProgressRowsMarkup(
+      trackingV2StatusOrder
+        .map((status) => ({ label: trackingV2StatusLabel(status), value: trackingV2StatusCounts(data.assets)[status] || 0, valueText: trackingV2StatusCounts(data.assets)[status] || 0 }))
+        .filter((row) => row.value > 0),
+    );
+  }
+  if (item.kind === "latest") {
+    return `
+      <div class="v2-mini-filmstrip">
+        ${data.versions
+          .slice(0, 4)
+          .map((version) => `<span>${version.media?.previewUrl ? `<img src="${escapeHtml(version.media.previewUrl)}" alt="${escapeHtml(version.version)}" />` : "<i>▶</i>"}<b>${escapeHtml(version.version)}</b></span>`)
+          .join("") || `<div class="v2-empty-mini">No versions</div>`}
+      </div>
+    `;
+  }
+  return trackingV2StackMarkup({});
+}
+
 function trackingV2InsightRows(tracker) {
   const metrics = analysisMetrics();
   const assets = trackingV2AssetRows(tracker);
@@ -7993,8 +8212,8 @@ function trackingV2InsightRows(tracker) {
     { title: "Assets", value: assets.length, meta: "stacked by status", kind: "assets" },
     { title: "Shots", value: shots.length, meta: `${shots.filter((shot) => shot.status === "IN_PROGRESS").length} in progress`, kind: "shots" },
     { title: "Tasks", value: tracker.summary.totalTasks, meta: `${tracker.summary.reviewTasks} review / ${tracker.summary.heldTasks} hold`, kind: "tasks" },
-    { title: "Velocity", value: velocity[velocity.length - 1], meta: velocity.join(" / "), kind: "velocity" },
-    { title: "Version Status", value: versions.length, meta: `${versionStatus.pending} pending · ${versionStatus.approved} approved`, kind: "versions" },
+    { title: "Velocity", value: velocity[velocity.length - 1], meta: velocity.join(" / "), kind: "velocity", series: velocity },
+    { title: "Version Status", value: versions.length, meta: `${versionStatus.pending} pending · ${versionStatus.approved} approved`, kind: "versions", versionStatus },
     { title: "% Final by Department", value: percentText(tracker.summary.completionRate), meta: "pipeline close rate", kind: "final" },
     { title: "Project Crew", value: people.length, meta: "Name / Email / Login", kind: "crew" },
     { title: "Sequences", value: sequenceCount, meta: Array.from(new Set(shots.map((shot) => shot.sequence))).join(" / ") || "--", kind: "sequences" },
@@ -8057,7 +8276,8 @@ function renderTrackingV2Surface(tracker) {
       (item) => `
         <section class="v2-insight-widget ${item.kind}">
           <header><button type="button" aria-label="Collapse">⌄</button><strong>${escapeHtml(item.title)}</strong><span>↻</span></header>
-          <div><b>${escapeHtml(String(item.value))}</b><small>${escapeHtml(item.meta)}</small></div>
+          <div class="v2-insight-summary"><b>${escapeHtml(String(item.value))}</b><small>${escapeHtml(item.meta)}</small></div>
+          <div class="v2-insight-body">${trackingV2InsightBody(item, data, tracker)}</div>
         </section>
       `,
     )
