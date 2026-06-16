@@ -640,6 +640,16 @@ function applyFullDemoData(options = {}) {
   workLogs = [];
   scheduleTasks = [];
   pipelineEvents = [];
+  trackingV2TaskEdits = {};
+  trackingV2WorkOrderEdits = {};
+  trackingV2InboxEdits = {};
+  trackingV2AdminRoleEdits = {};
+  trackingV2ApiRouteEdits = {};
+  trackingV2ShotEdits = {};
+  trackingV2AssetEdits = {};
+  trackingV2CalendarExceptionEdits = {};
+  trackingV2CalendarExceptions = [];
+  trackingV2MediaPlaylistIds = [];
   selectedScheduleTaskId = "";
   currentProjectId = keepProjectId ? previousProjectId : `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   lastSavedPersonId = "";
@@ -674,6 +684,7 @@ let selectedV2AdminUserId = "";
 let selectedV2ApiRouteId = "";
 let selectedV2ShotId = "";
 let selectedV2AssetId = "";
+let selectedV2MediaCompareId = "";
 let trackingV2TaskEdits = {};
 let trackingV2WorkOrderEdits = {};
 let trackingV2InboxEdits = {};
@@ -681,6 +692,9 @@ let trackingV2AdminRoleEdits = {};
 let trackingV2ApiRouteEdits = {};
 let trackingV2ShotEdits = {};
 let trackingV2AssetEdits = {};
+let trackingV2CalendarExceptionEdits = {};
+let trackingV2CalendarExceptions = [];
+let trackingV2MediaPlaylistIds = [];
 let trackerUiState = {
   status: "all",
   assignee: "all",
@@ -695,6 +709,7 @@ let trackerUiState = {
   v2ProjectView: "grid",
   v2ProjectSort: "recent",
   v2ProjectQuery: "",
+  v2CollapsedInsights: {},
 };
 
 let displaySettings = {
@@ -1091,6 +1106,16 @@ function createProjectSnapshot(id = currentProjectId, name = project.title) {
       workLogs: clone(workLogs),
       scheduleTasks: clone(scheduleTasks),
       pipelineEvents: clone(pipelineEvents),
+      trackingV2TaskEdits: clone(trackingV2TaskEdits),
+      trackingV2WorkOrderEdits: clone(trackingV2WorkOrderEdits),
+      trackingV2InboxEdits: clone(trackingV2InboxEdits),
+      trackingV2AdminRoleEdits: clone(trackingV2AdminRoleEdits),
+      trackingV2ApiRouteEdits: clone(trackingV2ApiRouteEdits),
+      trackingV2ShotEdits: clone(trackingV2ShotEdits),
+      trackingV2AssetEdits: clone(trackingV2AssetEdits),
+      trackingV2CalendarExceptionEdits: clone(trackingV2CalendarExceptionEdits),
+      trackingV2CalendarExceptions: clone(trackingV2CalendarExceptions),
+      trackingV2MediaPlaylistIds: clone(trackingV2MediaPlaylistIds),
     },
   };
 }
@@ -1117,6 +1142,16 @@ function normalizeProjectSnapshot(snapshot) {
       workLogs: normalizeWorkLogs(data.workLogs),
       scheduleTasks: normalizeScheduleTasks(data.scheduleTasks),
       pipelineEvents: normalizePipelineEvents(data.pipelineEvents),
+      trackingV2TaskEdits: normalizeTrackingV2EditMap(data.trackingV2TaskEdits),
+      trackingV2WorkOrderEdits: normalizeTrackingV2EditMap(data.trackingV2WorkOrderEdits),
+      trackingV2InboxEdits: normalizeTrackingV2EditMap(data.trackingV2InboxEdits),
+      trackingV2AdminRoleEdits: normalizeTrackingV2RoleEdits(data.trackingV2AdminRoleEdits),
+      trackingV2ApiRouteEdits: normalizeTrackingV2EditMap(data.trackingV2ApiRouteEdits),
+      trackingV2ShotEdits: normalizeTrackingV2EditMap(data.trackingV2ShotEdits),
+      trackingV2AssetEdits: normalizeTrackingV2EditMap(data.trackingV2AssetEdits),
+      trackingV2CalendarExceptionEdits: normalizeTrackingV2EditMap(data.trackingV2CalendarExceptionEdits),
+      trackingV2CalendarExceptions: normalizeTrackingV2CalendarExceptions(data.trackingV2CalendarExceptions),
+      trackingV2MediaPlaylistIds: normalizeTrackingV2PlaylistIds(data.trackingV2MediaPlaylistIds),
     },
   };
 }
@@ -1136,6 +1171,16 @@ function applyProjectSnapshot(snapshot) {
   workLogs = clone(normalized.data.workLogs);
   scheduleTasks = clone(normalized.data.scheduleTasks);
   pipelineEvents = clone(normalized.data.pipelineEvents);
+  trackingV2TaskEdits = clone(normalized.data.trackingV2TaskEdits);
+  trackingV2WorkOrderEdits = clone(normalized.data.trackingV2WorkOrderEdits);
+  trackingV2InboxEdits = clone(normalized.data.trackingV2InboxEdits);
+  trackingV2AdminRoleEdits = clone(normalized.data.trackingV2AdminRoleEdits);
+  trackingV2ApiRouteEdits = clone(normalized.data.trackingV2ApiRouteEdits);
+  trackingV2ShotEdits = clone(normalized.data.trackingV2ShotEdits);
+  trackingV2AssetEdits = clone(normalized.data.trackingV2AssetEdits);
+  trackingV2CalendarExceptionEdits = clone(normalized.data.trackingV2CalendarExceptionEdits);
+  trackingV2CalendarExceptions = clone(normalized.data.trackingV2CalendarExceptions);
+  trackingV2MediaPlaylistIds = clone(normalized.data.trackingV2MediaPlaylistIds);
   selectedScheduleTaskId = scheduleTasks[0]?.id || "";
   lastSavedPersonId = "";
   lastPersonFeedback = null;
@@ -1417,6 +1462,50 @@ function normalizePipelineEvents(items) {
     .slice(0, 24);
 }
 
+function normalizeTrackingV2EditMap(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => String(key || "").trim())
+      .map(([key, entry]) => [String(key), entry && typeof entry === "object" && !Array.isArray(entry) ? { ...entry } : entry]),
+  );
+}
+
+function normalizeTrackingV2RoleEdits(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const allowed = new Set(["admin", "producer", "supervisor", "artist", "reviewer"]);
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([key, role]) => [String(key || "").trim(), String(role || "").trim()])
+      .filter(([key, role]) => key && allowed.has(role)),
+  );
+}
+
+function normalizeTrackingV2CalendarExceptions(items) {
+  return (Array.isArray(items) ? items : [])
+    .map((item, index) => {
+      const day = Math.max(1, Math.round(Number(item?.day) || Number(item?.date) || project.currentDay || 1));
+      const hours = Math.max(0, Math.min(24, Number(item?.hours) || 0));
+      const label = String(item?.label || "").trim() || (hours > 0 ? "Reduced hours" : "Production hold");
+      return {
+        id: String(item?.id || `custom-cal-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`),
+        day,
+        type: String(item?.type || (hours > 0 ? "REDUCED_HOURS" : "HOLD")).trim(),
+        label,
+        hours,
+        inheritedFrom: String(item?.inheritedFrom || "local").trim(),
+        note: String(item?.note || "").trim(),
+      };
+    })
+    .filter((item) => item.label)
+    .slice(0, 12);
+}
+
+function normalizeTrackingV2PlaylistIds(items) {
+  const ids = (Array.isArray(items) ? items : []).map((item) => String(item || "").trim()).filter(Boolean);
+  return Array.from(new Set(ids)).slice(0, 12);
+}
+
 function languageLabel() {
   return displaySettings.language === "en" ? translate("display.languageEn") : translate("display.languageZh");
 }
@@ -1547,6 +1636,16 @@ function loadSavedData() {
       workLogs = normalizeWorkLogs(saved.workLogs);
       scheduleTasks = normalizeScheduleTasks(saved.scheduleTasks);
       pipelineEvents = normalizePipelineEvents(saved.pipelineEvents);
+      trackingV2TaskEdits = normalizeTrackingV2EditMap(saved.trackingV2TaskEdits);
+      trackingV2WorkOrderEdits = normalizeTrackingV2EditMap(saved.trackingV2WorkOrderEdits);
+      trackingV2InboxEdits = normalizeTrackingV2EditMap(saved.trackingV2InboxEdits);
+      trackingV2AdminRoleEdits = normalizeTrackingV2RoleEdits(saved.trackingV2AdminRoleEdits);
+      trackingV2ApiRouteEdits = normalizeTrackingV2EditMap(saved.trackingV2ApiRouteEdits);
+      trackingV2ShotEdits = normalizeTrackingV2EditMap(saved.trackingV2ShotEdits);
+      trackingV2AssetEdits = normalizeTrackingV2EditMap(saved.trackingV2AssetEdits);
+      trackingV2CalendarExceptionEdits = normalizeTrackingV2EditMap(saved.trackingV2CalendarExceptionEdits);
+      trackingV2CalendarExceptions = normalizeTrackingV2CalendarExceptions(saved.trackingV2CalendarExceptions);
+      trackingV2MediaPlaylistIds = normalizeTrackingV2PlaylistIds(saved.trackingV2MediaPlaylistIds);
       selectedScheduleTaskId = scheduleTasks[0]?.id || "";
     }
   } catch (error) {
@@ -1577,6 +1676,16 @@ function applyStarterData(options = {}) {
   workLogs = [];
   scheduleTasks = [];
   pipelineEvents = [];
+  trackingV2TaskEdits = {};
+  trackingV2WorkOrderEdits = {};
+  trackingV2InboxEdits = {};
+  trackingV2AdminRoleEdits = {};
+  trackingV2ApiRouteEdits = {};
+  trackingV2ShotEdits = {};
+  trackingV2AssetEdits = {};
+  trackingV2CalendarExceptionEdits = {};
+  trackingV2CalendarExceptions = [];
+  trackingV2MediaPlaylistIds = [];
   selectedScheduleTaskId = "";
   currentProjectId = keepProjectId ? previousProjectId : `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   lastSavedPersonId = "";
@@ -1600,6 +1709,16 @@ function applyNewProjectData(title = "新项目") {
   workLogs = [];
   scheduleTasks = [];
   pipelineEvents = [];
+  trackingV2TaskEdits = {};
+  trackingV2WorkOrderEdits = {};
+  trackingV2InboxEdits = {};
+  trackingV2AdminRoleEdits = {};
+  trackingV2ApiRouteEdits = {};
+  trackingV2ShotEdits = {};
+  trackingV2AssetEdits = {};
+  trackingV2CalendarExceptionEdits = {};
+  trackingV2CalendarExceptions = [];
+  trackingV2MediaPlaylistIds = [];
   selectedScheduleTaskId = "";
   currentProjectId = `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   lastSavedPersonId = "";
@@ -1760,6 +1879,16 @@ function saveData() {
         workLogs,
         scheduleTasks,
         pipelineEvents,
+        trackingV2TaskEdits,
+        trackingV2WorkOrderEdits,
+        trackingV2InboxEdits,
+        trackingV2AdminRoleEdits,
+        trackingV2ApiRouteEdits,
+        trackingV2ShotEdits,
+        trackingV2AssetEdits,
+        trackingV2CalendarExceptionEdits,
+        trackingV2CalendarExceptions,
+        trackingV2MediaPlaylistIds,
       }),
     );
   } catch (error) {
@@ -8045,6 +8174,7 @@ function trackingV2SetShotStatus(shotId, status) {
   if (!shotId || !status) return false;
   trackingV2ShotEdits[shotId] = { ...(trackingV2ShotEdits[shotId] || {}), status, updatedAt: `D${project.currentDay || 1}` };
   selectedV2ShotId = shotId;
+  saveData();
   const surface = document.querySelector("#trackingV2Surface");
   if (surface) surface.dataset.activePanel = "shots";
   renderTrackingV2Surface(productionTrackerWorkflowData());
@@ -8056,6 +8186,7 @@ function trackingV2SetAssetStatus(assetId, status) {
   if (!assetId || !status) return false;
   trackingV2AssetEdits[assetId] = { ...(trackingV2AssetEdits[assetId] || {}), status, updatedAt: `D${project.currentDay || 1}` };
   selectedV2AssetId = assetId;
+  saveData();
   const surface = document.querySelector("#trackingV2Surface");
   if (surface) surface.dataset.activePanel = "assets";
   renderTrackingV2Surface(productionTrackerWorkflowData());
@@ -8156,6 +8287,7 @@ function resetTrackerUiState() {
     v2ProjectView: "grid",
     v2ProjectSort: "recent",
     v2ProjectQuery: "",
+    v2CollapsedInsights: {},
   };
 }
 
@@ -8369,12 +8501,21 @@ function trackingV2CalendarExceptionRows() {
     { day: Math.min(totalDays, Math.max(1, (project.currentDay || 1) + 2)), type: "REDUCED_HOURS", label: "Reduced hours", hours: 4, inheritedFrom: "project" },
     { day: Math.min(totalDays, Math.max(1, (project.currentDay || 1) + 5)), type: "HOLIDAY", label: "Local holiday", hours: 0, inheritedFrom: "studio" },
     { day: Math.min(totalDays, Math.max(1, (project.currentDay || 1) + 8)), type: "STUDIO_CLOSURE", label: "Stage turnover", hours: 0, inheritedFrom: "project" },
-  ].map((row, index) => ({
-    id: `cal-${index}`,
-    ...row,
-    date: `D${row.day}`,
-    impact: row.hours === 0 ? "No capacity" : `${row.hours}h capacity`,
-  }));
+  ]
+    .map((row, index) => ({ id: `cal-${index}`, ...row }))
+    .concat(trackingV2CalendarExceptions)
+    .map((row) => {
+      const edit = trackingV2CalendarExceptionEdits[row.id] || {};
+      return {
+        ...row,
+        status: edit.status || "open",
+        updatedAt: edit.updatedAt || "",
+        date: `D${row.day}`,
+        impact: row.hours === 0 ? "No capacity" : `${row.hours}h capacity`,
+      };
+    })
+    .filter((row) => row.status !== "closed")
+    .sort((a, b) => a.day - b.day || String(a.label).localeCompare(String(b.label)));
 }
 
 function trackingV2InboxRows(tracker) {
@@ -8422,6 +8563,7 @@ function trackingV2SetWorkOrderStatus(orderId, status) {
   if (!orderId) return false;
   trackingV2WorkOrderEdits[orderId] = { ...(trackingV2WorkOrderEdits[orderId] || {}), status, updatedAt: `D${project.currentDay || 1}` };
   selectedV2WorkOrderId = orderId;
+  saveData();
   const surface = document.querySelector("#trackingV2Surface");
   if (surface) surface.dataset.activePanel = "workorders";
   renderTrackingV2Surface(productionTrackerWorkflowData());
@@ -8433,6 +8575,7 @@ function trackingV2SetInboxStatus(inboxId, status) {
   if (!inboxId) return false;
   trackingV2InboxEdits[inboxId] = { ...(trackingV2InboxEdits[inboxId] || {}), status, updatedAt: `D${project.currentDay || 1}` };
   selectedV2InboxId = inboxId;
+  saveData();
   const surface = document.querySelector("#trackingV2Surface");
   if (surface) surface.dataset.activePanel = "inbox";
   renderTrackingV2Surface(productionTrackerWorkflowData());
@@ -8500,6 +8643,7 @@ function trackingV2SetAdminRole(userId, role) {
     },
     ...pipelineEvents,
   ]);
+  saveData();
   const surface = document.querySelector("#trackingV2Surface");
   if (surface) surface.dataset.activePanel = "admin";
   renderTrackingV2Surface(productionTrackerWorkflowData());
@@ -8554,6 +8698,7 @@ function trackingV2SetApiRouteStatus(routeId, status) {
     },
     ...pipelineEvents,
   ]);
+  saveData();
   const surface = document.querySelector("#trackingV2Surface");
   if (surface) surface.dataset.activePanel = "admin";
   renderTrackingV2Surface(productionTrackerWorkflowData());
@@ -8627,6 +8772,217 @@ function trackingV2ReviewDecision(reviewId, decision) {
   renderTrackingV2Surface(productionTrackerWorkflowData());
   renderProductionTrackingConsole();
   setFormStatus(`版本状态已更新：${row.shotGroup} · ${row.version}`, decision === "approved" ? "good" : "warning");
+  return true;
+}
+
+function trackingV2VersionAmount(version) {
+  if (!version) return 0;
+  const row = vfxReviewRows().find((item) => item.id === version.id);
+  return Number(row?.amount) || 0;
+}
+
+function trackingV2MediaPlaylist(versions) {
+  const source = Array.isArray(versions) ? versions : [];
+  const playlistIds = trackingV2MediaPlaylistIds.filter((id) => source.some((version) => version.id === id));
+  const rows = playlistIds.length > 0 ? playlistIds.map((id) => source.find((version) => version.id === id)).filter(Boolean) : source.slice(0, 4);
+  const totalShots = rows.reduce((sum, version) => sum + (Number(version.shotCount) || 0), 0);
+  const approvedShots = rows.reduce((sum, version) => sum + (Number(version.approvedCount) || 0), 0);
+  const amount = rows.reduce((sum, version) => sum + trackingV2VersionAmount(version), 0);
+  return {
+    rows,
+    totalShots,
+    approvedShots,
+    amount,
+    approvalRate: totalShots > 0 ? approvedShots / totalShots : 0,
+  };
+}
+
+function trackingV2TogglePlaylist(reviewId) {
+  if (!reviewId) return false;
+  if (trackingV2MediaPlaylistIds.includes(reviewId)) {
+    trackingV2MediaPlaylistIds = trackingV2MediaPlaylistIds.filter((id) => id !== reviewId);
+  } else {
+    trackingV2MediaPlaylistIds = normalizeTrackingV2PlaylistIds([...trackingV2MediaPlaylistIds, reviewId]);
+  }
+  selectedV2ReviewId = reviewId;
+  saveData();
+  const surface = document.querySelector("#trackingV2Surface");
+  if (surface) surface.dataset.activePanel = "media";
+  renderTrackingV2Surface(productionTrackerWorkflowData());
+  setFormStatus(`播放列表已更新：${trackingV2MediaPlaylistIds.length || "默认"} 个版本`, "good");
+  return true;
+}
+
+function trackingV2ClearPlaylist() {
+  trackingV2MediaPlaylistIds = [];
+  saveData();
+  const surface = document.querySelector("#trackingV2Surface");
+  if (surface) surface.dataset.activePanel = "media";
+  renderTrackingV2Surface(productionTrackerWorkflowData());
+  setFormStatus("播放列表已恢复为默认队列", "good");
+}
+
+function trackingV2CompareVersion(versions, selectedVersion) {
+  if (!Array.isArray(versions) || versions.length === 0) return null;
+  const selected = selectedVersion || trackingV2SelectedVersion(versions);
+  if (selectedV2MediaCompareId && selectedV2MediaCompareId !== selected?.id) {
+    const matched = versions.find((version) => version.id === selectedV2MediaCompareId);
+    if (matched) return matched;
+  }
+  return versions.find((version) => version.id !== selected?.id && version.shotGroup === selected?.shotGroup) || versions.find((version) => version.id !== selected?.id) || null;
+}
+
+function trackingV2PrdRoadmapRows(tracker, data) {
+  const status = trackerPrdStatusRows(tracker);
+  const taskRows = data?.tasks || trackingV2TaskRows(tracker);
+  const apiRows = data?.apiRoutes || trackingV2ApiRows();
+  const calendarRows = data?.calendarExceptions || trackingV2CalendarExceptionRows();
+  const playlist = trackingV2MediaPlaylist(data?.versions || vfxReviewRows());
+  const completed = status.rows.filter((row) => row.rate >= 0.95 && row.stage !== "todo").length;
+  return [
+    { label: "Prototype UI", value: `${completed}/${status.rows.length}`, detail: "Shot / Asset / Media / Resource / Admin 可演示", tone: "good" },
+    { label: "Local Persistence", value: `${Object.keys(trackingV2TaskEdits).length + Object.keys(trackingV2ShotEdits).length + Object.keys(trackingV2AssetEdits).length}`, detail: "状态、日期、播放列表、日历异常已本地保存", tone: "good" },
+    { label: "Exports", value: "CSV", detail: "任务、资源、版本、异常、API 就绪度可导出", tone: "good" },
+    { label: "Schedule Editing", value: taskRows.length, detail: "日期选择已完成；真实拖拽依赖线待工程化", tone: "note" },
+    { label: "Media Review", value: playlist.rows.length, detail: "播放列表、版本对比、审批状态可演示；真实上传存储待后端", tone: playlist.rows.length > 0 ? "good" : "note" },
+    { label: "Calendar Exceptions", value: calendarRows.length, detail: "可新增/关闭本地异常；团队日历继承待数据库", tone: calendarRows.length > 0 ? "good" : "note" },
+    { label: "API / Auth / DB", value: `${apiRows.filter((row) => row.status === "Ready").length}/${apiRows.length}`, detail: "端点清单可管理；Next.js、Prisma、NextAuth 尚未开始", tone: "warning" },
+  ];
+}
+
+function trackingV2ExportRows(kind) {
+  const tracker = productionTrackerWorkflowData();
+  const data = trackingV2Data(tracker);
+  if (kind === "tasks") {
+    return data.tasks.map((task) => ({
+      Shot: task.shotCode,
+      Task: task.label,
+      Status: trackingV2StatusLabel(task.status),
+      Assignee: task.assignee,
+      Reviewer: task.reviewer,
+      Start: `D${task.start}`,
+      End: `D${task.end}`,
+      BidDays: task.bid,
+      LoggedDays: task.logged,
+      CostOverUnder: task.costOverUnder,
+    }));
+  }
+  if (kind === "resources") {
+    return data.resource.rows.flatMap((row) =>
+      row.cells.map((cell) => ({
+        Department: row.label || row.department?.name || "",
+        Week: cell.range,
+        Capacity: cell.capacity,
+        Workload: cell.workload,
+        Delta: cell.delta,
+        Exception: cell.exception?.label || "",
+      })),
+    );
+  }
+  if (kind === "media") {
+    return data.versions.map((version) => ({
+      Vendor: version.vendor,
+      ShotGroup: version.shotGroup,
+      Version: version.version,
+      Status: trackingV2VersionStatusLabel(version),
+      Reviewer: version.reviewer,
+      PaymentGate: vfxPaymentGateLabels[version.paymentGate] || version.paymentGate,
+      Approved: `${version.approvedCount}/${version.shotCount}`,
+      Amount: trackingV2VersionAmount(version),
+      Media: version.media?.fileName || "",
+      Notes: version.notes || version.action || "",
+    }));
+  }
+  if (kind === "calendar") {
+    return data.calendarExceptions.map((item) => ({
+      Day: item.date,
+      Label: item.label,
+      Type: item.type,
+      CapacityHours: item.hours,
+      Impact: item.impact,
+      Source: item.inheritedFrom,
+      Note: item.note || "",
+    }));
+  }
+  if (kind === "api") {
+    return data.apiRoutes.map((route) => ({
+      Method: route.method,
+      Endpoint: route.endpoint,
+      Purpose: route.purpose,
+      Status: route.status,
+      Owner: route.owner,
+      UpdatedAt: route.updatedAt,
+    }));
+  }
+  if (kind === "roadmap") {
+    return trackingV2PrdRoadmapRows(tracker, data).map((row) => ({
+      Item: row.label,
+      Status: row.value,
+      Detail: row.detail,
+      Tone: row.tone,
+    }));
+  }
+  return [];
+}
+
+function trackingV2Export(kind) {
+  const rows = trackingV2ExportRows(kind);
+  if (!rows.length) {
+    setFormStatus("暂无可导出的 PRD v2 数据", "warning");
+    return false;
+  }
+  const label =
+    {
+      tasks: "任务排期",
+      resources: "资源规划",
+      media: "媒体版本",
+      calendar: "日历异常",
+      api: "API就绪度",
+      roadmap: "PRD完成度",
+    }[kind] || "PRD-v2";
+  downloadCsvFile(rows, `${project.title || "项目"}-${label}.csv`);
+  setFormStatus(`已导出：${label} ${rows.length} 行`, "good");
+  return true;
+}
+
+function trackingV2AddCalendarException() {
+  const totalDays = Math.max(project.plannedDays || 18, 1);
+  const defaultDay = Math.min(totalDays, Math.max(1, (project.currentDay || 1) + 3));
+  const dayInput = window.prompt("异常发生在第几天？", String(defaultDay));
+  if (dayInput === null) return false;
+  const day = clampDay(dayInput);
+  const labelInput = window.prompt("异常名称", "供应商交付暂停");
+  if (labelInput === null) return false;
+  const label = labelInput.trim() || "Production exception";
+  const hoursInput = window.prompt("当天可用工时（0 表示停工）", "0");
+  if (hoursInput === null) return false;
+  const hours = Math.max(0, Math.min(24, Number(hoursInput) || 0));
+  const item = {
+    id: `custom-cal-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    day,
+    type: hours > 0 ? "REDUCED_HOURS" : "HOLD",
+    label,
+    hours,
+    inheritedFrom: "local",
+    note: hours > 0 ? "手动加入的缩短工时" : "手动加入的停工/暂停",
+  };
+  trackingV2CalendarExceptions = normalizeTrackingV2CalendarExceptions([item, ...trackingV2CalendarExceptions]);
+  saveData();
+  const surface = document.querySelector("#trackingV2Surface");
+  if (surface) surface.dataset.activePanel = "phases";
+  renderTrackingV2Surface(productionTrackerWorkflowData());
+  setFormStatus(`已加入日历异常：D${day} · ${label}`, hours === 0 ? "warning" : "good");
+  return true;
+}
+
+function trackingV2CloseCalendarException(exceptionId) {
+  if (!exceptionId) return false;
+  trackingV2CalendarExceptionEdits[exceptionId] = { ...(trackingV2CalendarExceptionEdits[exceptionId] || {}), status: "closed", updatedAt: `D${project.currentDay || 1}` };
+  saveData();
+  const surface = document.querySelector("#trackingV2Surface");
+  if (surface) surface.dataset.activePanel = "phases";
+  renderTrackingV2Surface(productionTrackerWorkflowData());
+  setFormStatus("日历异常已关闭", "good");
   return true;
 }
 
@@ -8916,9 +9272,14 @@ function renderTrackingV2Surface(tracker) {
   const activePanel = surface.dataset.activePanel || "projects";
   const visibleProjectCards = trackingV2VisibleProjectCards(data.projectCards);
   const projectView = trackerUiState.v2ProjectView || "grid";
+  const roadmapRows = trackingV2PrdRoadmapRows(tracker, data);
+  const roadmapWarnings = roadmapRows.filter((row) => row.tone === "warning").length;
+  const roadmapReady = roadmapRows.filter((row) => row.tone === "good").length;
 
   toolbar.innerHTML = `
     <button type="button" data-workspace-view="overview" data-workspace-focus="trackingV2ProjectGrid">Add Project</button>
+    <button type="button" data-v2-export="roadmap">Export Roadmap</button>
+    <button type="button" data-v2-export="tasks">Export Tasks</button>
     <div class="v2-view-toggle" aria-label="Project view">
       <button type="button" class="${projectView === "grid" ? "active" : ""}" data-v2-project-view="grid" title="Grid view">▦</button>
       <button type="button" class="${projectView === "table" ? "active" : ""}" data-v2-project-view="table" title="Table view">☷</button>
@@ -8935,21 +9296,40 @@ function renderTrackingV2Surface(tracker) {
     <button type="button" data-v2-project-action="more">More</button>
     <label><span>Search</span><input type="search" data-v2-project-search placeholder="project / code / status" value="${escapeHtml(trackerUiState.v2ProjectQuery || "")}" /></label>
     <button type="button" data-v2-project-action="filter">Filter</button>
-    <span>1 - ${visibleProjectCards.length} of ${Math.max(data.projectCards.length, 12)} Projects</span>
+    <span>${roadmapReady} ready · ${roadmapWarnings} blocked · 1 - ${visibleProjectCards.length} of ${Math.max(data.projectCards.length, 12)} Projects</span>
   `;
 
   projectGrid.dataset.view = projectView;
-  projectGrid.innerHTML = trackingV2ProjectViewMarkup(visibleProjectCards);
+  projectGrid.innerHTML = `
+    ${trackingV2ProjectViewMarkup(visibleProjectCards)}
+    <div class="v2-roadmap-strip">
+      <div><span>PRD Roadmap</span><strong>${roadmapReady}/${roadmapRows.length} frontend-ready</strong><small>静态原型完成度与后端工程化边界</small></div>
+      ${roadmapRows
+        .map(
+          (row) => `
+            <button class="${row.tone}" type="button" data-context-kind="prd-roadmap" data-context-title="${escapeHtml(row.label)}" data-context-meta="${escapeHtml(row.detail)}">
+              <span>${escapeHtml(row.label)}</span>
+              <strong>${escapeHtml(row.value)}</strong>
+              <small>${escapeHtml(row.detail)}</small>
+            </button>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
 
   insights.innerHTML = data.insights
     .map(
-      (item) => `
-        <section class="v2-insight-widget ${item.kind}">
-          <header><button type="button" aria-label="Collapse">⌄</button><strong>${escapeHtml(item.title)}</strong><span>↻</span></header>
+      (item) => {
+        const collapsed = Boolean(trackerUiState.v2CollapsedInsights?.[item.kind]);
+        return `
+        <section class="v2-insight-widget ${item.kind}${collapsed ? " collapsed" : ""}">
+          <header><button type="button" aria-label="Collapse" data-v2-insight-toggle="${escapeHtml(item.kind)}">${collapsed ? "›" : "⌄"}</button><strong>${escapeHtml(item.title)}</strong><button type="button" data-v2-insight-export="${escapeHtml(item.kind)}" aria-label="Export widget">⇩</button></header>
           <div class="v2-insight-summary"><b>${escapeHtml(String(item.value))}</b><small>${escapeHtml(item.meta)}</small></div>
-          <div class="v2-insight-body">${trackingV2InsightBody(item, data, tracker)}</div>
+          <div class="v2-insight-body" ${collapsed ? "hidden" : ""}>${trackingV2InsightBody(item, data, tracker)}</div>
         </section>
-      `,
+      `;
+      },
     )
     .join("");
 
@@ -9099,7 +9479,7 @@ function renderTrackingV2Surface(tracker) {
   const editableTask = trackingV2SelectedTask(data.tasks);
   const dateOptions = trackingV2DateOptions(editableTask);
   taskGantt.innerHTML = `
-    <div class="v2-panel-head"><span>Task Table + Gantt</span><strong>Gantt Display</strong></div>
+    <div class="v2-panel-head"><span>Task Table + Gantt</span><strong>Gantt Display</strong><button type="button" data-v2-export="tasks">Export CSV</button></div>
     <div class="v2-task-gantt">
       <div class="v2-task-list">
         <div class="v2-task-header">
@@ -9170,14 +9550,14 @@ function renderTrackingV2Surface(tracker) {
   const inspectWeek = data.resource.weeks[Math.max(0, Math.min(data.resource.weeks.length - 1, Number(trackerUiState.v2InspectWeek) || 0))] || data.resource.weeks[0];
   const heatmapRows = trackerUiState.v2InspectGroup === "project" ? data.resource.projectRows : data.resource.rows;
   resourcePlanning.innerHTML = `
-    <div class="v2-panel-head"><span>Resource Planning</span><strong>Weekly · Person Days</strong></div>
+    <div class="v2-panel-head"><span>Resource Planning</span><strong>Weekly · Person Days</strong><button type="button" data-v2-export="resources">Export CSV</button></div>
     <div class="v2-resource-toolbar">
       <span>Studio / All Departments</span>
       <button type="button">Weekly</button>
       <button type="button" class="${trackerUiState.v2ResourceChart === "area" ? "active" : ""}" data-v2-resource-chart="area">Area Chart</button>
       <button type="button" class="${trackerUiState.v2ResourceChart === "heatmap" ? "active" : ""}" data-v2-resource-chart="heatmap">Workload Heatmap</button>
       <button type="button" data-v2-inspect-group="${trackerUiState.v2InspectGroup === "project" ? "department" : "project"}">Inspect by ${trackerUiState.v2InspectGroup === "project" ? "Department" : "Project"}</button>
-      <button type="button">Export</button>
+      <button type="button" data-v2-export="resources">Export</button>
     </div>
     ${
       trackerUiState.v2ResourceChart === "heatmap"
@@ -9275,8 +9655,15 @@ function renderTrackingV2Surface(tracker) {
   const selectedVersion = trackingV2SelectedVersion(data.versions);
   const selectedVersionStatus = trackingV2VersionTaskStatus(selectedVersion);
   const selectedVersionNotes = trackingV2VersionNotes(selectedVersion);
+  const compareVersion = trackingV2CompareVersion(data.versions, selectedVersion);
+  const playlist = trackingV2MediaPlaylist(data.versions);
   mediaCenter.innerHTML = `
-    <div class="v2-panel-head"><span>Media Review / Version Player</span><strong>${selectedVersion ? `${escapeHtml(selectedVersion.shotGroup)} · ${escapeHtml(selectedVersion.version)}` : "No Version"}</strong></div>
+    <div class="v2-panel-head"><span>Media Review / Version Player</span><strong>${selectedVersion ? `${escapeHtml(selectedVersion.shotGroup)} · ${escapeHtml(selectedVersion.version)}` : "No Version"}</strong><button type="button" data-v2-export="media">Export CSV</button></div>
+    <div class="v2-media-playlist">
+      <div><span>Playlist</span><strong>${playlist.rows.length} versions · ${playlist.approvedShots}/${playlist.totalShots || 0} approved</strong><small>${money.format(playlist.amount)} · ${percentText(playlist.approvalRate)} pass rate</small></div>
+      <div>${playlist.rows.map((version) => `<button type="button" data-v2-review-select="${escapeHtml(version.id)}">${escapeHtml(`${version.shotGroup} ${version.version}`)}</button>`).join("") || `<span>No playlist rows</span>`}</div>
+      <button type="button" data-v2-playlist-clear>Clear</button>
+    </div>
     <div class="v2-media-review">
       <div class="v2-version-player">
         <span>${selectedVersion?.media?.previewUrl ? `<img src="${escapeHtml(selectedVersion.media.previewUrl)}" alt="${escapeHtml(selectedVersion.version)}" />` : "▶"}</span>
@@ -9290,6 +9677,7 @@ function renderTrackingV2Surface(tracker) {
           <button type="button" data-v2-review-decision="approved" data-v2-review-id="${escapeHtml(selectedVersion?.id || "")}">Approve</button>
           <button type="button" data-v2-review-decision="notes" data-v2-review-id="${escapeHtml(selectedVersion?.id || "")}">Changes</button>
           <button type="button" data-v2-review-decision="blocked" data-v2-review-id="${escapeHtml(selectedVersion?.id || "")}">Hold</button>
+          <button type="button" data-v2-playlist-toggle="${escapeHtml(selectedVersion?.id || "")}">${trackingV2MediaPlaylistIds.includes(selectedVersion?.id) ? "Remove" : "Playlist"}</button>
         </div>
       </div>
       <div class="v2-note-stream">
@@ -9307,15 +9695,35 @@ function renderTrackingV2Surface(tracker) {
         </div>
       </div>
     </div>
+    <div class="v2-version-compare">
+      <section>
+        <span>A / Current</span>
+        <strong>${escapeHtml(selectedVersion ? `${selectedVersion.shotGroup} · ${selectedVersion.version}` : "No version")}</strong>
+        <small>${escapeHtml(selectedVersion ? `${trackingV2VersionStatusLabel(selectedVersion)} · ${selectedVersion.reviewer} · ${money.format(trackingV2VersionAmount(selectedVersion))}` : "Select a version")}</small>
+        <i><b style="width:${Math.round(Math.max(0.04, Math.min(selectedVersion?.approvalRate || 0, 1)) * 100)}%"></b></i>
+      </section>
+      <section>
+        <span>B / Compare</span>
+        <strong>${escapeHtml(compareVersion ? `${compareVersion.shotGroup} · ${compareVersion.version}` : "No comparison")}</strong>
+        <small>${escapeHtml(compareVersion ? `${trackingV2VersionStatusLabel(compareVersion)} · ${compareVersion.reviewer} · ${money.format(trackingV2VersionAmount(compareVersion))}` : "Choose another version")}</small>
+        <i><b style="width:${Math.round(Math.max(0.04, Math.min(compareVersion?.approvalRate || 0, 1)) * 100)}%"></b></i>
+      </section>
+    </div>
     <div class="v2-filmstrip">
       ${data.versions
         .map(
           (version) => `
-            <button class="v2-version-card ${version.id === selectedVersion?.id ? "selected" : ""} ${trackingV2StatusClass(trackingV2VersionTaskStatus(version))}" type="button" data-v2-review-select="${escapeHtml(version.id)}" data-context-kind="vfx-review" data-context-review-id="${escapeHtml(version.id)}" data-context-title="${escapeHtml(`${version.shotGroup} · ${version.version}`)}" data-context-meta="${escapeHtml(`${version.vendor} · ${trackingV2VersionStatusLabel(version)}`)}">
-              <span class="v2-version-thumb">${version.media?.previewUrl ? `<img src="${escapeHtml(version.media.previewUrl)}" alt="${escapeHtml(version.version)}" />` : "▶"}</span>
-              <strong>${escapeHtml(version.shotGroup)} · ${escapeHtml(version.version)}</strong>
-              <small>${trackingV2StatusDot(trackingV2VersionTaskStatus(version))}${escapeHtml(version.vendor)} · ${escapeHtml(vfxPaymentGateLabels[version.paymentGate] || version.paymentGate)}</small>
-            </button>
+            <div class="v2-version-tile">
+              <button class="v2-version-card ${version.id === selectedVersion?.id ? "selected" : ""} ${trackingV2StatusClass(trackingV2VersionTaskStatus(version))}" type="button" data-v2-review-select="${escapeHtml(version.id)}" data-context-kind="vfx-review" data-context-review-id="${escapeHtml(version.id)}" data-context-title="${escapeHtml(`${version.shotGroup} · ${version.version}`)}" data-context-meta="${escapeHtml(`${version.vendor} · ${trackingV2VersionStatusLabel(version)}`)}">
+                <span class="v2-version-thumb">${version.media?.previewUrl ? `<img src="${escapeHtml(version.media.previewUrl)}" alt="${escapeHtml(version.version)}" />` : "▶"}</span>
+                <strong>${escapeHtml(version.shotGroup)} · ${escapeHtml(version.version)}</strong>
+                <small>${trackingV2StatusDot(trackingV2VersionTaskStatus(version))}${escapeHtml(version.vendor)} · ${escapeHtml(vfxPaymentGateLabels[version.paymentGate] || version.paymentGate)}</small>
+                <span class="v2-version-card-actions">
+                  <em>${trackingV2MediaPlaylistIds.includes(version.id) ? "In playlist" : "Queue"}</em>
+                </span>
+              </button>
+              <button class="v2-version-compare-button" type="button" data-v2-compare-select="${escapeHtml(version.id)}">Compare</button>
+            </div>
           `,
         )
         .join("") || `<div class="producer-empty">暂无版本。</div>`}
@@ -9323,7 +9731,7 @@ function renderTrackingV2Surface(tracker) {
   `;
 
   phaseBoard.innerHTML = `
-    <div class="v2-panel-head"><span>Phases + Calendar Exceptions</span><strong>${data.phases.length} phases · ${data.calendarExceptions.length} exceptions</strong></div>
+    <div class="v2-panel-head"><span>Phases + Calendar Exceptions</span><strong>${data.phases.length} phases · ${data.calendarExceptions.length} exceptions</strong><button type="button" data-v2-calendar-add>Add Exception</button><button type="button" data-v2-export="calendar">Export CSV</button></div>
     <div class="v2-phase-board">
       <div class="v2-phase-list">
         ${data.phases.map((phase) => `
@@ -9344,7 +9752,7 @@ function renderTrackingV2Surface(tracker) {
       </div>
       <div class="v2-calendar-exceptions">
         <span>Calendar Exceptions</span>
-        ${data.calendarExceptions.map((item) => `<p><b>${escapeHtml(item.date)}</b><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.impact)} · ${escapeHtml(item.inheritedFrom)}</small></p>`).join("")}
+        ${data.calendarExceptions.map((item) => `<p><b>${escapeHtml(item.date)}</b><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.impact)} · ${escapeHtml(item.inheritedFrom)}${item.note ? ` · ${escapeHtml(item.note)}` : ""}</small><button type="button" data-v2-calendar-close="${escapeHtml(item.id)}">Close</button></p>`).join("")}
       </div>
     </div>
   `;
@@ -9427,7 +9835,7 @@ function renderTrackingV2Surface(tracker) {
   const adminEvents = pipelineEvents.filter((event) => /^Admin\.|^API\./u.test(event.action || "")).slice(0, 5);
   const blockedRoutes = data.apiRoutes.filter((route) => route.status === "Blocked").length;
   adminBoard.innerHTML = `
-    <div class="v2-panel-head"><span>Admin Users + API Map</span><strong>${data.adminUsers.length} users · ${data.apiRoutes.length} endpoints · ${blockedRoutes} blocked</strong></div>
+    <div class="v2-panel-head"><span>Admin Users + API Map</span><strong>${data.adminUsers.length} users · ${data.apiRoutes.length} endpoints · ${blockedRoutes} blocked</strong><button type="button" data-v2-export="api">Export API</button></div>
     <div class="v2-admin-console">
       <section class="v2-admin-users">
         <h5>Users / Roles</h5>
@@ -14968,6 +15376,31 @@ function setupProductionTrackerControls() {
       setFormStatus(`Project ${action} 已准备，可继续接字段配置`, "good");
       return;
     }
+    const v2Export = event.target.closest("[data-v2-export]");
+    if (v2Export) {
+      trackingV2Export(v2Export.dataset.v2Export || "roadmap");
+      return;
+    }
+    const v2InsightToggle = event.target.closest("[data-v2-insight-toggle]");
+    if (v2InsightToggle) {
+      const key = v2InsightToggle.dataset.v2InsightToggle || "";
+      trackerUiState.v2CollapsedInsights = {
+        ...(trackerUiState.v2CollapsedInsights || {}),
+        [key]: !trackerUiState.v2CollapsedInsights?.[key],
+      };
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      return;
+    }
+    const v2InsightExport = event.target.closest("[data-v2-insight-export]");
+    if (v2InsightExport) {
+      const key = v2InsightExport.dataset.v2InsightExport || "";
+      const row = trackingV2InsightRows(productionTrackerWorkflowData()).find((item) => item.kind === key);
+      if (row) {
+        downloadCsvFile([{ Widget: row.title, Value: row.value, Meta: row.meta, Kind: row.kind }], `${project.title || "项目"}-${row.title}.csv`);
+        setFormStatus(`已导出图表小组件：${row.title}`, "good");
+      }
+      return;
+    }
     const v2ShotSelect = event.target.closest("[data-v2-shot-select]");
     if (v2ShotSelect) {
       selectedV2ShotId = v2ShotSelect.dataset.v2ShotSelect || "";
@@ -15050,8 +15483,34 @@ function setupProductionTrackerControls() {
       const nextEnd = day > currentStart ? day : clampDay(day + bid - 1);
       trackingV2TaskEdits[taskId] = { start: nextStart, end: Math.max(nextStart, nextEnd) };
       trackerUiState.v2TaskDateEditor = taskId;
+      saveData();
       renderTrackingV2Surface(productionTrackerWorkflowData());
       setFormStatus(`任务日期已调整：D${nextStart} - D${Math.max(nextStart, nextEnd)}`, "good");
+      return;
+    }
+    const v2PlaylistToggle = event.target.closest("[data-v2-playlist-toggle]");
+    if (v2PlaylistToggle) {
+      trackingV2TogglePlaylist(v2PlaylistToggle.dataset.v2PlaylistToggle || "");
+      return;
+    }
+    const v2PlaylistClear = event.target.closest("[data-v2-playlist-clear]");
+    if (v2PlaylistClear) {
+      trackingV2ClearPlaylist();
+      return;
+    }
+    const v2CompareSelect = event.target.closest("[data-v2-compare-select]");
+    if (v2CompareSelect) {
+      selectedV2MediaCompareId = v2CompareSelect.dataset.v2CompareSelect || "";
+      const surface = document.querySelector("#trackingV2Surface");
+      if (surface) surface.dataset.activePanel = "media";
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      setFormStatus("对比版本已更新", "good");
+      return;
+    }
+    const v2ReviewDecision = event.target.closest("[data-v2-review-decision]");
+    if (v2ReviewDecision) {
+      const reviewId = v2ReviewDecision.dataset.v2ReviewId || "";
+      if (reviewId) trackingV2ReviewDecision(reviewId, v2ReviewDecision.dataset.v2ReviewDecision || "submitted");
       return;
     }
     const v2ReviewSelect = event.target.closest("[data-v2-review-select]");
@@ -15062,10 +15521,14 @@ function setupProductionTrackerControls() {
       renderTrackingV2Surface(productionTrackerWorkflowData());
       return;
     }
-    const v2ReviewDecision = event.target.closest("[data-v2-review-decision]");
-    if (v2ReviewDecision) {
-      const reviewId = v2ReviewDecision.dataset.v2ReviewId || "";
-      if (reviewId) trackingV2ReviewDecision(reviewId, v2ReviewDecision.dataset.v2ReviewDecision || "submitted");
+    const v2CalendarAdd = event.target.closest("[data-v2-calendar-add]");
+    if (v2CalendarAdd) {
+      trackingV2AddCalendarException();
+      return;
+    }
+    const v2CalendarClose = event.target.closest("[data-v2-calendar-close]");
+    if (v2CalendarClose) {
+      trackingV2CloseCalendarException(v2CalendarClose.dataset.v2CalendarClose || "");
       return;
     }
     const v2WorkOrderSelect = event.target.closest("[data-v2-workorder-select]");
