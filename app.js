@@ -8001,6 +8001,131 @@ function trackingV2ResourceData() {
   return { weeks, rows, totals, unassigned, projectRows };
 }
 
+function trackingV2PhaseRows(tracker) {
+  const schedule = productionScheduleRows();
+  const baseRows = schedule.length > 0 ? schedule : activeBudgetDepartments().slice(0, 5).map((department, index) => ({
+    id: `phase-fallback-${department.id}`,
+    title: department.name,
+    start: index * 3 + 1,
+    end: Math.min(project.plannedDays || 18, index * 3 + 5),
+    progressRate: Math.min(1, (index + 1) / 6),
+    status: "进行中",
+    owner: department.name,
+  }));
+  return baseRows.slice(0, 8).map((row, index) => {
+    const linkedTasks = tracker.allTasks.filter((task) => task.dueDay >= row.start && task.dueDay <= row.end);
+    const status = row.progressRate >= 1 ? "FINAL" : row.progressRate > 0.65 ? "IN_PROGRESS" : index === 0 ? "PENDING_REVIEW" : "READY_TO_START";
+    return {
+      id: row.id || `phase-${index}`,
+      name: row.title || `Phase ${index + 1}`,
+      start: row.start || index * 3 + 1,
+      end: row.end || Math.min(project.plannedDays || 18, index * 3 + 5),
+      progress: row.progressRate || row.progress || 0,
+      status,
+      owner: row.owner || "Producer",
+      taskCount: linkedTasks.length,
+      deliverable: index % 3 === 0 ? "Director Review" : index % 3 === 1 ? "Client Internal" : "Vendor Turnover",
+    };
+  });
+}
+
+function trackingV2WorkOrderRows() {
+  const flow = fundFlowReadableData(8);
+  const reviews = vfxReviewRows();
+  const audit = auditSummaryData();
+  const rows = [
+    ...reviews.slice(0, 5).map((review, index) => ({
+      id: `wo-review-${review.id}`,
+      title: `${review.shotGroup} ${review.version} review package`,
+      description: review.action,
+      owner: review.vendor,
+      status: review.risk === "high" ? "Blocked" : review.status === "approved" ? "Closed" : "Open",
+      amount: review.amount,
+      due: `D${Math.min(project.plannedDays || 1, (project.currentDay || 1) + index + 1)}`,
+      type: "Version",
+    })),
+    ...flow.detailRows.slice(0, 5).map((detail, index) => ({
+      id: `wo-flow-${index}`,
+      title: `${detail.label} delivery / invoice check`,
+      description: `${detail.department} · ${detail.type} · ${detail.meta || "付款凭证"}`,
+      owner: detail.label,
+      status: detail.value > 30000 ? "Open" : "Queued",
+      amount: detail.value,
+      due: `D${Math.min(project.plannedDays || 1, (project.currentDay || 1) + index + 2)}`,
+      type: "Finance",
+    })),
+    {
+      id: "wo-audit-close",
+      title: "Audit evidence closeout",
+      description: `${audit.highRiskCount} high risk · ${audit.mediumRiskCount} medium risk`,
+      owner: "Production Accountant",
+      status: audit.highRiskCount > 0 ? "Blocked" : "Open",
+      amount: audit.reviewedAmount || 0,
+      due: `D${project.currentDay || 1}`,
+      type: "Audit",
+    },
+  ];
+  return rows.slice(0, 10);
+}
+
+function trackingV2CalendarExceptionRows() {
+  const totalDays = Math.max(project.plannedDays || 18, 1);
+  return [
+    { day: Math.min(totalDays, Math.max(1, (project.currentDay || 1) + 2)), type: "REDUCED_HOURS", label: "Reduced hours", hours: 4, inheritedFrom: "project" },
+    { day: Math.min(totalDays, Math.max(1, (project.currentDay || 1) + 5)), type: "HOLIDAY", label: "Local holiday", hours: 0, inheritedFrom: "studio" },
+    { day: Math.min(totalDays, Math.max(1, (project.currentDay || 1) + 8)), type: "STUDIO_CLOSURE", label: "Stage turnover", hours: 0, inheritedFrom: "project" },
+  ].map((row, index) => ({
+    id: `cal-${index}`,
+    ...row,
+    date: `D${row.day}`,
+    impact: row.hours === 0 ? "No capacity" : `${row.hours}h capacity`,
+  }));
+}
+
+function trackingV2InboxRows(tracker) {
+  const tasks = tracker.allTasks
+    .filter((task) => ["PENDING_REVIEW", "CHANGES_REQUESTED", "ON_HOLD"].includes(task.status))
+    .slice(0, 6)
+    .map((task) => ({
+      id: `inbox-task-${task.id}`,
+      title: `${task.shotCode} · ${task.label}`,
+      meta: `${trackerStatusLabel(task.status)} · ${task.assignee}`,
+      role: task.department === "vfx_color" || task.department === "post" ? "supervisor" : "producer",
+      target: "Task",
+      status: trackingV2TaskStatus(task.status),
+    }));
+  const versions = vfxReviewRows().slice(0, 5).map((version) => ({
+    id: `inbox-version-${version.id}`,
+    title: `${version.shotGroup} · ${version.version}`,
+    meta: `${version.vendor} · ${vfxPaymentGateLabels[version.paymentGate] || version.paymentGate}`,
+    role: version.status === "approved" ? "reviewer" : "supervisor",
+    target: "Version",
+    status: version.risk === "high" ? "ON_HOLD" : version.status === "approved" ? "FINAL" : "PENDING_REVIEW",
+  }));
+  return [...tasks, ...versions].slice(0, 10);
+}
+
+function trackingV2AdminRows(tracker) {
+  return trackerUserRows(tracker).slice(0, 10).map((user) => ({
+    ...user,
+    login: user.email.split("@")[0],
+    capacity: Math.max(3, Math.min(6, Math.round((100 - Math.max(0, 100 - user.trust)) / 18))),
+    permission: user.role === "admin" ? "Full access" : user.role === "producer" ? "Edit + reports" : user.role === "reviewer" ? "Review only" : "Own tasks",
+  }));
+}
+
+function trackingV2ApiRows() {
+  return [
+    ["GET", "/api/projects/:id/stats", "dashboard widgets"],
+    ["GET", "/api/projects/:id/shots", "pipeline table"],
+    ["GET", "/api/tasks?status=", "task filters"],
+    ["POST", "/api/tasks/:id/assign", "assignment"],
+    ["PATCH", "/api/versions/:id/status", "supervisor approval"],
+    ["GET", "/api/resource-planning/inspect", "inspect chart data"],
+    ["POST", "/api/calendar-exceptions", "calendar exception"],
+  ].map(([method, endpoint, purpose]) => ({ method, endpoint, purpose }));
+}
+
 const trackingV2StatusColors = {
   WAITING_TO_START: "#9ba39e",
   READY_TO_START: "#378ADD",
@@ -8258,6 +8383,12 @@ function trackingV2Data(tracker) {
     resource: trackingV2ResourceData(),
     versions: vfxReviewRows(),
     insights: trackingV2InsightRows(tracker),
+    phases: trackingV2PhaseRows(tracker),
+    workOrders: trackingV2WorkOrderRows(tracker),
+    calendarExceptions: trackingV2CalendarExceptionRows(),
+    inbox: trackingV2InboxRows(tracker),
+    adminUsers: trackingV2AdminRows(tracker),
+    apiRoutes: trackingV2ApiRows(),
   };
 }
 
@@ -8272,7 +8403,11 @@ function renderTrackingV2Surface(tracker) {
   const taskGantt = document.querySelector("#trackingV2TaskGantt");
   const resourcePlanning = document.querySelector("#trackingV2ResourcePlanning");
   const mediaCenter = document.querySelector("#trackingV2MediaCenter");
-  if (!surface || !toolbar || !projectGrid || !insights || !tabs || !shotTable || !assetTable || !taskGantt || !resourcePlanning || !mediaCenter) return;
+  const phaseBoard = document.querySelector("#trackingV2PhaseBoard");
+  const workOrderBoard = document.querySelector("#trackingV2WorkOrderBoard");
+  const inboxBoard = document.querySelector("#trackingV2InboxBoard");
+  const adminBoard = document.querySelector("#trackingV2AdminBoard");
+  if (!surface || !toolbar || !projectGrid || !insights || !tabs || !shotTable || !assetTable || !taskGantt || !resourcePlanning || !mediaCenter || !phaseBoard || !workOrderBoard || !inboxBoard || !adminBoard) return;
   const data = trackingV2Data(tracker);
   const activePanel = surface.dataset.activePanel || "projects";
 
@@ -8281,6 +8416,8 @@ function renderTrackingV2Surface(tracker) {
     <button type="button">Sort</button>
     <button type="button">Group</button>
     <button type="button">Fields</button>
+    <button type="button">More</button>
+    <label><span>Search</span><input type="search" placeholder="shot / asset / vendor" /></label>
     <button type="button">Filter</button>
     <span>1 - ${data.projectCards.length} of ${Math.max(data.projectCards.length, 12)} Projects</span>
   `;
@@ -8316,6 +8453,10 @@ function renderTrackingV2Surface(tracker) {
     ["tasks", "Tasks + Gantt"],
     ["resource", "Resource Planning"],
     ["media", "Media"],
+    ["phases", "Phases"],
+    ["workorders", "Work Orders"],
+    ["inbox", "Inbox"],
+    ["admin", "Admin / API"],
   ]
     .map(([key, label]) => `<button class="${activePanel === key ? "active" : ""}" type="button" data-tracking-v2-panel="${escapeHtml(key)}">${escapeHtml(label)}</button>`)
     .join("");
@@ -8503,6 +8644,17 @@ function renderTrackingV2Surface(tracker) {
 
   mediaCenter.innerHTML = `
     <div class="v2-panel-head"><span>Latest Versions Filmstrip</span><strong>1 - ${Math.min(data.versions.length, 25)} of ${data.versions.length} Versions</strong></div>
+    <div class="v2-media-review">
+      <div class="v2-version-player">
+        <span>${data.versions[0]?.media?.previewUrl ? `<img src="${escapeHtml(data.versions[0].media.previewUrl)}" alt="${escapeHtml(data.versions[0].version)}" />` : "▶"}</span>
+        <strong>${escapeHtml(data.versions[0] ? `${data.versions[0].shotGroup} · ${data.versions[0].version}` : "No active version")}</strong>
+        <small>${escapeHtml(data.versions[0]?.action || "Select a version to review notes and approval status.")}</small>
+      </div>
+      <div class="v2-note-stream">
+        <span>Notes Stream</span>
+        ${data.versions.slice(0, 4).map((version) => `<p><b>${escapeHtml(version.reviewer || "Reviewer")}</b><small>${escapeHtml(version.notes || version.action || "Waiting for notes")}</small></p>`).join("") || `<p><b>System</b><small>No notes yet</small></p>`}
+      </div>
+    </div>
     <div class="v2-filmstrip">
       ${data.versions
         .map(
@@ -8518,6 +8670,91 @@ function renderTrackingV2Surface(tracker) {
     </div>
   `;
 
+  phaseBoard.innerHTML = `
+    <div class="v2-panel-head"><span>Phases + Calendar Exceptions</span><strong>${data.phases.length} phases · ${data.calendarExceptions.length} exceptions</strong></div>
+    <div class="v2-phase-board">
+      <div class="v2-phase-list">
+        ${data.phases.map((phase) => `
+          <button class="v2-phase-row ${trackingV2StatusClass(phase.status)}" type="button" data-context-kind="tracker-phase" data-context-title="${escapeHtml(phase.name)}" data-context-meta="${escapeHtml(`${phase.owner} · D${phase.start}-D${phase.end}`)}">
+            <strong>${escapeHtml(phase.name)}</strong>
+            <span>${trackingV2StatusDot(phase.status)}${escapeHtml(phase.owner)}</span>
+            <em>D${phase.start} → D${phase.end}</em>
+            <small>${escapeHtml(phase.deliverable)} · ${phase.taskCount} tasks</small>
+          </button>
+        `).join("")}
+      </div>
+      <div class="v2-phase-lanes">
+        ${data.phases.map((phase) => `
+          <div class="v2-phase-lane">
+            <span style="left:${Math.max(0, ((phase.start - 1) / Math.max(project.plannedDays || 1, 1)) * 100)}%; width:${Math.max(5, ((phase.end - phase.start + 1) / Math.max(project.plannedDays || 1, 1)) * 100)}%">${escapeHtml(percentText(phase.progress))}</span>
+          </div>
+        `).join("")}
+      </div>
+      <div class="v2-calendar-exceptions">
+        <span>Calendar Exceptions</span>
+        ${data.calendarExceptions.map((item) => `<p><b>${escapeHtml(item.date)}</b><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.impact)} · ${escapeHtml(item.inheritedFrom)}</small></p>`).join("")}
+      </div>
+    </div>
+  `;
+
+  workOrderBoard.innerHTML = `
+    <div class="v2-panel-head"><span>Work Orders</span><strong>${data.workOrders.length} open / queued</strong></div>
+    <div class="v2-workorder-table">
+      <div class="v2-workorder-head"><span>Type</span><span>Title</span><span>Owner</span><span>Status</span><span>Due</span><span>Amount</span></div>
+      ${data.workOrders.map((row) => `
+        <button class="v2-workorder-row ${row.status === "Blocked" ? "hold" : row.status === "Closed" ? "final" : "in-progress"}" type="button" data-context-kind="tracker-workorder" data-context-title="${escapeHtml(row.title)}" data-context-meta="${escapeHtml(`${row.owner} · ${row.status}`)}">
+          <span>${escapeHtml(row.type)}</span>
+          <strong>${escapeHtml(row.title)}<small>${escapeHtml(row.description)}</small></strong>
+          <span>${escapeHtml(row.owner)}</span>
+          <span>${escapeHtml(row.status)}</span>
+          <span>${escapeHtml(row.due)}</span>
+          <b>${money.format(row.amount || 0)}</b>
+        </button>
+      `).join("")}
+    </div>
+  `;
+
+  inboxBoard.innerHTML = `
+    <div class="v2-panel-head"><span>Inbox / My Tasks</span><strong>${data.inbox.length} routed items</strong></div>
+    <div class="v2-inbox-board">
+      ${["producer", "supervisor", "reviewer"].map((role) => `
+        <section>
+          <h5>${escapeHtml(role)}</h5>
+          ${data.inbox.filter((item) => item.role === role).map((item) => `
+            <button type="button" class="v2-inbox-row ${trackingV2StatusClass(item.status)}" data-context-kind="tracker-inbox" data-context-title="${escapeHtml(item.title)}" data-context-meta="${escapeHtml(item.meta)}">
+              <strong>${escapeHtml(item.title)}</strong>
+              <span>${trackingV2StatusDot(item.status)}${escapeHtml(item.target)}</span>
+              <small>${escapeHtml(item.meta)}</small>
+            </button>
+          `).join("") || `<div class="v2-empty-mini">No routed items</div>`}
+        </section>
+      `).join("")}
+    </div>
+  `;
+
+  adminBoard.innerHTML = `
+    <div class="v2-panel-head"><span>Admin Users + API Map</span><strong>${data.adminUsers.length} users · ${data.apiRoutes.length} endpoints</strong></div>
+    <div class="v2-admin-grid">
+      <section>
+        <h5>Users / Roles</h5>
+        ${data.adminUsers.map((user) => `
+          <button class="v2-admin-user" type="button" data-context-kind="tracker-user" data-context-title="${escapeHtml(user.name)}" data-context-meta="${escapeHtml(`${trackerRoleLabel(user.role)} · ${user.email}`)}">
+            <span>${escapeHtml(user.name.slice(0, 2))}</span>
+            <strong>${escapeHtml(user.name)}<small>${escapeHtml(user.email)}</small></strong>
+            <em>${escapeHtml(trackerRoleLabel(user.role))}</em>
+            <b>${escapeHtml(user.permission)}</b>
+          </button>
+        `).join("")}
+      </section>
+      <section>
+        <h5>REST API Readiness</h5>
+        ${data.apiRoutes.map((route) => `
+          <p class="v2-api-row"><b>${escapeHtml(route.method)}</b><code>${escapeHtml(route.endpoint)}</code><span>${escapeHtml(route.purpose)}</span></p>
+        `).join("")}
+      </section>
+    </div>
+  `;
+
   const panelMap = {
     projects: [projectGrid, insights],
     shots: [shotTable],
@@ -8525,8 +8762,12 @@ function renderTrackingV2Surface(tracker) {
     tasks: [taskGantt],
     resource: [resourcePlanning],
     media: [mediaCenter],
+    phases: [phaseBoard],
+    workorders: [workOrderBoard],
+    inbox: [inboxBoard],
+    admin: [adminBoard],
   };
-  [projectGrid, insights, shotTable, assetTable, taskGantt, resourcePlanning, mediaCenter].forEach((node) => {
+  [projectGrid, insights, shotTable, assetTable, taskGantt, resourcePlanning, mediaCenter, phaseBoard, workOrderBoard, inboxBoard, adminBoard].forEach((node) => {
     node.hidden = true;
   });
   (panelMap[activePanel] || panelMap.projects).forEach((node) => {
