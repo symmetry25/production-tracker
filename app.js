@@ -7928,6 +7928,12 @@ function trackingV2TaskRows(tracker) {
       const bid = Math.max(2, Math.round((task.dueDay % 5) + 2));
       const logged = Math.round((bid * (task.progress || 0) + (task.status === "CHANGES_REQUESTED" ? 1.6 : task.status === "ON_HOLD" ? 2.2 : 0)) * 10) / 10;
       const overUnder = Math.round((logged - bid) * 10) / 10;
+      const sourceAmount = Number(task.amount) || 0;
+      const person = people.find((row) => row.name === task.assignee || row.dept === task.department);
+      const dayCost = person ? Number(person.dayRate) || 0 : 1200;
+      const estimatedCost = sourceAmount > 0 ? Math.round(sourceAmount / Math.max(tracker.summary.totalTasks || 1, 1)) : Math.round(bid * dayCost);
+      const actualCost = Math.round(logged * dayCost);
+      const costOverUnder = actualCost - estimatedCost;
       const start = clampDay(Math.max(1, task.dueDay - bid + 1));
       const end = clampDay(task.dueDay);
       return {
@@ -7940,7 +7946,11 @@ function trackingV2TaskRows(tracker) {
         logged,
         loggedPct: bid > 0 ? logged / bid : 0,
         overUnder,
-        estimatedCost: Math.round((task.amount || 0) / Math.max(tracker.summary.totalTasks || 1, 1)) || Math.round(bid * 1200),
+        estimatedCost,
+        actualCost,
+        costOverUnder,
+        startDate: `D${start}`,
+        dueDate: `D${end}`,
         left: `${Math.max(0, ((start - 1) / dayWidth) * 100)}%`,
         width: `${Math.max(5, ((end - start + 1) / dayWidth) * 100)}%`,
         rowIndex: index,
@@ -7972,7 +7982,23 @@ function trackingV2ResourceData() {
     const workload = rows.reduce((sum, row) => sum + row.cells[week.index].workload, 0);
     return { ...week, capacity, workload, delta: workload - capacity };
   });
-  return { weeks, rows, totals };
+  const unassigned = weeks.map((week) => {
+    const workload = Math.max(0, callSheets.filter((sheet) => sheet.day >= week.index * 7 + 1 && sheet.day <= week.index * 7 + 7).length - 1);
+    return { ...week, workload };
+  });
+  const projectRows = trackingV2ProjectCards(productionTrackerWorkflowData()).slice(0, 4).map((card, cardIndex) => {
+    const base = Math.max(2, Math.round((card.shotCount || 1) / 8));
+    return {
+      id: card.id,
+      name: card.name,
+      cells: weeks.map((week) => {
+        const workload = Math.max(0, Math.round(base + ((week.index + cardIndex) % 4) - 1));
+        const capacity = Math.max(3, base + 2);
+        return { ...week, workload, capacity, delta: workload - capacity };
+      }),
+    };
+  });
+  return { weeks, rows, totals, unassigned, projectRows };
 }
 
 const trackingV2StatusColors = {
@@ -8377,14 +8403,20 @@ function renderTrackingV2Surface(tracker) {
     <div class="v2-panel-head"><span>Task Table + Gantt</span><strong>Gantt Display</strong></div>
     <div class="v2-task-gantt">
       <div class="v2-task-list">
+        <div class="v2-task-header">
+          <span>Task</span><span>Status / Assignee</span><span>Reviewer</span><span>Dates</span><span>Bid</span><span>Logged</span><span>Cost +/-</span>
+        </div>
         ${data.tasks
           .map(
             (task) => `
               <button class="v2-task-row ${task.overUnder > 0 ? "over" : ""}" type="button" data-context-kind="tracker-task" data-context-title="${escapeHtml(`${task.shotCode} · ${task.name}`)}" data-context-meta="${escapeHtml(`${trackingV2StatusLabel(task.status)} · ${task.assignee}`)}" data-tracker-task-id="${escapeHtml(task.id)}">
                 <strong>${escapeHtml(task.shotCode)} · ${escapeHtml(task.label)}</strong>
                 <span>${trackingV2StatusDot(task.status)}${escapeHtml(task.assignee)}</span>
-                <em>${task.start} → ${task.end} · ${formatProgressNumber(task.logged)}/${task.bid}d</em>
-                <b>${task.overUnder > 0 ? `+${formatProgressNumber(task.overUnder)}d` : `${formatProgressNumber(task.overUnder)}d`}</b>
+                <span>${escapeHtml(task.reviewer)}</span>
+                <em>${task.startDate} → ${task.dueDate}</em>
+                <em>${task.bid}d</em>
+                <em>${formatProgressNumber(task.logged)}d · ${percentText(task.loggedPct)}</em>
+                <b>${task.costOverUnder > 0 ? "+" : ""}${money.format(task.costOverUnder)}</b>
               </button>
             `,
           )
@@ -8406,6 +8438,12 @@ function renderTrackingV2Surface(tracker) {
 
   resourcePlanning.innerHTML = `
     <div class="v2-panel-head"><span>Resource Planning</span><strong>Weekly · Person Days</strong></div>
+    <div class="v2-resource-toolbar">
+      <span>Studio / All Departments</span>
+      <button type="button">Weekly</button>
+      <button type="button">Line Chart</button>
+      <button type="button">Export</button>
+    </div>
     <div class="v2-capacity-chart">
       ${data.resource.totals
         .map(
@@ -8419,8 +8457,37 @@ function renderTrackingV2Surface(tracker) {
         )
         .join("")}
     </div>
+    <div class="v2-inspect-grid">
+      <div>
+        <span>Inspect Chart Data · Department</span>
+        ${data.resource.rows
+          .slice(0, 5)
+          .map((row) => {
+            const week = row.cells[0];
+            return `<p><strong>${escapeHtml(row.department.name)}</strong><em>${week.capacity}</em><em>${week.workload}</em><b class="${week.delta > 0 ? "over" : "under"}">${week.delta > 0 ? "+" : ""}${week.delta}</b></p>`;
+          })
+          .join("")}
+      </div>
+      <div>
+        <span>Inspect Chart Data · Project</span>
+        ${data.resource.projectRows
+          .map((row) => {
+            const week = row.cells[0];
+            return `<p><strong>${escapeHtml(row.name)}</strong><em>${week.capacity}</em><em>${week.workload}</em><b class="${week.delta > 0 ? "over" : "under"}">${week.delta > 0 ? "+" : ""}${week.delta}</b></p>`;
+          })
+          .join("")}
+      </div>
+    </div>
     <div class="v2-resource-grid">
       <div class="v2-resource-head"><span>Department</span>${data.resource.weeks.map((week) => `<span>${escapeHtml(week.range)}</span>`).join("")}</div>
+      <div class="v2-resource-row v2-resource-special">
+        <strong>Days Over/Under</strong>
+        ${data.resource.totals.map((cell) => `<span class="${cell.delta > 0 ? "over" : cell.workload === 0 ? "none" : "under"}">${cell.delta > 0 ? `+${cell.delta}` : cell.delta}<small>${cell.workload}/${cell.capacity}</small></span>`).join("")}
+      </div>
+      <div class="v2-resource-row v2-resource-special">
+        <strong>Unassigned Workload</strong>
+        ${data.resource.unassigned.map((cell) => `<span class="${cell.workload > 0 ? "over" : "none"}">${cell.workload}<small>unassigned</small></span>`).join("")}
+      </div>
       ${data.resource.rows
         .map(
           (row) => `
