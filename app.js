@@ -668,7 +668,11 @@ let selectedScheduleTaskId = "";
 let scheduleDragState = null;
 let selectedInspectorTarget = null;
 let selectedV2ReviewId = "";
+let selectedV2WorkOrderId = "";
+let selectedV2InboxId = "";
 let trackingV2TaskEdits = {};
+let trackingV2WorkOrderEdits = {};
+let trackingV2InboxEdits = {};
 let trackerUiState = {
   status: "all",
   assignee: "all",
@@ -8196,7 +8200,28 @@ function trackingV2WorkOrderRows() {
       type: "Audit",
     },
   ];
-  return rows.slice(0, 10);
+  return rows.slice(0, 10).map((row, index) => {
+    const edit = trackingV2WorkOrderEdits[row.id] || {};
+    const status = edit.status || row.status;
+    const priority = status === "Blocked" || row.amount > 50000 ? "High" : row.amount > 15000 ? "Medium" : "Normal";
+    return {
+      ...row,
+      status,
+      priority,
+      updatedAt: edit.updatedAt || `D${Math.max(1, (project.currentDay || 1) - (index % 3))}`,
+      nextAction:
+        status === "Closed"
+          ? "Archive evidence and notify production accountant."
+          : status === "Blocked"
+            ? "Escalate to producer, supervisor, and finance before payment."
+            : row.type === "Version"
+              ? "Route review package to supervisor and close notes before payment."
+              : row.type === "Finance"
+                ? "Match invoice, vendor, receipt, and department allocation."
+                : "Collect missing audit evidence and close risk comments.",
+      route: row.type === "Version" ? "Supervisor" : row.type === "Finance" ? "Producer + Accountant" : "Admin",
+    };
+  });
 }
 
 function trackingV2CalendarExceptionRows() {
@@ -8233,7 +8258,47 @@ function trackingV2InboxRows(tracker) {
     target: "Version",
     status: version.risk === "high" ? "ON_HOLD" : version.status === "approved" ? "FINAL" : "PENDING_REVIEW",
   }));
-  return [...tasks, ...versions].slice(0, 10);
+  return [...tasks, ...versions].slice(0, 10).map((item, index) => {
+    const edit = trackingV2InboxEdits[item.id] || {};
+    const status = edit.status || item.status;
+    return {
+      ...item,
+      status,
+      sla: status === "ON_HOLD" ? "Escalate today" : status === "FINAL" ? "Closed" : index < 3 ? "Due today" : "Due next",
+      action: status === "FINAL" ? "No action required." : item.target === "Version" ? "Open media review, add decision, then update payment gate." : "Open task detail, resolve notes, and update assignee.",
+      updatedAt: edit.updatedAt || `D${Math.max(1, (project.currentDay || 1) - (index % 2))}`,
+    };
+  });
+}
+
+function trackingV2SelectedWorkOrder(rows) {
+  return rows.find((row) => row.id === selectedV2WorkOrderId) || rows.find((row) => row.status !== "Closed") || rows[0] || null;
+}
+
+function trackingV2SelectedInbox(rows) {
+  return rows.find((row) => row.id === selectedV2InboxId) || rows.find((row) => row.status !== "FINAL") || rows[0] || null;
+}
+
+function trackingV2SetWorkOrderStatus(orderId, status) {
+  if (!orderId) return false;
+  trackingV2WorkOrderEdits[orderId] = { ...(trackingV2WorkOrderEdits[orderId] || {}), status, updatedAt: `D${project.currentDay || 1}` };
+  selectedV2WorkOrderId = orderId;
+  const surface = document.querySelector("#trackingV2Surface");
+  if (surface) surface.dataset.activePanel = "workorders";
+  renderTrackingV2Surface(productionTrackerWorkflowData());
+  setFormStatus(`Work Order 已更新：${status}`, status === "Closed" ? "good" : "warning");
+  return true;
+}
+
+function trackingV2SetInboxStatus(inboxId, status) {
+  if (!inboxId) return false;
+  trackingV2InboxEdits[inboxId] = { ...(trackingV2InboxEdits[inboxId] || {}), status, updatedAt: `D${project.currentDay || 1}` };
+  selectedV2InboxId = inboxId;
+  const surface = document.querySelector("#trackingV2Surface");
+  if (surface) surface.dataset.activePanel = "inbox";
+  renderTrackingV2Surface(productionTrackerWorkflowData());
+  setFormStatus(`Inbox 已更新：${trackingV2StatusLabel(status)}`, status === "FINAL" ? "good" : "warning");
+  return true;
 }
 
 function trackingV2AdminRows(tracker) {
@@ -8994,38 +9059,75 @@ function renderTrackingV2Surface(tracker) {
     </div>
   `;
 
+  const selectedWorkOrder = trackingV2SelectedWorkOrder(data.workOrders);
   workOrderBoard.innerHTML = `
-    <div class="v2-panel-head"><span>Work Orders</span><strong>${data.workOrders.length} open / queued</strong></div>
-    <div class="v2-workorder-table">
-      <div class="v2-workorder-head"><span>Type</span><span>Title</span><span>Owner</span><span>Status</span><span>Due</span><span>Amount</span></div>
-      ${data.workOrders.map((row) => `
-        <button class="v2-workorder-row ${row.status === "Blocked" ? "hold" : row.status === "Closed" ? "final" : "in-progress"}" type="button" data-context-kind="tracker-workorder" data-context-title="${escapeHtml(row.title)}" data-context-meta="${escapeHtml(`${row.owner} · ${row.status}`)}">
-          <span>${escapeHtml(row.type)}</span>
-          <strong>${escapeHtml(row.title)}<small>${escapeHtml(row.description)}</small></strong>
-          <span>${escapeHtml(row.owner)}</span>
-          <span>${escapeHtml(row.status)}</span>
-          <span>${escapeHtml(row.due)}</span>
-          <b>${money.format(row.amount || 0)}</b>
-        </button>
-      `).join("")}
+    <div class="v2-panel-head"><span>Work Orders</span><strong>${data.workOrders.filter((row) => row.status !== "Closed").length} open / queued</strong></div>
+    <div class="v2-workorder-console">
+      <div class="v2-workorder-table">
+        <div class="v2-workorder-head"><span>Type</span><span>Title</span><span>Owner</span><span>Status</span><span>Due</span><span>Amount</span></div>
+        ${data.workOrders.map((row) => `
+          <button class="v2-workorder-row ${row.id === selectedWorkOrder?.id ? "selected" : ""} ${row.status === "Blocked" ? "hold" : row.status === "Closed" ? "final" : "in-progress"}" type="button" data-v2-workorder-select="${escapeHtml(row.id)}" data-context-kind="tracker-workorder" data-context-title="${escapeHtml(row.title)}" data-context-meta="${escapeHtml(`${row.owner} · ${row.status}`)}">
+            <span>${escapeHtml(row.type)}</span>
+            <strong>${escapeHtml(row.title)}<small>${escapeHtml(row.description)}</small></strong>
+            <span>${escapeHtml(row.owner)}</span>
+            <span>${escapeHtml(row.status)}</span>
+            <span>${escapeHtml(row.due)}</span>
+            <b>${money.format(row.amount || 0)}</b>
+          </button>
+        `).join("")}
+      </div>
+      <aside class="v2-workorder-detail">
+        <span>Selected Work Order</span>
+        <strong>${escapeHtml(selectedWorkOrder?.title || "No work order")}</strong>
+        <small>${escapeHtml(selectedWorkOrder ? `${selectedWorkOrder.type} · ${selectedWorkOrder.route} · ${selectedWorkOrder.priority}` : "Select a work order")}</small>
+        <div class="v2-workorder-kpis">
+          <p><b>${escapeHtml(selectedWorkOrder?.status || "-")}</b><small>Status</small></p>
+          <p><b>${escapeHtml(selectedWorkOrder?.due || "-")}</b><small>Due</small></p>
+          <p><b>${selectedWorkOrder ? money.format(selectedWorkOrder.amount || 0) : "¥0"}</b><small>Amount</small></p>
+        </div>
+        <p>${escapeHtml(selectedWorkOrder?.nextAction || "No next action.")}</p>
+        <div class="v2-workorder-actions">
+          <button type="button" data-v2-workorder-status="Open" data-v2-workorder-id="${escapeHtml(selectedWorkOrder?.id || "")}">Open</button>
+          <button type="button" data-v2-workorder-status="Blocked" data-v2-workorder-id="${escapeHtml(selectedWorkOrder?.id || "")}">Block</button>
+          <button type="button" data-v2-workorder-status="Closed" data-v2-workorder-id="${escapeHtml(selectedWorkOrder?.id || "")}">Close</button>
+        </div>
+      </aside>
     </div>
   `;
 
+  const selectedInbox = trackingV2SelectedInbox(data.inbox);
   inboxBoard.innerHTML = `
-    <div class="v2-panel-head"><span>Inbox / My Tasks</span><strong>${data.inbox.length} routed items</strong></div>
-    <div class="v2-inbox-board">
-      ${["producer", "supervisor", "reviewer"].map((role) => `
-        <section>
-          <h5>${escapeHtml(role)}</h5>
-          ${data.inbox.filter((item) => item.role === role).map((item) => `
-            <button type="button" class="v2-inbox-row ${trackingV2StatusClass(item.status)}" data-context-kind="tracker-inbox" data-context-title="${escapeHtml(item.title)}" data-context-meta="${escapeHtml(item.meta)}">
-              <strong>${escapeHtml(item.title)}</strong>
-              <span>${trackingV2StatusDot(item.status)}${escapeHtml(item.target)}</span>
-              <small>${escapeHtml(item.meta)}</small>
-            </button>
-          `).join("") || `<div class="v2-empty-mini">No routed items</div>`}
-        </section>
-      `).join("")}
+    <div class="v2-panel-head"><span>Inbox / My Tasks</span><strong>${data.inbox.filter((item) => item.status !== "FINAL").length} routed items</strong></div>
+    <div class="v2-inbox-console">
+      <div class="v2-inbox-board">
+        ${["producer", "supervisor", "reviewer"].map((role) => `
+          <section>
+            <h5>${escapeHtml(role)}</h5>
+            ${data.inbox.filter((item) => item.role === role).map((item) => `
+              <button type="button" class="v2-inbox-row ${item.id === selectedInbox?.id ? "selected" : ""} ${trackingV2StatusClass(item.status)}" data-v2-inbox-select="${escapeHtml(item.id)}" data-context-kind="tracker-inbox" data-context-title="${escapeHtml(item.title)}" data-context-meta="${escapeHtml(item.meta)}">
+                <strong>${escapeHtml(item.title)}</strong>
+                <span>${trackingV2StatusDot(item.status)}${escapeHtml(item.target)} · ${escapeHtml(item.sla)}</span>
+                <small>${escapeHtml(item.meta)}</small>
+              </button>
+            `).join("") || `<div class="v2-empty-mini">No routed items</div>`}
+          </section>
+        `).join("")}
+      </div>
+      <aside class="v2-inbox-detail">
+        <span>Routed Item</span>
+        <strong>${escapeHtml(selectedInbox?.title || "No routed item")}</strong>
+        <small>${escapeHtml(selectedInbox ? `${selectedInbox.role} · ${selectedInbox.target} · ${selectedInbox.updatedAt}` : "Select an item")}</small>
+        <p>${escapeHtml(selectedInbox?.action || "No action required.")}</p>
+        <div class="v2-inbox-route">
+          <b>${trackingV2StatusDot(selectedInbox?.status || "WAITING_TO_START")}${escapeHtml(trackingV2StatusLabel(selectedInbox?.status || "WAITING_TO_START"))}</b>
+          <em>${escapeHtml(selectedInbox?.sla || "No SLA")}</em>
+        </div>
+        <div class="v2-workorder-actions">
+          <button type="button" data-v2-inbox-status="PENDING_REVIEW" data-v2-inbox-id="${escapeHtml(selectedInbox?.id || "")}">Review</button>
+          <button type="button" data-v2-inbox-status="ON_HOLD" data-v2-inbox-id="${escapeHtml(selectedInbox?.id || "")}">Hold</button>
+          <button type="button" data-v2-inbox-status="FINAL" data-v2-inbox-id="${escapeHtml(selectedInbox?.id || "")}">Done</button>
+        </div>
+      </aside>
     </div>
   `;
 
@@ -14576,6 +14678,32 @@ function setupProductionTrackerControls() {
     if (v2ReviewDecision) {
       const reviewId = v2ReviewDecision.dataset.v2ReviewId || "";
       if (reviewId) trackingV2ReviewDecision(reviewId, v2ReviewDecision.dataset.v2ReviewDecision || "submitted");
+      return;
+    }
+    const v2WorkOrderSelect = event.target.closest("[data-v2-workorder-select]");
+    if (v2WorkOrderSelect) {
+      selectedV2WorkOrderId = v2WorkOrderSelect.dataset.v2WorkorderSelect || "";
+      const surface = document.querySelector("#trackingV2Surface");
+      if (surface) surface.dataset.activePanel = "workorders";
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      return;
+    }
+    const v2WorkOrderStatus = event.target.closest("[data-v2-workorder-status]");
+    if (v2WorkOrderStatus) {
+      trackingV2SetWorkOrderStatus(v2WorkOrderStatus.dataset.v2WorkorderId || "", v2WorkOrderStatus.dataset.v2WorkorderStatus || "Open");
+      return;
+    }
+    const v2InboxSelect = event.target.closest("[data-v2-inbox-select]");
+    if (v2InboxSelect) {
+      selectedV2InboxId = v2InboxSelect.dataset.v2InboxSelect || "";
+      const surface = document.querySelector("#trackingV2Surface");
+      if (surface) surface.dataset.activePanel = "inbox";
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      return;
+    }
+    const v2InboxStatus = event.target.closest("[data-v2-inbox-status]");
+    if (v2InboxStatus) {
+      trackingV2SetInboxStatus(v2InboxStatus.dataset.v2InboxId || "", v2InboxStatus.dataset.v2InboxStatus || "PENDING_REVIEW");
       return;
     }
     const roleFilter = event.target.closest("[data-tracker-role-filter]");

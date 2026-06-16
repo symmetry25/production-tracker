@@ -2880,6 +2880,8 @@ main {
 .v2-note-stream,
 .v2-calendar-exceptions,
 .v2-inbox-board section,
+.v2-workorder-detail,
+.v2-inbox-detail,
 .v2-admin-grid section {
   min-width: 0;
   border: 1px solid var(--line);
@@ -3162,10 +3164,23 @@ main {
   grid-column: 2;
 }
 
+.v2-workorder-console,
+.v2-inbox-console {
+  display: grid;
+  grid-template-columns: minmax(720px, 1fr) minmax(280px, 0.34fr);
+  min-width: 0;
+  background: var(--surface);
+}
+
+.v2-inbox-console {
+  grid-template-columns: minmax(760px, 1fr) minmax(270px, 0.32fr);
+}
+
 .v2-workorder-table {
   display: grid;
   min-width: 0;
   overflow-x: auto;
+  border-right: 1px solid var(--line);
 }
 
 .v2-workorder-head,
@@ -3197,6 +3212,22 @@ main {
   text-align: left;
 }
 
+.v2-workorder-row.selected,
+.v2-inbox-row.selected {
+  color: var(--ink);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--blue) 14%, transparent), transparent 68%),
+    var(--surface-raised);
+  outline: 1px solid color-mix(in srgb, var(--blue) 34%, var(--line));
+  outline-offset: -1px;
+}
+
+.v2-workorder-row b {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .v2-workorder-row.hold {
   box-shadow: inset 4px 0 0 var(--red);
 }
@@ -3209,6 +3240,123 @@ main {
   box-shadow: inset 4px 0 0 var(--amber);
 }
 
+.v2-workorder-detail,
+.v2-inbox-detail {
+  display: grid;
+  gap: 9px;
+  align-content: start;
+  min-height: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 82%, transparent), transparent 44%),
+    var(--surface-strong);
+}
+
+.v2-workorder-detail > span,
+.v2-inbox-detail > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.v2-workorder-detail > strong,
+.v2-inbox-detail > strong {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.v2-workorder-detail > small,
+.v2-inbox-detail > small,
+.v2-workorder-detail > p,
+.v2-inbox-detail > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.v2-workorder-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 2px;
+}
+
+.v2-workorder-kpis p {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 6px;
+}
+
+.v2-workorder-kpis b,
+.v2-inbox-route b {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-workorder-kpis small,
+.v2-inbox-route em {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.v2-workorder-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.v2-workorder-actions button {
+  min-height: 29px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--control);
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.v2-workorder-actions button:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-raised);
+}
+
+.v2-workorder-actions button:nth-child(2) {
+  border-color: color-mix(in srgb, var(--red) 36%, var(--line));
+  color: color-mix(in srgb, var(--red) 82%, var(--ink));
+}
+
+.v2-workorder-actions button:nth-child(3) {
+  border-color: color-mix(in srgb, var(--teal) 40%, var(--line));
+  color: color-mix(in srgb, var(--teal) 78%, var(--ink));
+}
+
 .v2-inbox-board,
 .v2-admin-grid {
   display: grid;
@@ -3216,6 +3364,35 @@ main {
   gap: 10px;
   padding: 10px;
   background: var(--surface);
+}
+
+.v2-inbox-board {
+  border-right: 1px solid var(--line);
+}
+
+.v2-inbox-row {
+  min-height: 70px;
+}
+
+.v2-inbox-row.final {
+  box-shadow: inset 3px 0 0 var(--teal);
+}
+
+.v2-inbox-row.hold {
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
+.v2-inbox-row.in-progress {
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+
+.v2-inbox-route {
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 6px;
 }
 
 .v2-admin-grid {
