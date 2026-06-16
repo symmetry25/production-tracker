@@ -2882,6 +2882,10 @@ main {
 .v2-inbox-board section,
 .v2-workorder-detail,
 .v2-inbox-detail,
+.v2-admin-users,
+.v2-admin-detail,
+.v2-api-console,
+.v2-api-detail,
 .v2-admin-grid section {
   min-width: 0;
   border: 1px solid var(--line);
@@ -2980,6 +2984,10 @@ main {
 .v2-note-stream > span,
 .v2-calendar-exceptions > span,
 .v2-inbox-board h5,
+.v2-admin-users h5,
+.v2-admin-detail h5,
+.v2-api-console h5,
+.v2-api-detail h5,
 .v2-admin-grid h5 {
   margin: 0;
   padding: 8px 9px;
@@ -3399,10 +3407,40 @@ main {
   grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr);
 }
 
+.v2-admin-console {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(280px, 0.82fr) minmax(360px, 1.06fr) minmax(250px, 0.72fr);
+  gap: 10px;
+  padding: 10px;
+  background: var(--surface);
+}
+
+.v2-admin-users,
+.v2-admin-detail,
+.v2-api-console,
+.v2-api-detail {
+  min-height: 320px;
+  border-radius: 7px;
+}
+
+.v2-admin-users,
+.v2-api-console {
+  overflow: auto;
+}
+
 .v2-admin-user {
   grid-template-columns: 34px minmax(0, 1fr) 72px 96px;
   gap: 8px;
   align-items: center;
+}
+
+.v2-admin-user.selected,
+.v2-api-row.selected {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--teal) 16%, transparent), transparent 72%),
+    var(--surface-raised);
+  outline: 1px solid color-mix(in srgb, var(--teal) 38%, var(--line));
+  outline-offset: -1px;
 }
 
 .v2-admin-user > span {
@@ -3418,9 +3456,143 @@ main {
   font-weight: 950;
 }
 
-.v2-api-row {
-  grid-template-columns: 52px minmax(0, 1fr) 140px;
+.v2-admin-profile {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 9px;
   align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.v2-admin-profile > span {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--surface-raised);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.v2-admin-profile strong,
+.v2-api-detail > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-admin-profile small,
+.v2-admin-profile b,
+.v2-api-detail > small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-admin-profile b {
+  grid-column: 2;
+  margin-top: -4px;
+}
+
+.v2-role-switcher,
+.v2-api-status-actions {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+  padding: 9px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.v2-role-switcher button,
+.v2-api-status-actions button {
+  min-height: 27px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--control);
+  border-radius: 5px;
+  font-size: 9.5px;
+  font-weight: 950;
+}
+
+.v2-role-switcher button.active,
+.v2-api-status-actions button.active {
+  border-color: color-mix(in srgb, var(--teal) 50%, var(--line));
+  color: var(--ink);
+  background: color-mix(in srgb, var(--teal) 14%, var(--surface-raised));
+}
+
+.v2-permission-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding: 10px;
+}
+
+.v2-permission-grid p {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 6px;
+}
+
+.v2-permission-grid p.enabled {
+  border-color: color-mix(in srgb, var(--green) 28%, var(--line));
+}
+
+.v2-permission-grid p.disabled {
+  opacity: 0.62;
+}
+
+.v2-permission-grid strong,
+.v2-permission-grid span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-permission-grid span {
+  color: var(--muted);
+  font-weight: 850;
+}
+
+.v2-api-row {
+  grid-template-columns: 52px minmax(0, 1fr) 138px;
+  align-items: center;
+}
+
+.v2-api-row.ready {
+  box-shadow: inset 3px 0 0 var(--green);
+}
+
+.v2-api-row.mock {
+  box-shadow: inset 3px 0 0 var(--amber);
+}
+
+.v2-api-row.blocked {
+  box-shadow: inset 3px 0 0 var(--red);
 }
 
 .v2-api-row b {
@@ -3433,6 +3605,79 @@ main {
   font-family: "SFMono-Regular", "Cascadia Code", "Menlo", monospace;
   font-size: 10px;
   font-weight: 900;
+}
+
+.v2-api-detail {
+  display: grid;
+  gap: 9px;
+  align-content: start;
+  padding-bottom: 10px;
+}
+
+.v2-api-detail > strong,
+.v2-api-detail > small {
+  margin: 0 10px;
+}
+
+.v2-api-status-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.v2-api-payload,
+.v2-admin-events {
+  display: grid;
+  gap: 6px;
+  margin: 0 10px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 6px;
+}
+
+.v2-api-payload span,
+.v2-admin-events > span {
+  color: var(--muted);
+  font-size: 9.5px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.v2-api-payload code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: "SFMono-Regular", "Cascadia Code", "Menlo", monospace;
+  font-size: 10px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-admin-events p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+
+.v2-admin-events p:first-of-type {
+  border-top: 0;
+}
+
+.v2-admin-events b,
+.v2-admin-events small {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-admin-events small {
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .tracking-console-grid {

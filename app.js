@@ -670,9 +670,13 @@ let selectedInspectorTarget = null;
 let selectedV2ReviewId = "";
 let selectedV2WorkOrderId = "";
 let selectedV2InboxId = "";
+let selectedV2AdminUserId = "";
+let selectedV2ApiRouteId = "";
 let trackingV2TaskEdits = {};
 let trackingV2WorkOrderEdits = {};
 let trackingV2InboxEdits = {};
+let trackingV2AdminRoleEdits = {};
+let trackingV2ApiRouteEdits = {};
 let trackerUiState = {
   status: "all",
   assignee: "all",
@@ -7046,6 +7050,7 @@ function trackerRoleLabel(role) {
     {
       admin: "Admin",
       producer: "Producer",
+      supervisor: "Supervisor",
       artist: "Artist",
       reviewer: "Reviewer",
     }[role] || role || "Artist"
@@ -8304,22 +8309,122 @@ function trackingV2SetInboxStatus(inboxId, status) {
 function trackingV2AdminRows(tracker) {
   return trackerUserRows(tracker).slice(0, 10).map((user) => ({
     ...user,
+    role: trackingV2AdminRoleEdits[user.id] || user.role,
     login: user.email.split("@")[0],
     capacity: Math.max(3, Math.min(6, Math.round((100 - Math.max(0, 100 - user.trust)) / 18))),
-    permission: user.role === "admin" ? "Full access" : user.role === "producer" ? "Edit + reports" : user.role === "reviewer" ? "Review only" : "Own tasks",
+    permission: trackingV2PermissionSummary(trackingV2AdminRoleEdits[user.id] || user.role),
   }));
+}
+
+function trackingV2PermissionMatrix(role) {
+  const activeRole = role || "artist";
+  const permissions = [
+    { key: "projects", label: "Projects", admin: true, producer: true, supervisor: false, artist: false, reviewer: false },
+    { key: "tasks", label: "Tasks", admin: true, producer: true, supervisor: true, artist: "own", reviewer: false },
+    { key: "versions", label: "Versions", admin: true, producer: true, supervisor: true, artist: "upload", reviewer: "comment" },
+    { key: "reports", label: "Reports", admin: true, producer: true, supervisor: "view", artist: false, reviewer: "view" },
+    { key: "audit", label: "Audit", admin: true, producer: true, supervisor: "view", artist: false, reviewer: false },
+    { key: "admin", label: "Admin", admin: true, producer: false, supervisor: false, artist: false, reviewer: false },
+  ];
+  return permissions.map((item) => {
+    const value = item[activeRole];
+    return {
+      ...item,
+      value,
+      labelValue: value === true ? "Edit" : value === "own" ? "Own" : value === "upload" ? "Upload" : value === "comment" ? "Comment" : value === "view" ? "View" : "No access",
+      enabled: Boolean(value),
+    };
+  });
+}
+
+function trackingV2PermissionSummary(role) {
+  if (role === "admin") return "Full access";
+  if (role === "producer") return "Edit + reports";
+  if (role === "supervisor") return "Approve dept";
+  if (role === "reviewer") return "Review + comments";
+  return "Own tasks";
+}
+
+function trackingV2SelectedAdminUser(rows) {
+  return rows.find((row) => row.id === selectedV2AdminUserId) || rows.find((row) => row.role === "producer") || rows[0] || null;
+}
+
+function trackingV2SetAdminRole(userId, role) {
+  if (!userId || !role) return false;
+  trackingV2AdminRoleEdits[userId] = role;
+  selectedV2AdminUserId = userId;
+  pipelineEvents = normalizePipelineEvents([
+    {
+      id: `v2-admin-role-${Date.now()}`,
+      action: "Admin.roleChanged",
+      label: "Role changed",
+      entityType: "User",
+      entityId: userId,
+      status: role === "admin" ? "needs_review" : "queued",
+      payload: { userId, role, source: "prd-v2-admin" },
+      createdAt: new Date().toISOString(),
+    },
+    ...pipelineEvents,
+  ]);
+  const surface = document.querySelector("#trackingV2Surface");
+  if (surface) surface.dataset.activePanel = "admin";
+  renderTrackingV2Surface(productionTrackerWorkflowData());
+  setFormStatus(`权限已更新：${trackerRoleLabel(role)}`, role === "admin" ? "warning" : "good");
+  return true;
 }
 
 function trackingV2ApiRows() {
   return [
-    ["GET", "/api/projects/:id/stats", "dashboard widgets"],
-    ["GET", "/api/projects/:id/shots", "pipeline table"],
-    ["GET", "/api/tasks?status=", "task filters"],
-    ["POST", "/api/tasks/:id/assign", "assignment"],
-    ["PATCH", "/api/versions/:id/status", "supervisor approval"],
-    ["GET", "/api/resource-planning/inspect", "inspect chart data"],
-    ["POST", "/api/calendar-exceptions", "calendar exception"],
-  ].map(([method, endpoint, purpose]) => ({ method, endpoint, purpose }));
+    ["GET", "/api/projects/:id/stats", "dashboard widgets", "Ready", "Producer"],
+    ["GET", "/api/projects/:id/shots", "pipeline table", "Ready", "Producer"],
+    ["GET", "/api/tasks?status=", "task filters", "Mock", "Producer"],
+    ["POST", "/api/tasks/:id/assign", "assignment", "Mock", "Producer"],
+    ["PATCH", "/api/versions/:id/status", "supervisor approval", "Ready", "Supervisor"],
+    ["GET", "/api/resource-planning/inspect", "inspect chart data", "Mock", "Producer"],
+    ["POST", "/api/calendar-exceptions", "calendar exception", "Blocked", "Admin"],
+  ].map(([method, endpoint, purpose, status, owner], index) => {
+    const id = `api-${pipelinePathSegment(`${method}-${endpoint}`, `route-${index}`)}`;
+    const edit = trackingV2ApiRouteEdits[id] || {};
+    const finalStatus = edit.status || status;
+    return {
+      id,
+      method,
+      endpoint,
+      purpose,
+      status: finalStatus,
+      owner,
+      updatedAt: edit.updatedAt || `D${Math.max(1, (project.currentDay || 1) - (index % 3))}`,
+      risk: finalStatus === "Blocked" ? "high" : finalStatus === "Mock" ? "medium" : "low",
+    };
+  });
+}
+
+function trackingV2SelectedApiRoute(rows) {
+  return rows.find((row) => row.id === selectedV2ApiRouteId) || rows.find((row) => row.status !== "Ready") || rows[0] || null;
+}
+
+function trackingV2SetApiRouteStatus(routeId, status) {
+  if (!routeId || !status) return false;
+  trackingV2ApiRouteEdits[routeId] = { ...(trackingV2ApiRouteEdits[routeId] || {}), status, updatedAt: `D${project.currentDay || 1}` };
+  selectedV2ApiRouteId = routeId;
+  pipelineEvents = normalizePipelineEvents([
+    {
+      id: `v2-api-${Date.now()}`,
+      action: "API.statusChanged",
+      label: "API readiness updated",
+      entityType: "API Route",
+      entityId: routeId,
+      status: status === "Blocked" ? "needs_review" : "queued",
+      payload: { routeId, status, source: "prd-v2-admin" },
+      createdAt: new Date().toISOString(),
+    },
+    ...pipelineEvents,
+  ]);
+  const surface = document.querySelector("#trackingV2Surface");
+  if (surface) surface.dataset.activePanel = "admin";
+  renderTrackingV2Surface(productionTrackerWorkflowData());
+  setFormStatus(`API 状态已更新：${status}`, status === "Blocked" ? "warning" : "good");
+  return true;
 }
 
 function trackingV2VersionTaskStatus(version) {
@@ -9131,13 +9236,18 @@ function renderTrackingV2Surface(tracker) {
     </div>
   `;
 
+  const selectedAdminUser = trackingV2SelectedAdminUser(data.adminUsers);
+  const selectedApiRoute = trackingV2SelectedApiRoute(data.apiRoutes);
+  const permissionRows = trackingV2PermissionMatrix(selectedAdminUser?.role || "artist");
+  const adminEvents = pipelineEvents.filter((event) => /^Admin\.|^API\./u.test(event.action || "")).slice(0, 5);
+  const blockedRoutes = data.apiRoutes.filter((route) => route.status === "Blocked").length;
   adminBoard.innerHTML = `
-    <div class="v2-panel-head"><span>Admin Users + API Map</span><strong>${data.adminUsers.length} users · ${data.apiRoutes.length} endpoints</strong></div>
-    <div class="v2-admin-grid">
-      <section>
+    <div class="v2-panel-head"><span>Admin Users + API Map</span><strong>${data.adminUsers.length} users · ${data.apiRoutes.length} endpoints · ${blockedRoutes} blocked</strong></div>
+    <div class="v2-admin-console">
+      <section class="v2-admin-users">
         <h5>Users / Roles</h5>
         ${data.adminUsers.map((user) => `
-          <button class="v2-admin-user" type="button" data-context-kind="tracker-user" data-context-title="${escapeHtml(user.name)}" data-context-meta="${escapeHtml(`${trackerRoleLabel(user.role)} · ${user.email}`)}">
+          <button class="v2-admin-user ${user.id === selectedAdminUser?.id ? "selected" : ""}" type="button" data-v2-admin-user="${escapeHtml(user.id)}" data-context-kind="tracker-user" data-context-title="${escapeHtml(user.name)}" data-context-meta="${escapeHtml(`${trackerRoleLabel(user.role)} · ${user.email}`)}">
             <span>${escapeHtml(user.name.slice(0, 2))}</span>
             <strong>${escapeHtml(user.name)}<small>${escapeHtml(user.email)}</small></strong>
             <em>${escapeHtml(trackerRoleLabel(user.role))}</em>
@@ -9145,12 +9255,48 @@ function renderTrackingV2Surface(tracker) {
           </button>
         `).join("")}
       </section>
-      <section>
+      <section class="v2-admin-detail">
+        <h5>Permission Console</h5>
+        <div class="v2-admin-profile">
+          <span>${escapeHtml(selectedAdminUser?.name.slice(0, 2) || "U")}</span>
+          <strong>${escapeHtml(selectedAdminUser?.name || "No user")}<small>${escapeHtml(selectedAdminUser ? `${selectedAdminUser.title || selectedAdminUser.department || "Team"} · ${selectedAdminUser.login}` : "Select a user")}</small></strong>
+          <b>${escapeHtml(selectedAdminUser ? `${selectedAdminUser.tasks} tasks · trust ${selectedAdminUser.trust}` : "No data")}</b>
+        </div>
+        <div class="v2-role-switcher">
+          ${["admin", "producer", "supervisor", "artist", "reviewer"].map((role) => `<button type="button" class="${selectedAdminUser?.role === role ? "active" : ""}" data-v2-admin-role="${escapeHtml(role)}" data-v2-admin-id="${escapeHtml(selectedAdminUser?.id || "")}">${escapeHtml(trackerRoleLabel(role))}</button>`).join("")}
+        </div>
+        <div class="v2-permission-grid">
+          ${permissionRows.map((row) => `
+            <p class="${row.enabled ? "enabled" : "disabled"}"><strong>${escapeHtml(row.label)}</strong><span>${escapeHtml(row.labelValue)}</span></p>
+          `).join("")}
+        </div>
+      </section>
+      <section class="v2-api-console">
         <h5>REST API Readiness</h5>
         ${data.apiRoutes.map((route) => `
-          <p class="v2-api-row"><b>${escapeHtml(route.method)}</b><code>${escapeHtml(route.endpoint)}</code><span>${escapeHtml(route.purpose)}</span></p>
+          <button class="v2-api-row ${route.id === selectedApiRoute?.id ? "selected" : ""} ${route.status.toLowerCase()}" type="button" data-v2-api-route="${escapeHtml(route.id)}" data-context-kind="tracker-api" data-context-title="${escapeHtml(route.endpoint)}" data-context-meta="${escapeHtml(`${route.method} · ${route.status}`)}">
+            <b>${escapeHtml(route.method)}</b>
+            <code>${escapeHtml(route.endpoint)}</code>
+            <span>${escapeHtml(route.status)} · ${escapeHtml(route.purpose)}</span>
+          </button>
         `).join("")}
       </section>
+      <aside class="v2-api-detail">
+        <h5>Endpoint Gate</h5>
+        <strong>${escapeHtml(selectedApiRoute?.endpoint || "No endpoint")}</strong>
+        <small>${escapeHtml(selectedApiRoute ? `${selectedApiRoute.method} · owner ${selectedApiRoute.owner} · ${selectedApiRoute.updatedAt}` : "Select an API route")}</small>
+        <div class="v2-api-status-actions">
+          ${["Ready", "Mock", "Blocked"].map((status) => `<button type="button" class="${selectedApiRoute?.status === status ? "active" : ""}" data-v2-api-status="${escapeHtml(status)}" data-v2-api-id="${escapeHtml(selectedApiRoute?.id || "")}">${escapeHtml(status)}</button>`).join("")}
+        </div>
+        <div class="v2-api-payload">
+          <span>Response Shape</span>
+          <code>{ data: ${escapeHtml(selectedApiRoute?.purpose || "resource")}, error: null }</code>
+        </div>
+        <div class="v2-admin-events">
+          <span>Audit Events</span>
+          ${adminEvents.map((event) => `<p><b>${escapeHtml(event.label)}</b><small>${escapeHtml(`${event.entityType} · ${event.status}`)}</small></p>`).join("") || `<p><b>No admin events</b><small>Role/API changes will appear here.</small></p>`}
+        </div>
+      </aside>
     </div>
   `;
 
@@ -14704,6 +14850,32 @@ function setupProductionTrackerControls() {
     const v2InboxStatus = event.target.closest("[data-v2-inbox-status]");
     if (v2InboxStatus) {
       trackingV2SetInboxStatus(v2InboxStatus.dataset.v2InboxId || "", v2InboxStatus.dataset.v2InboxStatus || "PENDING_REVIEW");
+      return;
+    }
+    const v2AdminUser = event.target.closest("[data-v2-admin-user]");
+    if (v2AdminUser) {
+      selectedV2AdminUserId = v2AdminUser.dataset.v2AdminUser || "";
+      const surface = document.querySelector("#trackingV2Surface");
+      if (surface) surface.dataset.activePanel = "admin";
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      return;
+    }
+    const v2AdminRole = event.target.closest("[data-v2-admin-role]");
+    if (v2AdminRole) {
+      trackingV2SetAdminRole(v2AdminRole.dataset.v2AdminId || "", v2AdminRole.dataset.v2AdminRole || "artist");
+      return;
+    }
+    const v2ApiRoute = event.target.closest("[data-v2-api-route]");
+    if (v2ApiRoute) {
+      selectedV2ApiRouteId = v2ApiRoute.dataset.v2ApiRoute || "";
+      const surface = document.querySelector("#trackingV2Surface");
+      if (surface) surface.dataset.activePanel = "admin";
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      return;
+    }
+    const v2ApiStatus = event.target.closest("[data-v2-api-status]");
+    if (v2ApiStatus) {
+      trackingV2SetApiRouteStatus(v2ApiStatus.dataset.v2ApiId || "", v2ApiStatus.dataset.v2ApiStatus || "Mock");
       return;
     }
     const roleFilter = event.target.closest("[data-tracker-role-filter]");
