@@ -667,6 +667,7 @@ let projectLibrary = [];
 let selectedScheduleTaskId = "";
 let scheduleDragState = null;
 let selectedInspectorTarget = null;
+let selectedV2ReviewId = "";
 let trackingV2TaskEdits = {};
 let trackerUiState = {
   status: "all",
@@ -8256,6 +8257,75 @@ function trackingV2ApiRows() {
   ].map(([method, endpoint, purpose]) => ({ method, endpoint, purpose }));
 }
 
+function trackingV2VersionTaskStatus(version) {
+  if (!version) return "PENDING_REVIEW";
+  if (version.status === "approved") return "FINAL";
+  if (version.status === "blocked") return "ON_HOLD";
+  if (version.status === "notes") return "PENDING_REVIEW";
+  return "PENDING_REVIEW";
+}
+
+function trackingV2VersionStatusLabel(version) {
+  if (!version) return "Pending Review";
+  return vfxReviewStatusLabels[version.status]?.label || "待审";
+}
+
+function trackingV2SelectedVersion(versions) {
+  if (!Array.isArray(versions) || versions.length === 0) return null;
+  const selected = versions.find((version) => version.id === selectedV2ReviewId);
+  return selected || versions[0];
+}
+
+function trackingV2VersionNotes(version) {
+  if (!version) return [];
+  const rawNotes = String(version.notes || version.action || "Waiting for notes")
+    .split(/\n+/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const systemNotes = [
+    `${trackingV2VersionStatusLabel(version)} · ${vfxPaymentGateLabels[version.paymentGate] || version.paymentGate}`,
+    version.action,
+  ].filter(Boolean);
+  return [...new Set([...rawNotes, ...systemNotes])].slice(0, 5);
+}
+
+function trackingV2ReviewDecision(reviewId, decision) {
+  const row = normalizeVfxReviewVersions(vfxReviewVersions).find((item) => item.id === reviewId);
+  if (!row) return false;
+  const stamp = reportDateLabel();
+  if (decision === "approved") {
+    updateVfxReviewById(reviewId, {
+      status: "approved",
+      approvedCount: Math.max(Number(row.shotCount) || 1, Number(row.approvedCount) || 0),
+      paymentGate: row.paymentGate === "hold" ? "milestone" : row.paymentGate,
+      notes: [row.notes, `[${stamp}] PRD v2 Media: approved for next payment gate.`].filter(Boolean).join("\n"),
+    });
+  } else if (decision === "notes") {
+    updateVfxReviewById(reviewId, {
+      status: "notes",
+      paymentGate: "hold",
+      notes: [row.notes, `[${stamp}] PRD v2 Media: changes requested, hold payment until next version.`].filter(Boolean).join("\n"),
+    });
+  } else if (decision === "blocked") {
+    updateVfxReviewById(reviewId, {
+      status: "blocked",
+      paymentGate: "hold",
+      notes: [row.notes, `[${stamp}] PRD v2 Media: blocked by supervisor review.`].filter(Boolean).join("\n"),
+    });
+  } else {
+    updateVfxReviewById(reviewId, {
+      status: "submitted",
+      notes: [row.notes, `[${stamp}] PRD v2 Media: returned to pending review.`].filter(Boolean).join("\n"),
+    });
+  }
+  selectedV2ReviewId = reviewId;
+  saveData();
+  renderTrackingV2Surface(productionTrackerWorkflowData());
+  renderProductionTrackingConsole();
+  setFormStatus(`版本状态已更新：${row.shotGroup} · ${row.version}`, decision === "approved" ? "good" : "warning");
+  return true;
+}
+
 const trackingV2StatusColors = {
   WAITING_TO_START: "#9ba39e",
   READY_TO_START: "#378ADD",
@@ -8847,27 +8917,49 @@ function renderTrackingV2Surface(tracker) {
     </div>
   `;
 
+  const selectedVersion = trackingV2SelectedVersion(data.versions);
+  const selectedVersionStatus = trackingV2VersionTaskStatus(selectedVersion);
+  const selectedVersionNotes = trackingV2VersionNotes(selectedVersion);
   mediaCenter.innerHTML = `
-    <div class="v2-panel-head"><span>Latest Versions Filmstrip</span><strong>1 - ${Math.min(data.versions.length, 25)} of ${data.versions.length} Versions</strong></div>
+    <div class="v2-panel-head"><span>Media Review / Version Player</span><strong>${selectedVersion ? `${escapeHtml(selectedVersion.shotGroup)} · ${escapeHtml(selectedVersion.version)}` : "No Version"}</strong></div>
     <div class="v2-media-review">
       <div class="v2-version-player">
-        <span>${data.versions[0]?.media?.previewUrl ? `<img src="${escapeHtml(data.versions[0].media.previewUrl)}" alt="${escapeHtml(data.versions[0].version)}" />` : "▶"}</span>
-        <strong>${escapeHtml(data.versions[0] ? `${data.versions[0].shotGroup} · ${data.versions[0].version}` : "No active version")}</strong>
-        <small>${escapeHtml(data.versions[0]?.action || "Select a version to review notes and approval status.")}</small>
+        <span>${selectedVersion?.media?.previewUrl ? `<img src="${escapeHtml(selectedVersion.media.previewUrl)}" alt="${escapeHtml(selectedVersion.version)}" />` : "▶"}</span>
+        <strong>${escapeHtml(selectedVersion ? `${selectedVersion.shotGroup} · ${selectedVersion.version}` : "No active version")}</strong>
+        <small>${escapeHtml(selectedVersion?.action || "Select a version to review notes and approval status.")}</small>
+        <div class="v2-review-meter">
+          <span><b style="width:${Math.round(Math.max(0.04, Math.min(selectedVersion?.approvalRate || 0, 1)) * 100)}%"></b></span>
+          <em>${selectedVersion ? `${selectedVersion.approvedCount}/${selectedVersion.shotCount} approved` : "0/0 approved"}</em>
+        </div>
+        <div class="v2-review-actions">
+          <button type="button" data-v2-review-decision="approved" data-v2-review-id="${escapeHtml(selectedVersion?.id || "")}">Approve</button>
+          <button type="button" data-v2-review-decision="notes" data-v2-review-id="${escapeHtml(selectedVersion?.id || "")}">Changes</button>
+          <button type="button" data-v2-review-decision="blocked" data-v2-review-id="${escapeHtml(selectedVersion?.id || "")}">Hold</button>
+        </div>
       </div>
       <div class="v2-note-stream">
         <span>Notes Stream</span>
-        ${data.versions.slice(0, 4).map((version) => `<p><b>${escapeHtml(version.reviewer || "Reviewer")}</b><small>${escapeHtml(version.notes || version.action || "Waiting for notes")}</small></p>`).join("") || `<p><b>System</b><small>No notes yet</small></p>`}
+        <div class="v2-version-meta">
+          <strong>${trackingV2StatusDot(selectedVersionStatus)}${escapeHtml(trackingV2VersionStatusLabel(selectedVersion))}</strong>
+          <small>${escapeHtml(selectedVersion ? `${selectedVersion.vendor} · ${selectedVersion.reviewer} · ${vfxPaymentGateLabels[selectedVersion.paymentGate] || selectedVersion.paymentGate}` : "Waiting for review")}</small>
+        </div>
+        ${selectedVersionNotes.map((note) => `<p><b>${escapeHtml(selectedVersion?.reviewer || "Reviewer")}</b><small>${escapeHtml(note)}</small></p>`).join("") || `<p><b>System</b><small>No notes yet</small></p>`}
+        <div class="v2-review-checklist">
+          <span>Supervisor Checklist</span>
+          <label><input type="checkbox" ${selectedVersion?.status === "approved" ? "checked" : ""} disabled /> 版本可进入付款关口</label>
+          <label><input type="checkbox" ${selectedVersion?.notes ? "checked" : ""} disabled /> 批注已写入审阅记录</label>
+          <label><input type="checkbox" ${selectedVersion?.media?.fileName ? "checked" : ""} disabled /> 媒体文件 / 缩略图已绑定</label>
+        </div>
       </div>
     </div>
     <div class="v2-filmstrip">
       ${data.versions
         .map(
           (version) => `
-            <button class="v2-version-card ${trackingV2StatusClass(version.status === "approved" ? "FINAL" : version.status === "notes" ? "PENDING_REVIEW" : version.status === "blocked" ? "ON_HOLD" : "PENDING_REVIEW")}" type="button" data-workspace-view="audit" data-workspace-focus="vfxVersionList">
+            <button class="v2-version-card ${version.id === selectedVersion?.id ? "selected" : ""} ${trackingV2StatusClass(trackingV2VersionTaskStatus(version))}" type="button" data-v2-review-select="${escapeHtml(version.id)}" data-context-kind="vfx-review" data-context-review-id="${escapeHtml(version.id)}" data-context-title="${escapeHtml(`${version.shotGroup} · ${version.version}`)}" data-context-meta="${escapeHtml(`${version.vendor} · ${trackingV2VersionStatusLabel(version)}`)}">
               <span class="v2-version-thumb">${version.media?.previewUrl ? `<img src="${escapeHtml(version.media.previewUrl)}" alt="${escapeHtml(version.version)}" />` : "▶"}</span>
               <strong>${escapeHtml(version.shotGroup)} · ${escapeHtml(version.version)}</strong>
-              <small>${trackingV2StatusDot(version.status === "approved" ? "FINAL" : version.status === "blocked" ? "ON_HOLD" : "PENDING_REVIEW")}${escapeHtml(version.vendor)}</small>
+              <small>${trackingV2StatusDot(trackingV2VersionTaskStatus(version))}${escapeHtml(version.vendor)} · ${escapeHtml(vfxPaymentGateLabels[version.paymentGate] || version.paymentGate)}</small>
             </button>
           `,
         )
@@ -14470,6 +14562,20 @@ function setupProductionTrackerControls() {
       trackerUiState.v2TaskDateEditor = taskId;
       renderTrackingV2Surface(productionTrackerWorkflowData());
       setFormStatus(`任务日期已调整：D${nextStart} - D${Math.max(nextStart, nextEnd)}`, "good");
+      return;
+    }
+    const v2ReviewSelect = event.target.closest("[data-v2-review-select]");
+    if (v2ReviewSelect) {
+      selectedV2ReviewId = v2ReviewSelect.dataset.v2ReviewSelect || "";
+      const surface = document.querySelector("#trackingV2Surface");
+      if (surface) surface.dataset.activePanel = "media";
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      return;
+    }
+    const v2ReviewDecision = event.target.closest("[data-v2-review-decision]");
+    if (v2ReviewDecision) {
+      const reviewId = v2ReviewDecision.dataset.v2ReviewId || "";
+      if (reviewId) trackingV2ReviewDecision(reviewId, v2ReviewDecision.dataset.v2ReviewDecision || "submitted");
       return;
     }
     const roleFilter = event.target.closest("[data-tracker-role-filter]");
