@@ -6023,6 +6023,21 @@ function inspectorTargetFromElement(target) {
       );
     }
   }
+  if (target.dataset.trackerAssetId) {
+    const asset = productionTrackerWorkflowData().assetRows.find((row) => row.id === target.dataset.trackerAssetId);
+    if (asset) {
+      facts.push(
+        { label: "资产", value: `${asset.code} · ${asset.name}` },
+        { label: "类型", value: trackerAssetTypeLabel(asset.type) },
+        { label: "负责人", value: asset.owner },
+        { label: "部门", value: getDept(asset.department).name },
+        { label: "状态", value: trackerStatusLabel(asset.status) },
+        { label: "预算关联", value: money.format(asset.amount || 0) },
+        { label: "版本", value: `${asset.versionCount || 0} 个` },
+        { label: "进度", value: percentText(asset.progress || 0) },
+      );
+    }
+  }
   if (kind === "tracker-workload") {
     const work = productionTrackerWorkflowData().workloadRows.find((row) => row.name === title);
     if (work) {
@@ -6061,6 +6076,7 @@ function inspectorTargetFromElement(target) {
     queueId: target.dataset.pipelineQueueId || "",
     trackerTaskId: target.dataset.trackerTaskId || "",
     trackerShotCode: target.dataset.trackerShotCode || "",
+    trackerAssetId: target.dataset.trackerAssetId || "",
     summary: contextSummaryFromElement(target),
     facts,
   };
@@ -6775,6 +6791,125 @@ function trackerVisibleTasks(tracker) {
     });
 }
 
+function trackerAssetTypeLabel(type) {
+  return (
+    {
+      character: "角色",
+      prop: "道具 / 器材",
+      environment: "场景",
+      fx: "FX / 包装",
+    }[type] || type || "资产"
+  );
+}
+
+function trackerAssetRows(tracker) {
+  const reviewRows = vfxReviewRows();
+  const actorRows = people
+    .filter(isActorPerson)
+    .slice()
+    .sort((a, b) => personTotal(b) - personTotal(a))
+    .slice(0, 4)
+    .map((person, index) => {
+      const relatedTasks = tracker.allTasks.filter((task) => task.department === "cast" || task.shotTitle.includes(person.characterName || person.name));
+      const progress = relatedTasks.length > 0 ? averageNumbers(relatedTasks.map((task) => task.progress), activeProgressStats().rate || 0) : Math.min(1, (project.currentDay || 1) / Math.max(project.plannedDays || 1, 1));
+      const status = personTotal(person) > 0 && person.days > 0 ? taskStatusFromRate(progress, normalizeTrust(person.trust) < 70 ? "warning" : "ok", false) : "NOT_STARTED";
+      return {
+        id: `asset-character-${index}-${person.name}`,
+        type: "character",
+        name: person.characterName || person.name || "未命名角色",
+        code: `CHR-${String(index + 1).padStart(2, "0")}`,
+        owner: person.name || "未指派",
+        ownerMeta: `${personRoleDisplay(person)} · ${person.vendor || "个人 / 自由职业"}`,
+        department: "cast",
+        status,
+        progress,
+        amount: personTotal(person),
+        versionCount: 0,
+        note: `信任 ${normalizeTrust(person.trust)} · ${person.days || 0} 天 · ${money.format(person.dayRate || 0)}/日`,
+        target: "personnel",
+        focus: "actorBudgetPanel",
+      };
+    });
+
+  const propRows = equipment
+    .slice()
+    .sort((a, b) => equipmentTotal(b) - equipmentTotal(a))
+    .slice(0, 4)
+    .map((item, index) => {
+      const progress = Math.min(1, (item.days || 0) / Math.max(project.plannedDays || item.days || 1, 1));
+      const trust = normalizeTrust(item.trust);
+      const status = taskStatusFromRate(progress, trust < 68 ? "warning" : "ok", false);
+      return {
+        id: `asset-prop-${index}-${item.name}`,
+        type: "prop",
+        name: item.name || "未命名器材",
+        code: `PRP-${String(index + 1).padStart(2, "0")}`,
+        owner: item.vendor || "未登记供应商",
+        ownerMeta: `${getDept(item.dept).name} · 信任 ${trust}`,
+        department: item.dept,
+        status,
+        progress,
+        amount: equipmentTotal(item),
+        versionCount: 0,
+        note: `${item.days || 0} 天 · 押金 ${money.format(item.deposit || 0)}`,
+        target: "equipment",
+        focus: "equipmentTable",
+      };
+    });
+
+  const environmentRows = scenes
+    .slice()
+    .sort((a, b) => {
+      const riskWeight = { warning: 2, note: 1, ok: 0 };
+      return (riskWeight[b.risk] || 0) - (riskWeight[a.risk] || 0) || b.pages - a.pages;
+    })
+    .slice(0, 4)
+    .map((scene, index) => {
+      const pipeline = tracker.shotRows.find((shot) => shot.code === scene.code);
+      const status = pipeline?.warning > 0 ? "CHANGES_REQUESTED" : pipeline?.pending > 0 ? "PENDING_REVIEW" : pipeline?.progress >= 0.95 ? "APPROVED" : pipeline?.progress > 0 ? "IN_PROGRESS" : "NOT_STARTED";
+      return {
+        id: `asset-env-${scene.code}`,
+        type: "environment",
+        name: scene.location || scene.title,
+        code: `ENV-${scene.code}`,
+        owner: scene.title,
+        ownerMeta: `${scene.code} · ${scene.pages} 页 · ${sceneCount(scene.code)} 场`,
+        department: "art",
+        status,
+        progress: pipeline?.progress || 0,
+        amount: Math.round((getDept("art").budget || 0) * (scene.pages || 1) / Math.max(project.totalPages || scene.pages || 1, 1)),
+        versionCount: pipeline?.tasks.reduce((sum, task) => sum + task.versionCount, 0) || 0,
+        note: pipeline?.note || "等待场景管线",
+        target: "progress",
+        focus: "shotPipelineBoard",
+      };
+    });
+
+  const fxRows = reviewRows.slice(0, 4).map((row, index) => ({
+    id: `asset-fx-${row.id}`,
+    type: "fx",
+    name: row.shotGroup || `FX ${index + 1}`,
+    code: `FX-${String(index + 1).padStart(2, "0")}`,
+    owner: row.vendor,
+    ownerMeta: `${row.version} · ${row.reviewer}`,
+    department: "vfx_color",
+    status: taskStatusFromVersion(row) || taskStatusFromRate(row.approvalRate, row.risk === "high" ? "warning" : "ok", row.status !== "approved"),
+    progress: row.approvalRate,
+    amount: row.amount,
+    versionCount: 1,
+    note: row.action,
+    target: "audit",
+    focus: "vfxVersionList",
+  }));
+
+  const rows = [...actorRows, ...propRows, ...environmentRows, ...fxRows];
+  const typeOrder = { fx: 0, character: 1, environment: 2, prop: 3 };
+  return rows.sort((a, b) => {
+    const statusWeight = { CHANGES_REQUESTED: 0, ON_HOLD: 1, PENDING_REVIEW: 2, IN_PROGRESS: 3, NOT_STARTED: 4, APPROVED: 5 };
+    return (statusWeight[a.status] ?? 6) - (statusWeight[b.status] ?? 6) || (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9) || b.amount - a.amount;
+  });
+}
+
 function trackerTaskStatusPatch(status) {
   if (status === "APPROVED") return { status: "approved", paymentGate: "milestone" };
   if (status === "CHANGES_REQUESTED") return { status: "notes", paymentGate: "hold" };
@@ -7056,18 +7191,24 @@ function productionTrackerWorkflowData() {
       tone: row.overtime > 0 || activeTasks > 5 ? "warning" : activeTasks > 2 ? "note" : "good",
     };
   });
+  const trackerBase = { shotRows, allTasks, priorityTasks, workloadRows };
+  const assetRows = trackerAssetRows(trackerBase);
+  const assetReviewCount = assetRows.filter((asset) => asset.status === "PENDING_REVIEW" || asset.status === "CHANGES_REQUESTED" || asset.status === "ON_HOLD").length;
 
   return {
     shotRows,
     allTasks,
     priorityTasks,
     workloadRows,
+    assetRows,
     summary: {
       totalShots: shotRows.length,
       totalTasks,
       approvedTasks,
       reviewTasks,
       heldTasks,
+      totalAssets: assetRows.length,
+      assetReviewCount,
       versionCount: versions.length,
       noteCount: versions.reduce((sum, row) => sum + (row.notes ? 1 : 0), 0),
       completionRate: totalTasks > 0 ? approvedTasks / totalTasks : 0,
@@ -7223,6 +7364,7 @@ function productionTrackingData() {
     { label: "追踪项", value: rows.length, detail: `${production.schedule.length} 阶段 · ${callSheets.length} 通告`, tone: rows.some((row) => row.tone === "warning") ? "warning" : "good" },
     { label: "完成进度", value: percentText(production.progressRate), detail: `当前 D${project.currentDay}/${project.plannedDays}`, tone: production.delayed > 0 ? "warning" : production.tight > 0 ? "note" : "good" },
     { label: "预算消耗", value: percentText(budgetRate), detail: money.format(metrics.spent), tone: budgetRate > production.progressRate + 0.12 ? "warning" : budgetRate > production.progressRate + 0.06 ? "note" : "good" },
+    { label: "资产追踪", value: tracker.summary.totalAssets, detail: `${tracker.summary.assetReviewCount} 项需复核`, tone: tracker.summary.assetReviewCount > 0 ? "note" : "good" },
     { label: "任务审阅", value: tracker.summary.reviewTasks, detail: `${tracker.summary.versionCount} 版本 · ${tracker.summary.heldTasks} 暂停`, tone: tracker.summary.heldTasks > 0 ? "warning" : tracker.summary.reviewTasks > 0 ? "note" : "good" },
     { label: "资金流", value: flow.supplierCount, detail: flow.statusLabel, tone: flow.unclassifiedUsed > 0 || flow.overAllocated > 0 ? "warning" : flow.unallocated > 0 ? "note" : "good" },
   ];
@@ -7238,10 +7380,11 @@ function renderProductionTrackingConsole() {
   const taskStack = document.querySelector("#trackingTaskStack");
   const workloadPanel = document.querySelector("#trackingWorkloadPanel");
   const taskDetail = document.querySelector("#trackingTaskDetail");
+  const assetBoard = document.querySelector("#trackingAssetBoard");
   const table = document.querySelector("#trackingConsoleTable");
   const resources = document.querySelector("#trackingResourceList");
   const reviews = document.querySelector("#trackingReviewList");
-  if (!container || !badge || !kpiNode || !workflowBadge || !shotGrid || !taskStack || !workloadPanel || !taskDetail || !table || !resources || !reviews) return;
+  if (!container || !badge || !kpiNode || !workflowBadge || !shotGrid || !taskStack || !workloadPanel || !taskDetail || !assetBoard || !table || !resources || !reviews) return;
   const data = productionTrackingData();
   const warningCount = data.rows.filter((row) => row.tone === "warning").length + data.reviewRows.filter((row) => row.tone === "warning").length;
   const noteCount = data.rows.filter((row) => row.tone === "note").length + data.reviewRows.filter((row) => row.tone === "note").length;
@@ -7259,13 +7402,21 @@ function renderProductionTrackingConsole() {
   workflowBadge.className = `status-pill ${tracker.summary.heldTasks > 0 ? "warning" : tracker.summary.reviewTasks > 0 ? "note" : "good"}`;
   kpiNode.innerHTML = data.kpis
     .map(
-      (item) => `
-        <button class="tracking-kpi ${item.tone}" type="button" data-workspace-view="${item.label === "资金流" ? "fundflow" : item.label === "审查队列" ? "audit" : "progress"}">
+      (item) => {
+        const kpiTarget =
+          {
+            资金流: { view: "fundflow", focus: "fundFlowChart" },
+            资产追踪: { view: "overview", focus: "trackingAssetBoard" },
+            任务审阅: { view: "audit", focus: "vfxVersionList" },
+          }[item.label] || { view: "progress", focus: "productionScheduleBoard" };
+        return `
+        <button class="tracking-kpi ${item.tone}" type="button" data-workspace-view="${escapeHtml(kpiTarget.view)}" data-workspace-focus="${escapeHtml(kpiTarget.focus)}">
           <span>${escapeHtml(item.label)}</span>
           <strong>${escapeHtml(String(item.value))}</strong>
           <small>${escapeHtml(item.detail)}</small>
         </button>
-      `,
+      `;
+      },
     )
     .join("");
   shotGrid.innerHTML =
@@ -7370,6 +7521,36 @@ function renderProductionTrackingConsole() {
           .join("")}`
       : `<div class="producer-empty">暂无待处理任务。</div>`;
   taskDetail.innerHTML = renderTrackerTaskDetail(trackerTaskDetailTarget(tracker), tracker);
+  assetBoard.innerHTML = `
+    <div class="tracking-asset-head">
+      <div>
+        <span>Assets</span>
+        <strong>资产追踪</strong>
+      </div>
+      <em>${tracker.summary.totalAssets} 项 · ${tracker.summary.assetReviewCount} 项需复核</em>
+    </div>
+    <div class="tracking-asset-grid">
+      ${tracker.assetRows
+        .map((asset) => {
+          const statusClass = trackerStatusClass(asset.status);
+          const tone = trackerStatusTone(asset.status);
+          return `
+            <button class="tracking-asset-card ${tone}" type="button" data-context-kind="tracker-asset" data-context-title="${escapeHtml(`${asset.code} · ${asset.name}`)}" data-context-meta="${escapeHtml(`${trackerAssetTypeLabel(asset.type)} · ${asset.owner}`)}" data-tracker-asset-id="${escapeHtml(asset.id)}" data-workspace-view="${escapeHtml(asset.target)}" data-workspace-focus="${escapeHtml(asset.focus)}">
+              <span class="tracker-status ${statusClass}">${escapeHtml(trackerStatusLabel(asset.status))}</span>
+              <strong>${escapeHtml(asset.code)} · ${escapeHtml(asset.name)}</strong>
+              <small>${escapeHtml(trackerAssetTypeLabel(asset.type))} · ${escapeHtml(asset.owner)}</small>
+              <i><b style="width:${Math.round(Math.max(0.04, Math.min(asset.progress || 0, 1)) * 100)}%"></b></i>
+              <span class="tracking-asset-meta">
+                <em>${escapeHtml(asset.ownerMeta)}</em>
+                <em>${escapeHtml(money.format(asset.amount || 0))}</em>
+              </span>
+              <p>${escapeHtml(asset.note || "等待资产管线状态")}</p>
+            </button>
+          `;
+        })
+        .join("") || `<div class="producer-empty">暂无资产。录入演员、器材、场次或 VFX 版本后会生成。</div>`}
+    </div>
+  `;
   const maxWorkloadHours = Math.max(1, ...tracker.workloadRows.map((row) => row.hours));
   workloadPanel.innerHTML = `
     <div class="tracking-workload-summary">
@@ -10782,7 +10963,7 @@ function contextMenuItems(target) {
       { action: "pipeline-copy-path", label: "复制关联路径", hint: "事件绑定的文件或队列路径", key: "P" },
     ];
   }
-  if (["person", "equipment", "audit-item", "tracking"].includes(kind)) {
+  if (["person", "equipment", "audit-item", "tracking", "tracker-asset"].includes(kind)) {
     return [
       { action: "copy", label: "复制对象摘要", hint: "名称、状态和关键说明", key: "⌘C" },
       { action: "open", label: "打开关联视图", hint: "跳转到对应模块", key: "↵" },

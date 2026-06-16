@@ -1333,7 +1333,7 @@ main {
 
 .tracking-console-kpis {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -2211,6 +2211,138 @@ main {
 .tracking-detail-action button:hover {
   border-color: var(--line-strong);
   background: var(--surface-raised);
+}
+
+.tracking-asset-board {
+  min-width: 0;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.tracking-asset-head {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--violet) 7%, transparent), transparent 48%),
+    var(--surface-raised);
+}
+
+.tracking-asset-head span,
+.tracking-asset-head em {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.tracking-asset-head strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.tracking-asset-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+}
+
+.tracking-asset-card {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  min-height: 146px;
+  padding: 11px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: inset 4px 0 0 var(--teal);
+  text-align: left;
+}
+
+.tracking-asset-card:nth-child(4n) {
+  border-right: 0;
+}
+
+.tracking-asset-card.warning {
+  box-shadow: inset 4px 0 0 var(--red);
+}
+
+.tracking-asset-card.note {
+  box-shadow: inset 4px 0 0 var(--amber);
+}
+
+.tracking-asset-card:hover {
+  background: var(--surface-strong);
+}
+
+.tracking-asset-card strong,
+.tracking-asset-card small,
+.tracking-asset-card em,
+.tracking-asset-card p {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tracking-asset-card strong {
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.tracking-asset-card small,
+.tracking-asset-card em,
+.tracking-asset-card p {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.tracking-asset-card i {
+  display: block;
+  height: 7px;
+  overflow: hidden;
+  background: var(--track);
+  border-radius: 999px;
+}
+
+.tracking-asset-card i b {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--teal), var(--blue));
+  border-radius: inherit;
+}
+
+.tracking-asset-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.tracking-asset-meta em {
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.tracking-asset-card p {
+  display: -webkit-box;
+  margin: 0;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .tracking-console-section {
@@ -7239,6 +7371,7 @@ body.schedule-dragging .schedule-bar.selected {
 .actor-budget-card,
 .actor-budget-row,
 .actor-budget-empty,
+.tracking-asset-card,
 .segmented-control,
 .custom-role-group,
 .custom-role-empty,
@@ -7363,9 +7496,11 @@ body.schedule-dragging .schedule-bar.selected {
 :root.dark-mode .tracking-workflow-head,
 :root.dark-mode .tracking-shot-header,
 :root.dark-mode .tracking-workload-summary,
+:root.dark-mode .tracking-asset-head,
 :root.dark-mode .tracking-task-card,
 :root.dark-mode .tracking-shot-row,
 :root.dark-mode .tracking-workload-row,
+:root.dark-mode .tracking-asset-card,
 :root.dark-mode .tracking-console-section,
 :root.dark-mode .tracking-section-head,
 :root.dark-mode .tracking-section-head span,
@@ -7387,6 +7522,7 @@ body.schedule-dragging .schedule-bar.selected {
 :root.dark-mode .tracking-shot-row:hover,
 :root.dark-mode .tracking-task-card:hover,
 :root.dark-mode .tracking-workload-row:hover,
+:root.dark-mode .tracking-asset-card:hover,
 :root.dark-mode .pipeline-shot-cell:hover,
 :root.dark-mode .pipeline-step:hover,
 :root.dark-mode .pipeline-status-cell:hover {
@@ -7865,6 +8001,19 @@ body.schedule-dragging .schedule-bar.selected {
   .tracking-detail-notes {
     border-top: 1px solid var(--line);
   }
+
+  .tracking-console-kpis,
+  .tracking-asset-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tracking-asset-card:nth-child(4n) {
+    border-right: 1px solid var(--line);
+  }
+
+  .tracking-asset-card:nth-child(3n) {
+    border-right: 0;
+  }
 }
 
 @media (min-width: 1101px) and (max-width: 1320px) {
@@ -8249,6 +8398,19 @@ body.schedule-dragging .schedule-bar.selected {
 
   .tracking-shot-linked-tasks {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracking-asset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracking-asset-card:nth-child(3n),
+  .tracking-asset-card:nth-child(4n) {
+    border-right: 1px solid var(--line);
+  }
+
+  .tracking-asset-card:nth-child(2n) {
+    border-right: 0;
   }
 
   .tracking-task-stack {
@@ -8689,8 +8851,18 @@ body.schedule-dragging .schedule-bar.selected {
   }
 
   .tracking-filter-bar,
-  .tracking-shot-linked-tasks {
+  .tracking-shot-linked-tasks,
+  .tracking-asset-grid {
     grid-template-columns: 1fr;
+  }
+
+  .tracking-asset-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tracking-asset-card:nth-child(n) {
+    border-right: 0;
   }
 
   .tracking-detail-grid section:nth-child(2n) {
