@@ -650,6 +650,7 @@ let trackerUiState = {
   status: "all",
   assignee: "all",
   expandedShotCode: "",
+  role: "all",
 };
 
 let displaySettings = {
@@ -6011,14 +6012,15 @@ function inspectorTargetFromElement(target) {
     }
   }
   if (target.dataset.trackerTaskId) {
-    const task = productionTrackerWorkflowData().allTasks.find((row) => row.id === target.dataset.trackerTaskId);
+    const tracker = productionTrackerWorkflowData();
+    const task = [...tracker.allTasks, ...trackerProducerActionRows(tracker)].find((row) => row.id === target.dataset.trackerTaskId);
     if (task) {
       facts.push(
-        { label: "镜头", value: `${task.shotCode} · ${task.shotTitle}` },
+        { label: task.sourceType === "producer-action" ? "任务域" : "镜头", value: `${task.shotCode} · ${task.shotTitle}` },
         { label: "任务", value: task.name },
         { label: "状态", value: trackerStatusLabel(task.status) },
         { label: "负责人", value: task.assignee },
-        { label: "版本", value: task.latestVersion ? `${task.latestVersion.version} · ${task.latestVersion.vendor}` : `${task.versionCount} 个版本` },
+        { label: task.sourceType === "producer-action" ? "金额" : "版本", value: task.sourceType === "producer-action" ? money.format(task.amount || 0) : task.latestVersion ? `${task.latestVersion.version} · ${task.latestVersion.vendor}` : `${task.versionCount} 个版本` },
         { label: "批注", value: `${task.noteCount} 条` },
       );
     }
@@ -6035,6 +6037,48 @@ function inspectorTargetFromElement(target) {
         { label: "预算关联", value: money.format(asset.amount || 0) },
         { label: "版本", value: `${asset.versionCount || 0} 个` },
         { label: "进度", value: percentText(asset.progress || 0) },
+      );
+    }
+  }
+  if (target.dataset.trackerProjectId) {
+    const tracker = productionTrackerWorkflowData();
+    const projectRow = trackerProjectRows(tracker).find((row) => row.id === target.dataset.trackerProjectId);
+    if (projectRow) {
+      facts.push(
+        { label: "项目", value: projectRow.name },
+        { label: "代码", value: projectRow.code },
+        { label: "预算", value: money.format(projectRow.budget || 0) },
+        { label: "已用", value: money.format(projectRow.spent || 0) },
+        { label: "进度", value: percentText(projectRow.progress || 0) },
+        { label: "Shot / Asset", value: `${projectRow.shotCount} / ${projectRow.assetCount}` },
+        { label: "风险", value: `${projectRow.riskCount} 项` },
+      );
+    }
+  }
+  if (target.dataset.trackerUserId) {
+    const tracker = productionTrackerWorkflowData();
+    const user = trackerUserRows(tracker).find((row) => row.id === target.dataset.trackerUserId);
+    if (user) {
+      facts.push(
+        { label: "成员", value: user.name },
+        { label: "角色", value: trackerRoleLabel(user.role) },
+        { label: "部门", value: getDept(user.department).name },
+        { label: "公司/个体", value: user.vendor },
+        { label: "任务", value: `${user.tasks} 项` },
+        { label: "复核", value: `${user.reviewTasks} 项` },
+        { label: "信任", value: String(user.trust) },
+      );
+    }
+  }
+  if (target.dataset.trackerReportId) {
+    const tracker = productionTrackerWorkflowData();
+    const report = trackerReportRows(tracker).find((row) => row.id === target.dataset.trackerReportId);
+    if (report) {
+      facts.push(
+        { label: "报表", value: report.label },
+        { label: "接口", value: report.endpoint },
+        { label: "指标", value: report.value },
+        { label: "说明", value: report.detail },
       );
     }
   }
@@ -6077,6 +6121,9 @@ function inspectorTargetFromElement(target) {
     trackerTaskId: target.dataset.trackerTaskId || "",
     trackerShotCode: target.dataset.trackerShotCode || "",
     trackerAssetId: target.dataset.trackerAssetId || "",
+    trackerProjectId: target.dataset.trackerProjectId || "",
+    trackerUserId: target.dataset.trackerUserId || "",
+    trackerReportId: target.dataset.trackerReportId || "",
     summary: contextSummaryFromElement(target),
     facts,
   };
@@ -6721,6 +6768,14 @@ function taskStatusFromVersion(version) {
 
 function trackerTaskNextAction(task) {
   if (!task) return "选择一个任务查看下一步。";
+  if (task.sourceType === "producer-action") {
+    if (task.id.includes("budget")) return "打开监制分析报告，确认预算偏差、预测完片成本和需要暂停的高额支出。";
+    if (task.id.includes("payment")) return "进入审查清单，先关闭高风险凭证和暂缓付款版本，再放行下一笔款。";
+    if (task.id.includes("callsheet")) return "核对今日通告的车辆、住宿、场地和部门到场信息，锁定执行成本。";
+    if (task.id.includes("vendor")) return "补齐公司/个人、联系方式和供应商等级，避免资金流与审计证据断开。";
+    if (task.id.includes("archive")) return "保存当前项目并触发管线交付包，把项目状态固定成可复盘版本。";
+    return "打开关联处理入口，把项目级事项关闭到可交付状态。";
+  }
   if (task.status === "CHANGES_REQUESTED") return "把批注拆成可关闭项，要求负责人回传下一版日期。";
   if (task.status === "ON_HOLD") return "先确认阻塞原因，再决定是否调整供应商、排期或付款关口。";
   if (task.status === "PENDING_REVIEW") return "安排导演、监制或后期负责人完成审阅，并记录是否可进入付款。";
@@ -6731,6 +6786,9 @@ function trackerTaskNextAction(task) {
 
 function trackerTaskNotes(task) {
   if (!task) return [];
+  if (task.sourceType === "producer-action") {
+    return [task.detail, trackerTaskNextAction(task)].filter(Boolean);
+  }
   const notes = [];
   if (task.latestVersion?.notes) {
     String(task.latestVersion.notes)
@@ -6910,6 +6968,309 @@ function trackerAssetRows(tracker) {
   });
 }
 
+function trackerUserRoleFromPerson(person, tracker = null) {
+  const roleText = `${person?.role || ""} ${person?.dept || ""}`.toLowerCase();
+  if (/制片人|制片主任|producer|production manager|会计|accountant/u.test(roleText)) return "producer";
+  if (/导演|监制|review|审阅|vfx|调色|post|后期/u.test(roleText)) return "reviewer";
+  if (tracker?.allTasks?.some((task) => task.assignee === person?.name)) return "artist";
+  return "artist";
+}
+
+function trackerRoleLabel(role) {
+  return (
+    {
+      admin: "Admin",
+      producer: "Producer",
+      artist: "Artist",
+      reviewer: "Reviewer",
+    }[role] || role || "Artist"
+  );
+}
+
+function trackerUserRows(tracker) {
+  const teamRows = people.map((person, index) => {
+    const role = trackerUserRoleFromPerson(person, tracker);
+    const tasks = tracker.allTasks.filter((task) => task.assignee === person.name || task.department === person.dept);
+    const activeTasks = tasks.filter((task) => task.status !== "APPROVED").length;
+    const reviewTasks = tasks.filter((task) => task.status === "PENDING_REVIEW" || task.status === "CHANGES_REQUESTED" || task.status === "ON_HOLD").length;
+    const amount = personTotal(person);
+    const trust = normalizeTrust(person.trust);
+    const tone = reviewTasks > 0 || trust < 68 ? "warning" : activeTasks > 2 ? "note" : "good";
+    return {
+      id: `user-${index}-${person.name}`,
+      name: person.name || "未命名人员",
+      role,
+      title: personRoleDisplay(person),
+      department: person.dept,
+      vendor: person.vendor || "个人 / 自由职业",
+      email: `${pipelinePathSegment(person.name || `user-${index}`, "user").toLowerCase()}@production.local`,
+      tasks: activeTasks,
+      reviewTasks,
+      amount,
+      trust,
+      tone,
+      target: "personnel",
+      focus: "personnelTable",
+    };
+  });
+  return [
+    {
+      id: "admin-current",
+      name: "项目管理员",
+      role: "admin",
+      title: "系统 / 项目权限",
+      department: "production",
+      vendor: project.title || "当前项目",
+      email: "admin@production.local",
+      tasks: tracker.summary.reviewTasks,
+      reviewTasks: tracker.summary.heldTasks,
+      amount: project.budget || 0,
+      trust: 100,
+      tone: tracker.summary.heldTasks > 0 ? "warning" : "good",
+      target: "overview",
+      focus: "pipelineCore",
+    },
+    ...teamRows,
+  ].sort((a, b) => {
+    const roleWeight = { admin: 0, producer: 1, reviewer: 2, artist: 3 };
+    return (roleWeight[a.role] ?? 9) - (roleWeight[b.role] ?? 9) || b.reviewTasks - a.reviewTasks || b.tasks - a.tasks;
+  });
+}
+
+function trackerProjectRows(tracker) {
+  const metrics = analysisMetrics();
+  const progress = activeProgressStats();
+  const snapshots = projectLibrary.length > 0 ? projectLibrary : [createProjectSnapshot(currentProjectId, project.title)];
+  return snapshots.slice(0, 5).map((snapshot) => {
+    const isCurrent = snapshot.id === currentProjectId;
+    const data = snapshot.data || {};
+    const projectData = data.project || {};
+    const snapshotPeople = Array.isArray(data.people) ? data.people : [];
+    const snapshotScenes = Array.isArray(data.scenes) ? data.scenes : [];
+    const snapshotVersions = normalizeVfxReviewVersions(data.vfxReviewVersions || []);
+    const snapshotBudget = Number(projectData.budget) || 0;
+    const snapshotProgress = isCurrent ? progress.rate : snapshotScenes.length > 0 ? snapshotScenes.filter((scene) => scene.status === "done").length / Math.max(snapshotScenes.length, 1) : 0;
+    const snapshotSpent = isCurrent ? metrics.spent : snapshotPeople.reduce((sum, person) => sum + (Number(person.dayRate) || 0) * Math.min(Number(person.days) || 0, Number(projectData.currentDay) || 1) + Number(person.allowance || 0), 0);
+    const riskCount = isCurrent ? tracker.summary.heldTasks + tracker.summary.reviewTasks : snapshotVersions.filter((row) => row.status === "blocked" || row.status === "notes").length;
+    const updatedAt = snapshot.updatedAt ? new Date(snapshot.updatedAt) : null;
+    const tone = riskCount > 2 || (snapshotBudget > 0 && snapshotSpent / snapshotBudget > snapshotProgress + 0.12) ? "warning" : riskCount > 0 ? "note" : "good";
+    return {
+      id: snapshot.id,
+      name: snapshot.name || projectData.title || "未命名项目",
+      code: pipelinePathSegment(projectData.title || snapshot.name || "project", "project").toUpperCase().slice(0, 12),
+      budget: snapshotBudget,
+      spent: snapshotSpent,
+      progress: snapshotProgress,
+      shotCount: isCurrent ? tracker.summary.totalShots : snapshotScenes.length,
+      assetCount: isCurrent ? tracker.summary.totalAssets : snapshotPeople.length + snapshotVersions.length,
+      riskCount,
+      updated: updatedAt ? updatedAt.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" }) : "未保存",
+      current: isCurrent,
+      tone,
+    };
+  });
+}
+
+function trackerProducerActionRows(tracker) {
+  const metrics = analysisMetrics();
+  const audit = auditSummaryData();
+  const flow = fundFlowReadableData(8);
+  const today = callSheets.find((sheet) => sheet.day === project.currentDay) || callSheets[callSheets.length - 1] || null;
+  const heldVersions = vfxReviewRows().filter((row) => row.paymentGate === "hold" || row.status === "blocked" || row.status === "notes");
+  const missingVendorCount = people.filter((person) => !person.vendor || person.vendor === "个人 / 自由职业").length + equipment.filter((item) => !item.vendor || item.vendor === "未登记公司").length;
+  const rows = [
+    {
+      id: "producer-budget-guard",
+      name: "Budget Guard",
+      label: "预算偏差复核",
+      status: metrics.health.className === "warning" ? "CHANGES_REQUESTED" : metrics.health.className === "note" ? "PENDING_REVIEW" : "IN_PROGRESS",
+      userRole: "producer",
+      assignee: "制片人 / 监制",
+      assigneeRole: "Producer",
+      dueDay: project.currentDay || 1,
+      detail: `${money.format(metrics.spent)} 已用 · 预测 ${money.format(metrics.projectedFinal)}`,
+      amount: Math.abs(metrics.variance || 0),
+      progress: Math.max(0, Math.min(metrics.progressRate || 0, 1)),
+      target: "analysis",
+      focus: "analysisReportMetrics",
+      priority: metrics.health.className === "warning" ? 2 : 1,
+    },
+    {
+      id: "producer-payment-gate",
+      name: "Payment Gate",
+      label: "付款关口复核",
+      status: audit.highRiskCount > 0 || heldVersions.length > 0 ? "ON_HOLD" : audit.mediumRiskCount > 0 ? "PENDING_REVIEW" : "IN_PROGRESS",
+      userRole: "producer",
+      assignee: "执行制片 / 制片主任",
+      assigneeRole: "Line Producer",
+      dueDay: project.currentDay || 1,
+      detail: `${audit.highRiskCount} 高风险 · ${heldVersions.length} 个版本暂缓 · ${money.format(audit.reviewedAmount || 0)} 覆盖`,
+      amount: audit.reviewedAmount || 0,
+      progress: audit.coverage || 0,
+      target: "audit",
+      focus: "auditTableBody",
+      priority: audit.highRiskCount > 0 ? 2 : 1,
+    },
+    {
+      id: "producer-callsheet-lock",
+      name: "Call Sheet Lock",
+      label: "今日通告锁定",
+      status: today ? (today.day <= (project.currentDay || 1) ? "IN_PROGRESS" : "NOT_STARTED") : "NOT_STARTED",
+      userRole: "producer",
+      assignee: "第一副导演 / 制片",
+      assigneeRole: "1st AD + Production",
+      dueDay: today?.day || project.currentDay || 1,
+      detail: today ? `${today.code} · ${today.title} · ${today.extra.vehicles} 车 / ${today.extra.rooms} 房` : "等待通告单",
+      amount: today ? dayTotal(today) : 0,
+      progress: today ? Math.min(1, (project.currentDay || 1) / Math.max(today.day || 1, 1)) : 0,
+      target: "callsheet",
+      focus: "callsheetDetail",
+      priority: 1,
+    },
+    {
+      id: "producer-vendor-cleanup",
+      name: "Vendor Cleanup",
+      label: "公司 / 个人信息补齐",
+      status: missingVendorCount > 0 ? "CHANGES_REQUESTED" : "APPROVED",
+      userRole: "producer",
+      assignee: "制作协管 / 会计",
+      assigneeRole: "Production Coordinator",
+      dueDay: project.currentDay || 1,
+      detail: `${missingVendorCount} 项供应商待补 · 资金流 ${flow.statusLabel}`,
+      amount: flow.unclassifiedUsed || 0,
+      progress: missingVendorCount > 0 ? 0.35 : 1,
+      target: "input",
+      focus: "personForm",
+      priority: missingVendorCount > 0 ? 1 : 0,
+    },
+    {
+      id: "producer-project-archive",
+      name: "Project Archive",
+      label: "项目保存与交付包",
+      status: projectLibrary.some((item) => item.id === currentProjectId) ? "APPROVED" : "PENDING_REVIEW",
+      userRole: "producer",
+      assignee: "项目管理员",
+      assigneeRole: "Admin",
+      dueDay: project.plannedDays || project.currentDay || 1,
+      detail: `${projectLibrary.length || 1} 个本地项目 · ${pipelineEvents.length} 个管线事件`,
+      amount: project.budget || 0,
+      progress: projectLibrary.some((item) => item.id === currentProjectId) ? 1 : 0.5,
+      target: "overview",
+      focus: "pipelineCore",
+      priority: 0,
+    },
+  ];
+  return rows.map((row, index) => ({
+    ...row,
+    id: `producer-action-${index}-${row.id}`,
+    sourceType: "producer-action",
+    shotCode: "PROD",
+    shotTitle: "项目级制片任务",
+      department: "production",
+      entityType: "PROJECT",
+      versionCount: 0,
+      noteCount: row.status === "APPROVED" ? 0 : 1,
+      latestVersion: null,
+  }));
+}
+
+function trackerMyTaskRows(tracker) {
+  const role = trackerUiState.role || "all";
+  const projectTasks = trackerProducerActionRows(tracker);
+  const shotTasks = tracker.allTasks
+    .map((task) => {
+      const matchedPerson = people.find((person) => person.name === task.assignee || person.dept === task.department);
+      const userRole = matchedPerson ? trackerUserRoleFromPerson(matchedPerson, tracker) : task.department === "post" || task.department === "vfx_color" ? "reviewer" : "artist";
+      return {
+        ...task,
+        userRole,
+        person: matchedPerson || null,
+      };
+    });
+  return [...projectTasks, ...shotTasks]
+    .filter((task) => role === "all" || task.userRole === role)
+    .sort((a, b) => {
+      const statusWeight = { CHANGES_REQUESTED: 0, ON_HOLD: 1, PENDING_REVIEW: 2, IN_PROGRESS: 3, NOT_STARTED: 4, APPROVED: 5 };
+      return (statusWeight[a.status] ?? 6) - (statusWeight[b.status] ?? 6) || a.dueDay - b.dueDay || b.priority - a.priority;
+    })
+    .slice(0, 9);
+}
+
+function trackerReportRows(tracker) {
+  const metrics = analysisMetrics();
+  const production = productionDashboardData();
+  const workload = workHourSummary();
+  const audit = auditSummaryData();
+  const flow = fundFlowReadableData(8);
+  const burndownGap = tracker.summary.actualRemaining - tracker.summary.plannedRemaining;
+  return [
+    {
+      id: "report-overview",
+      endpoint: "/api/reports/overview",
+      label: "总览报表",
+      value: `${tracker.summary.approvedTasks}/${tracker.summary.totalTasks}`,
+      detail: `${tracker.summary.totalShots} shots · ${tracker.summary.totalAssets} assets · ${audit.highRiskCount} 高风险`,
+      tone: audit.highRiskCount > 0 || tracker.summary.heldTasks > 0 ? "warning" : tracker.summary.reviewTasks > 0 ? "note" : "good",
+      target: "analysis",
+      focus: "analysisReportMetrics",
+    },
+    {
+      id: "report-burndown",
+      endpoint: "/api/reports/burndown",
+      label: "燃尽报表",
+      value: `${tracker.summary.actualRemaining} 剩余`,
+      detail: `计划剩余 ${tracker.summary.plannedRemaining} · 每日需关闭 ${formatProgressNumber(tracker.summary.dailyCloseNeeded)}`,
+      tone: burndownGap > 4 ? "warning" : burndownGap > 0 ? "note" : "good",
+      target: "overview",
+      focus: "trackingWorkloadPanel",
+    },
+    {
+      id: "report-workload",
+      endpoint: "/api/reports/workload",
+      label: "工作量报表",
+      value: `${formatProgressNumber(workload.totalHours)}h`,
+      detail: `${workload.personCount} 人 · ${workload.overtimeCount} 次加班 · 峰值 D${workload.peakDay?.day || "--"}`,
+      tone: workload.overtimeCount > 0 ? "note" : "good",
+      target: "progress",
+      focus: "workHourDashboard",
+    },
+    {
+      id: "report-finance",
+      endpoint: "/api/reports/finance",
+      label: "财务报表",
+      value: money.format(metrics.spent),
+      detail: `预测 ${money.format(metrics.projectedFinal)} · ${flow.statusLabel}`,
+      tone: metrics.health.className,
+      target: "fundflow",
+      focus: "fundFlowLargeChart",
+    },
+    {
+      id: "report-schedule",
+      endpoint: "/api/reports/schedule",
+      label: "排期报表",
+      value: `${production.schedule.length} 阶段`,
+      detail: `${production.delayed} 延期 · ${production.tight} 偏紧 · 剩余 ${production.remainingDays} 天`,
+      tone: production.delayed > 0 ? "warning" : production.tight > 0 ? "note" : "good",
+      target: "progress",
+      focus: "productionScheduleBoard",
+    },
+  ];
+}
+
+function trackerPrdSuiteData(tracker) {
+  const userRows = trackerUserRows(tracker);
+  return {
+    projectRows: trackerProjectRows(tracker),
+    myTaskRows: trackerMyTaskRows(tracker),
+    userRows,
+    roleCounts: userRows.reduce((result, row) => {
+      result[row.role] = (result[row.role] || 0) + 1;
+      return result;
+    }, {}),
+    reportRows: trackerReportRows(tracker),
+  };
+}
+
 function trackerTaskStatusPatch(status) {
   if (status === "APPROVED") return { status: "approved", paymentGate: "milestone" };
   if (status === "CHANGES_REQUESTED") return { status: "notes", paymentGate: "hold" };
@@ -6960,13 +7321,16 @@ function trackerAddNote(taskId, content) {
 }
 
 function trackerTaskDetailTarget(tracker) {
+  const producerActions = trackerProducerActionRows(tracker);
   if (selectedInspectorTarget?.trackerTaskId) {
-    const matchedById = tracker.allTasks.find((task) => task.id === selectedInspectorTarget.trackerTaskId);
+    const matchedById = [...tracker.allTasks, ...producerActions].find((task) => task.id === selectedInspectorTarget.trackerTaskId);
     if (matchedById) return matchedById;
   }
   const selectedTaskId = selectedInspectorTarget?.kind === "tracker-task" ? selectedInspectorTarget.facts?.find((item) => item.label === "任务") : null;
   if (selectedInspectorTarget?.kind === "tracker-task") {
     const titleParts = String(selectedInspectorTarget.title || "").split("·").map((item) => item.trim());
+    const matchedProducerAction = producerActions.find((task) => selectedInspectorTarget.trackerTaskId === task.id || selectedInspectorTarget.title?.includes(task.name));
+    if (matchedProducerAction) return matchedProducerAction;
     const matchedByTitle = tracker.allTasks.find((task) => task.shotCode === titleParts[0] && task.name === titleParts.slice(1).join(" · "));
     if (matchedByTitle) return matchedByTitle;
     const matchedByFact = tracker.allTasks.find((task) => task.name === selectedTaskId?.value && selectedInspectorTarget.title?.includes(task.shotCode));
@@ -6984,6 +7348,7 @@ function renderTrackerTaskDetailPanel() {
 
 function renderTrackerTaskDetail(task, tracker) {
   if (!task) return `<div class="producer-empty">暂无任务详情。录入场次、VFX 版本或排期后会显示。</div>`;
+  const isProducerAction = task.sourceType === "producer-action";
   const statusClass = trackerStatusClass(task.status);
   const statusLabel = trackerStatusLabel(task.status);
   const version = task.latestVersion || null;
@@ -7001,9 +7366,13 @@ function renderTrackerTaskDetail(task, tracker) {
       <strong>${escapeHtml(task.shotCode)} · ${escapeHtml(task.name)}</strong>
       <small>${escapeHtml(task.shotTitle)} · ${escapeHtml(getDept(task.department).name)} · D${task.dueDay}</small>
       <div class="tracking-status-actions" aria-label="任务状态操作">
-        ${["PENDING_REVIEW", "APPROVED", "CHANGES_REQUESTED", "ON_HOLD"]
-          .map((status) => `<button type="button" data-tracker-status-action="${escapeHtml(status)}" data-tracker-task-id="${escapeHtml(task.id)}">${escapeHtml(trackerStatusLabel(status))}</button>`)
-          .join("")}
+        ${
+          isProducerAction
+            ? `<button type="button" data-workspace-view="${escapeHtml(task.target || "analysis")}" data-workspace-focus="${escapeHtml(task.focus || "")}">打开处理入口</button>`
+            : ["PENDING_REVIEW", "APPROVED", "CHANGES_REQUESTED", "ON_HOLD"]
+                .map((status) => `<button type="button" data-tracker-status-action="${escapeHtml(status)}" data-tracker-task-id="${escapeHtml(task.id)}">${escapeHtml(trackerStatusLabel(status))}</button>`)
+                .join("")
+        }
       </div>
     </div>
     <div class="tracking-detail-progress" aria-label="任务进度">
@@ -7012,9 +7381,9 @@ function renderTrackerTaskDetail(task, tracker) {
       <div class="tracking-version-player" data-context-kind="tracker-task" data-context-title="${escapeHtml(`${task.shotCode} · ${task.name}`)}" data-context-meta="${escapeHtml(version ? `${version.version} · ${version.vendor}` : "暂无版本")}" data-tracker-task-id="${escapeHtml(task.id)}">
         <div class="tracking-version-frame">
           <span>${escapeHtml(task.label || "Task")}</span>
-          <strong>${escapeHtml(version ? version.version : "No Version")}</strong>
+          <strong>${escapeHtml(isProducerAction ? "PROJECT" : version ? version.version : "No Version")}</strong>
         </div>
-        <small>Frame ${frameStart}-${frameEnd} · ${escapeHtml(version ? versionStatus : "等待提交")}</small>
+        <small>${escapeHtml(isProducerAction ? task.detail || "项目级制片任务" : `Frame ${frameStart}-${frameEnd} · ${version ? versionStatus : "等待提交"}`)}</small>
       </div>
     </div>
     <div class="tracking-detail-grid">
@@ -7024,19 +7393,19 @@ function renderTrackerTaskDetail(task, tracker) {
         <small>${escapeHtml(task.assigneeRole || "未登记岗位")}</small>
       </section>
       <section>
-        <span>版本</span>
-        <strong>${escapeHtml(version ? version.version : `${task.versionCount} version`)}</strong>
-        <small>${escapeHtml(version ? `${version.vendor} · ${versionStatus}` : "等待上传版本")}</small>
+        <span>${isProducerAction ? "涉及金额" : "版本"}</span>
+        <strong>${escapeHtml(isProducerAction ? money.format(task.amount || 0) : version ? version.version : `${task.versionCount} version`)}</strong>
+        <small>${escapeHtml(isProducerAction ? task.detail || "项目级处理项" : version ? `${version.vendor} · ${versionStatus}` : "等待上传版本")}</small>
       </section>
       <section>
-        <span>验收</span>
-        <strong>${escapeHtml(approval)}</strong>
-        <small>${escapeHtml(payment)}</small>
+        <span>${isProducerAction ? "完成度" : "验收"}</span>
+        <strong>${escapeHtml(isProducerAction ? percentText(task.progress || 0) : approval)}</strong>
+        <small>${escapeHtml(isProducerAction ? statusLabel : payment)}</small>
       </section>
       <section>
-        <span>镜头范围</span>
-        <strong>${escapeHtml(shot ? `${shot.frameStart}-${shot.frameEnd}` : task.entityType)}</strong>
-        <small>${escapeHtml(shot ? `${shot.tasks.length} 项任务 · ${shot.note}` : "Shot Task")}</small>
+        <span>${isProducerAction ? "任务范围" : "镜头范围"}</span>
+        <strong>${escapeHtml(shot ? `${shot.frameStart}-${shot.frameEnd}` : task.entityType || "PROJECT")}</strong>
+        <small>${escapeHtml(shot ? `${shot.tasks.length} 项任务 · ${shot.note}` : isProducerAction ? "Project Task" : "Shot Task")}</small>
       </section>
     </div>
     <div class="tracking-detail-notes">
@@ -7051,7 +7420,7 @@ function renderTrackerTaskDetail(task, tracker) {
         <span>新增批注</span>
         <textarea rows="2" placeholder="写给供应商、艺术家或审阅人的批注" data-tracker-note-input="${escapeHtml(task.id)}"></textarea>
       </label>
-      <button class="tracking-note-submit" type="button" data-tracker-note-submit="${escapeHtml(task.id)}">保存批注</button>
+      ${isProducerAction ? `<button class="tracking-note-submit" type="button" data-workspace-view="${escapeHtml(task.target || "analysis")}" data-workspace-focus="${escapeHtml(task.focus || "")}">进入处理</button>` : `<button class="tracking-note-submit" type="button" data-tracker-note-submit="${escapeHtml(task.id)}">保存批注</button>`}
     </div>
     <div class="tracking-detail-action">
       <span>Next Action</span>
@@ -7060,7 +7429,7 @@ function renderTrackerTaskDetail(task, tracker) {
         ${history.map((item) => `<p><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.meta)}</small></p>`).join("")}
       </div>
       <div>
-        <button type="button" data-workspace-view="${task.status === "PENDING_REVIEW" || task.status === "CHANGES_REQUESTED" ? "audit" : "progress"}" data-workspace-focus="${task.status === "PENDING_REVIEW" || task.status === "CHANGES_REQUESTED" ? "vfxVersionList" : "productionScheduleBoard"}">打开关联视图</button>
+        <button type="button" data-workspace-view="${escapeHtml(isProducerAction ? task.target || "analysis" : task.status === "PENDING_REVIEW" || task.status === "CHANGES_REQUESTED" ? "audit" : "progress")}" data-workspace-focus="${escapeHtml(isProducerAction ? task.focus || "" : task.status === "PENDING_REVIEW" || task.status === "CHANGES_REQUESTED" ? "vfxVersionList" : "productionScheduleBoard")}">打开关联视图</button>
         <button type="button" data-context-kind="tracker-task" data-context-title="${escapeHtml(`${task.shotCode} · ${task.name}`)}" data-context-meta="${escapeHtml(`${statusLabel} · ${task.assignee}`)}" data-tracker-task-id="${escapeHtml(task.id)}">选中任务</button>
       </div>
     </div>
@@ -7381,14 +7750,20 @@ function renderProductionTrackingConsole() {
   const workloadPanel = document.querySelector("#trackingWorkloadPanel");
   const taskDetail = document.querySelector("#trackingTaskDetail");
   const assetBoard = document.querySelector("#trackingAssetBoard");
+  const prdSuite = document.querySelector("#trackingPrdSuite");
+  const projectBoard = document.querySelector("#trackingProjectBoard");
+  const myTaskBoard = document.querySelector("#trackingMyTaskBoard");
+  const userBoard = document.querySelector("#trackingUserBoard");
+  const reportBoard = document.querySelector("#trackingReportBoard");
   const table = document.querySelector("#trackingConsoleTable");
   const resources = document.querySelector("#trackingResourceList");
   const reviews = document.querySelector("#trackingReviewList");
-  if (!container || !badge || !kpiNode || !workflowBadge || !shotGrid || !taskStack || !workloadPanel || !taskDetail || !assetBoard || !table || !resources || !reviews) return;
+  if (!container || !badge || !kpiNode || !workflowBadge || !shotGrid || !taskStack || !workloadPanel || !taskDetail || !assetBoard || !prdSuite || !projectBoard || !myTaskBoard || !userBoard || !reportBoard || !table || !resources || !reviews) return;
   const data = productionTrackingData();
   const warningCount = data.rows.filter((row) => row.tone === "warning").length + data.reviewRows.filter((row) => row.tone === "warning").length;
   const noteCount = data.rows.filter((row) => row.tone === "note").length + data.reviewRows.filter((row) => row.tone === "note").length;
   const tracker = data.tracker;
+  const prdData = trackerPrdSuiteData(tracker);
   const allAssignees = Array.from(new Set(tracker.allTasks.map((task) => task.assignee).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
   const filteredShots = trackerFilteredShots(tracker);
   if (trackerUiState.expandedShotCode && !filteredShots.some((shot) => shot.code === trackerUiState.expandedShotCode)) {
@@ -7551,6 +7926,83 @@ function renderProductionTrackingConsole() {
         .join("") || `<div class="producer-empty">暂无资产。录入演员、器材、场次或 VFX 版本后会生成。</div>`}
     </div>
   `;
+  projectBoard.innerHTML =
+    prdData.projectRows.length > 0
+      ? prdData.projectRows
+          .map(
+            (row) => `
+              <button class="tracking-prd-row ${row.tone}${row.current ? " current" : ""}" type="button" data-context-kind="tracker-project" data-context-title="${escapeHtml(row.name)}" data-context-meta="${escapeHtml(`${row.code} · ${money.format(row.budget || 0)}`)}" data-tracker-project-id="${escapeHtml(row.id)}" data-workspace-view="overview" data-workspace-focus="productionTrackingConsole">
+                <span class="tracking-prd-code">${escapeHtml(row.code)}</span>
+                <span class="tracking-prd-main">
+                  <strong>${escapeHtml(row.name)}</strong>
+                  <small>${row.current ? "当前项目" : `保存 ${escapeHtml(row.updated)}`} · ${row.shotCount} shots · ${row.assetCount} assets</small>
+                </span>
+                <em>${escapeHtml(percentText(row.progress || 0))}</em>
+              </button>
+            `,
+          )
+          .join("")
+      : `<div class="producer-empty">暂无项目。点击顶部保存后会进入项目库。</div>`;
+  myTaskBoard.innerHTML = `
+    <div class="tracking-role-filter" aria-label="我的任务角色筛选">
+      ${[
+        ["all", "全部"],
+        ["producer", "Producer"],
+        ["artist", "Artist"],
+        ["reviewer", "Reviewer"],
+      ]
+        .map((item) => `<button type="button" class="${trackerUiState.role === item[0] ? "active" : ""}" data-tracker-role-filter="${escapeHtml(item[0])}">${escapeHtml(item[1])}</button>`)
+        .join("")}
+    </div>
+    ${
+      prdData.myTaskRows.length > 0
+        ? prdData.myTaskRows
+            .map(
+              (task) => `
+                <button class="tracking-prd-task ${trackerStatusTone(task.status)}" type="button" data-context-kind="tracker-task" data-context-title="${escapeHtml(`${task.shotCode} · ${task.name}`)}" data-context-meta="${escapeHtml(`${trackerRoleLabel(task.userRole)} · ${trackerStatusLabel(task.status)}`)}" data-tracker-task-id="${escapeHtml(task.id)}" data-workspace-view="${escapeHtml(task.sourceType === "producer-action" ? task.target : task.status === "PENDING_REVIEW" || task.status === "CHANGES_REQUESTED" ? "audit" : "progress")}" data-workspace-focus="${escapeHtml(task.sourceType === "producer-action" ? task.focus : task.status === "PENDING_REVIEW" || task.status === "CHANGES_REQUESTED" ? "vfxVersionList" : "productionScheduleBoard")}">
+                  <span class="tracker-status ${trackerStatusClass(task.status)}">${escapeHtml(trackerStatusLabel(task.status))}</span>
+                  <strong>${escapeHtml(task.shotCode)} · ${escapeHtml(task.label)}</strong>
+                  <small>${escapeHtml(task.assignee)} · ${escapeHtml(trackerRoleLabel(task.userRole))} · D${task.dueDay}</small>
+                  <em>${escapeHtml(task.sourceType === "producer-action" ? money.format(task.amount || 0) : task.latestVersion ? task.latestVersion.version : `${task.versionCount} version`)}</em>
+                </button>
+              `,
+            )
+            .join("")
+        : `<div class="producer-empty">当前角色暂无任务。</div>`
+    }
+  `;
+  userBoard.innerHTML =
+    prdData.userRows
+      .slice(0, 8)
+      .map(
+        (user) => `
+          <button class="tracking-user-row ${user.tone}" type="button" data-context-kind="tracker-user" data-context-title="${escapeHtml(user.name)}" data-context-meta="${escapeHtml(`${trackerRoleLabel(user.role)} · ${user.email}`)}" data-tracker-user-id="${escapeHtml(user.id)}" data-workspace-view="${escapeHtml(user.target)}" data-workspace-focus="${escapeHtml(user.focus)}">
+            <span class="tracking-avatar">${escapeHtml(user.name.slice(0, 2))}</span>
+            <span>
+              <strong>${escapeHtml(user.name)}</strong>
+              <small>${escapeHtml(user.title)} · ${escapeHtml(user.vendor)}</small>
+            </span>
+            <b>${escapeHtml(trackerRoleLabel(user.role))}</b>
+            <em>${user.tasks} tasks</em>
+          </button>
+        `,
+      )
+      .join("") || `<div class="producer-empty">暂无团队成员。录入人员后会显示权限建议。</div>`;
+  reportBoard.innerHTML =
+    prdData.reportRows
+      .map(
+        (report) => `
+          <button class="tracking-report-row ${report.tone}" type="button" data-context-kind="tracker-report" data-context-title="${escapeHtml(report.label)}" data-context-meta="${escapeHtml(report.endpoint)}" data-tracker-report-id="${escapeHtml(report.id)}" data-workspace-view="${escapeHtml(report.target)}" data-workspace-focus="${escapeHtml(report.focus)}">
+            <span>
+              <strong>${escapeHtml(report.label)}</strong>
+              <code>${escapeHtml(report.endpoint)}</code>
+            </span>
+            <b>${escapeHtml(report.value)}</b>
+            <small>${escapeHtml(report.detail)}</small>
+          </button>
+        `,
+      )
+      .join("");
   const maxWorkloadHours = Math.max(1, ...tracker.workloadRows.map((row) => row.hours));
   workloadPanel.innerHTML = `
     <div class="tracking-workload-summary">
@@ -10963,7 +11415,7 @@ function contextMenuItems(target) {
       { action: "pipeline-copy-path", label: "复制关联路径", hint: "事件绑定的文件或队列路径", key: "P" },
     ];
   }
-  if (["person", "equipment", "audit-item", "tracking", "tracker-asset"].includes(kind)) {
+  if (["person", "equipment", "audit-item", "tracking", "tracker-asset", "tracker-project", "tracker-user", "tracker-report"].includes(kind)) {
     return [
       { action: "copy", label: "复制对象摘要", hint: "名称、状态和关键说明", key: "⌘C" },
       { action: "open", label: "打开关联视图", hint: "跳转到对应模块", key: "↵" },
@@ -12523,9 +12975,16 @@ function setupProductionTrackerControls() {
     }
   });
   container.addEventListener("click", (event) => {
+    const roleFilter = event.target.closest("[data-tracker-role-filter]");
+    if (roleFilter) {
+      trackerUiState.role = roleFilter.dataset.trackerRoleFilter || "all";
+      renderProductionTrackingConsole();
+      setFormStatus(`任务角色筛选：${trackerUiState.role === "all" ? "全部" : trackerRoleLabel(trackerUiState.role)}`, "good");
+      return;
+    }
     const reset = event.target.closest("[data-tracker-filter-reset]");
     if (!reset) return;
-    trackerUiState = { status: "all", assignee: "all", expandedShotCode: "" };
+    trackerUiState = { status: "all", assignee: "all", expandedShotCode: "", role: "all" };
     renderProductionTrackingConsole();
     setFormStatus("ShotGrid 筛选已重置", "good");
   });

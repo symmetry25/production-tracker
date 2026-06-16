@@ -2345,6 +2345,267 @@ main {
   -webkit-line-clamp: 2;
 }
 
+.tracking-prd-suite {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(300px, 1.08fr) minmax(300px, 1.1fr) minmax(310px, 1.16fr);
+  min-width: 0;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.tracking-prd-panel {
+  min-width: 0;
+  border-right: 1px solid var(--line);
+}
+
+.tracking-prd-panel:last-child {
+  border-right: 0;
+}
+
+.tracking-prd-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--blue) 6%, transparent), transparent 54%),
+    var(--surface-raised);
+}
+
+.tracking-prd-head span {
+  padding: 3px 6px;
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+  background: var(--surface);
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 950;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tracking-prd-head h4 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-prd-list {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+}
+
+.tracking-prd-row,
+.tracking-prd-task,
+.tracking-user-row,
+.tracking-report-row {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.tracking-prd-row:hover,
+.tracking-prd-task:hover,
+.tracking-user-row:hover,
+.tracking-report-row:hover,
+.tracking-role-filter button:hover {
+  background: var(--surface-strong);
+}
+
+.tracking-prd-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  padding: 9px 10px;
+  box-shadow: inset 4px 0 0 var(--teal);
+}
+
+.tracking-prd-row.current {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--teal) 7%, transparent), transparent 56%),
+    var(--surface);
+}
+
+.tracking-prd-row.warning,
+.tracking-prd-task.warning,
+.tracking-user-row.warning,
+.tracking-report-row.warning {
+  box-shadow: inset 4px 0 0 var(--red);
+}
+
+.tracking-prd-row.note,
+.tracking-prd-task.note,
+.tracking-user-row.note,
+.tracking-report-row.note {
+  box-shadow: inset 4px 0 0 var(--amber);
+}
+
+.tracking-prd-code {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: "SFMono-Regular", "Cascadia Code", "Menlo", monospace;
+  font-size: 10px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-prd-main,
+.tracking-prd-main strong,
+.tracking-prd-main small,
+.tracking-prd-task strong,
+.tracking-prd-task small,
+.tracking-prd-task em,
+.tracking-user-row strong,
+.tracking-user-row small,
+.tracking-user-row b,
+.tracking-user-row em,
+.tracking-report-row strong,
+.tracking-report-row code,
+.tracking-report-row small,
+.tracking-report-row b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracking-prd-main strong,
+.tracking-prd-task strong,
+.tracking-user-row strong,
+.tracking-report-row strong {
+  display: block;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.tracking-prd-main small,
+.tracking-prd-task small,
+.tracking-prd-task em,
+.tracking-user-row small,
+.tracking-user-row em,
+.tracking-report-row small,
+.tracking-report-row code {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.tracking-prd-row em,
+.tracking-user-row b,
+.tracking-report-row b {
+  color: var(--ink);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+.tracking-role-filter {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-strong);
+}
+
+.tracking-role-filter button {
+  min-width: 0;
+  min-height: 32px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  color: var(--muted);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.tracking-role-filter button:last-child {
+  border-right: 0;
+}
+
+.tracking-role-filter button.active {
+  color: var(--ink);
+  background: var(--surface-raised);
+  box-shadow: inset 0 -2px 0 var(--teal);
+}
+
+.tracking-prd-task {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  padding: 9px 10px;
+  box-shadow: inset 4px 0 0 var(--teal);
+}
+
+.tracking-prd-task .tracker-status {
+  align-self: start;
+}
+
+.tracking-prd-task em {
+  text-align: right;
+}
+
+.tracking-user-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 10px;
+  box-shadow: inset 4px 0 0 var(--teal);
+}
+
+.tracking-avatar {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--surface-raised);
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.tracking-user-row em {
+  grid-column: 2 / -1;
+  justify-self: start;
+}
+
+.tracking-report-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 8px;
+  padding: 9px 10px;
+  box-shadow: inset 4px 0 0 var(--teal);
+}
+
+.tracking-report-row small {
+  grid-column: 1 / -1;
+  white-space: normal;
+}
+
+.tracking-report-row code {
+  font-family: "SFMono-Regular", "Cascadia Code", "Menlo", monospace;
+}
+
 .tracking-console-section {
   min-width: 0;
   border: 1px solid var(--line);
@@ -7501,6 +7762,13 @@ body.schedule-dragging .schedule-bar.selected {
 :root.dark-mode .tracking-shot-row,
 :root.dark-mode .tracking-workload-row,
 :root.dark-mode .tracking-asset-card,
+:root.dark-mode .tracking-prd-head,
+:root.dark-mode .tracking-prd-head span,
+:root.dark-mode .tracking-prd-row,
+:root.dark-mode .tracking-prd-task,
+:root.dark-mode .tracking-user-row,
+:root.dark-mode .tracking-report-row,
+:root.dark-mode .tracking-role-filter,
 :root.dark-mode .tracking-console-section,
 :root.dark-mode .tracking-section-head,
 :root.dark-mode .tracking-section-head span,
@@ -7523,6 +7791,12 @@ body.schedule-dragging .schedule-bar.selected {
 :root.dark-mode .tracking-task-card:hover,
 :root.dark-mode .tracking-workload-row:hover,
 :root.dark-mode .tracking-asset-card:hover,
+:root.dark-mode .tracking-prd-row:hover,
+:root.dark-mode .tracking-prd-task:hover,
+:root.dark-mode .tracking-user-row:hover,
+:root.dark-mode .tracking-report-row:hover,
+:root.dark-mode .tracking-role-filter button:hover,
+:root.dark-mode .tracking-role-filter button.active,
 :root.dark-mode .pipeline-shot-cell:hover,
 :root.dark-mode .pipeline-step:hover,
 :root.dark-mode .pipeline-status-cell:hover {
@@ -8007,6 +8281,18 @@ body.schedule-dragging .schedule-bar.selected {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .tracking-prd-suite {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tracking-prd-panel:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .tracking-prd-panel:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--line);
+  }
+
   .tracking-asset-card:nth-child(4n) {
     border-right: 1px solid var(--line);
   }
@@ -8411,6 +8697,19 @@ body.schedule-dragging .schedule-bar.selected {
 
   .tracking-asset-card:nth-child(2n) {
     border-right: 0;
+  }
+
+  .tracking-prd-suite {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-prd-panel {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .tracking-prd-panel:last-child {
+    border-bottom: 0;
   }
 
   .tracking-task-stack {
@@ -8863,6 +9162,32 @@ body.schedule-dragging .schedule-bar.selected {
 
   .tracking-asset-card:nth-child(n) {
     border-right: 0;
+  }
+
+  .tracking-prd-row,
+  .tracking-prd-task,
+  .tracking-user-row,
+  .tracking-report-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tracking-prd-code,
+  .tracking-avatar {
+    display: none;
+  }
+
+  .tracking-prd-task em,
+  .tracking-prd-row em,
+  .tracking-user-row b,
+  .tracking-user-row em,
+  .tracking-report-row b {
+    justify-self: start;
+    text-align: left;
+  }
+
+  .tracking-user-row em,
+  .tracking-report-row small {
+    grid-column: auto;
   }
 
   .tracking-detail-grid section:nth-child(2n) {
