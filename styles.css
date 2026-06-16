@@ -2199,6 +2199,19 @@ main {
   overflow-x: auto;
 }
 
+.v2-shot-console,
+.v2-asset-console {
+  display: grid;
+  grid-template-columns: minmax(760px, 1fr) minmax(280px, 0.34fr);
+  min-width: 0;
+  background: var(--surface);
+}
+
+.v2-shot-table,
+.v2-asset-table {
+  border-right: 1px solid var(--line);
+}
+
 .v2-shot-header,
 .v2-shot-row {
   display: grid;
@@ -2231,6 +2244,34 @@ main {
   background: transparent;
   font-size: 11px;
   text-align: left;
+}
+
+.v2-shot-row.selected,
+.v2-asset-row.selected {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--blue) 14%, transparent), transparent 70%),
+    var(--surface-raised);
+  outline: 1px solid color-mix(in srgb, var(--blue) 34%, var(--line));
+  outline-offset: -1px;
+}
+
+.v2-shot-row.hold,
+.v2-asset-row.hold,
+.v2-shot-row.changes,
+.v2-asset-row.changes {
+  box-shadow: inset 4px 0 0 var(--red);
+}
+
+.v2-shot-row.pending,
+.v2-asset-row.pending,
+.v2-shot-row.in-progress,
+.v2-asset-row.in-progress {
+  box-shadow: inset 4px 0 0 var(--amber);
+}
+
+.v2-shot-row.final,
+.v2-asset-row.final {
+  box-shadow: inset 4px 0 0 var(--green);
 }
 
 .v2-shot-row {
@@ -2351,6 +2392,121 @@ main {
 .v2-large-thumb i,
 .v2-version-thumb {
   font-style: normal;
+}
+
+.v2-shot-detail,
+.v2-asset-detail {
+  display: grid;
+  gap: 9px;
+  align-content: start;
+  min-width: 0;
+  min-height: 100%;
+  padding: 12px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 82%, transparent), transparent 44%),
+    var(--surface-strong);
+}
+
+.v2-shot-detail > span,
+.v2-asset-detail > span,
+.v2-detail-task-list > span,
+.v2-asset-links > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.v2-shot-detail > strong,
+.v2-asset-detail > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-shot-detail > small,
+.v2-asset-detail > small,
+.v2-asset-detail > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.v2-detail-task-list {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.v2-detail-task-list > span {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-raised);
+}
+
+.v2-detail-task-list p {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  margin: 0;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.v2-detail-task-list p:last-child {
+  border-bottom: 0;
+}
+
+.v2-detail-task-list b,
+.v2-detail-task-list small {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-detail-task-list small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.v2-asset-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 6px;
+}
+
+.v2-asset-links > span {
+  flex: 0 0 100%;
+}
+
+.v2-asset-links b {
+  min-width: 0;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--surface-raised);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 950;
 }
 
 .v2-task-gantt {

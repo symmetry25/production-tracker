@@ -672,11 +672,15 @@ let selectedV2WorkOrderId = "";
 let selectedV2InboxId = "";
 let selectedV2AdminUserId = "";
 let selectedV2ApiRouteId = "";
+let selectedV2ShotId = "";
+let selectedV2AssetId = "";
 let trackingV2TaskEdits = {};
 let trackingV2WorkOrderEdits = {};
 let trackingV2InboxEdits = {};
 let trackingV2AdminRoleEdits = {};
 let trackingV2ApiRouteEdits = {};
+let trackingV2ShotEdits = {};
+let trackingV2AssetEdits = {};
 let trackerUiState = {
   status: "all",
   assignee: "all",
@@ -7986,15 +7990,20 @@ function trackingV2ShotRows(tracker) {
       result[step.key] = trackingV2StepStatus(shot, step.key);
       return result;
     }, {});
+    const id = `shot-${code}`;
+    const edit = trackingV2ShotEdits[id] || {};
+    const status = edit.status || (shot.warning > 0 ? "ON_HOLD" : shot.pending > 0 ? "PENDING_REVIEW" : shot.progress >= 0.95 ? "FINAL" : shot.progress > 0 ? "IN_PROGRESS" : "WAITING_TO_START");
     return {
       ...shot,
+      id,
       originalCode: shot.code,
       code,
       sequence,
       cutIn: shot.frameStart,
       cutOut: shot.frameEnd,
       cutDuration: Math.max(1, shot.frameEnd - shot.frameStart + 1),
-      status: shot.warning > 0 ? "ON_HOLD" : shot.pending > 0 ? "PENDING_REVIEW" : shot.progress >= 0.95 ? "FINAL" : shot.progress > 0 ? "IN_PROGRESS" : "WAITING_TO_START",
+      status,
+      updatedAt: edit.updatedAt || `D${Math.max(1, project.currentDay || 1)}`,
       stepStatuses,
     };
   });
@@ -8007,16 +8016,51 @@ function trackingV2AssetRows(tracker) {
       result[step.key] = trackingV2ProgressStatus(asset.progress || 0, stepIndex * 0.11);
       return result;
     }, {});
+    const id = asset.id || asset.code || `asset-${index}`;
+    const edit = trackingV2AssetEdits[id] || {};
+    const status = edit.status || trackingV2TaskStatus(asset.status);
     return {
       ...asset,
+      id,
       typeLabel: trackerAssetTypeLabel(asset.type),
-      status: trackingV2TaskStatus(asset.status),
+      status,
       linkedShots: linkedShots.slice(0, Math.max(1, (index % 3) + 1)),
       sequence: index % 2 === 0 ? "RAID" : "TRU",
-      openNotes: asset.status === "CHANGES_REQUESTED" || asset.status === "ON_HOLD" ? 2 : asset.status === "PENDING_REVIEW" ? 1 : 0,
+      updatedAt: edit.updatedAt || `D${Math.max(1, project.currentDay || 1)}`,
+      openNotes: status === "CHANGES_REQUESTED" || status === "ON_HOLD" ? 2 : status === "PENDING_REVIEW" ? 1 : 0,
       stepStatuses,
     };
   });
+}
+
+function trackingV2SelectedShot(rows) {
+  return rows.find((row) => row.id === selectedV2ShotId) || rows.find((row) => row.status === "ON_HOLD" || row.status === "PENDING_REVIEW") || rows[0] || null;
+}
+
+function trackingV2SelectedAsset(rows) {
+  return rows.find((row) => row.id === selectedV2AssetId) || rows.find((row) => row.status === "ON_HOLD" || row.status === "PENDING_REVIEW") || rows[0] || null;
+}
+
+function trackingV2SetShotStatus(shotId, status) {
+  if (!shotId || !status) return false;
+  trackingV2ShotEdits[shotId] = { ...(trackingV2ShotEdits[shotId] || {}), status, updatedAt: `D${project.currentDay || 1}` };
+  selectedV2ShotId = shotId;
+  const surface = document.querySelector("#trackingV2Surface");
+  if (surface) surface.dataset.activePanel = "shots";
+  renderTrackingV2Surface(productionTrackerWorkflowData());
+  setFormStatus(`Shot 状态已更新：${trackingV2StatusLabel(status)}`, status === "ON_HOLD" ? "warning" : "good");
+  return true;
+}
+
+function trackingV2SetAssetStatus(assetId, status) {
+  if (!assetId || !status) return false;
+  trackingV2AssetEdits[assetId] = { ...(trackingV2AssetEdits[assetId] || {}), status, updatedAt: `D${project.currentDay || 1}` };
+  selectedV2AssetId = assetId;
+  const surface = document.querySelector("#trackingV2Surface");
+  if (surface) surface.dataset.activePanel = "assets";
+  renderTrackingV2Surface(productionTrackerWorkflowData());
+  setFormStatus(`Asset 状态已更新：${trackingV2StatusLabel(status)}`, status === "ON_HOLD" ? "warning" : "good");
+  return true;
 }
 
 function trackingV2TaskRows(tracker) {
@@ -8931,37 +8975,61 @@ function renderTrackingV2Surface(tracker) {
       return map;
     }, new Map()),
   );
+  const selectedShot = trackingV2SelectedShot(data.shots);
+  const selectedShotTasks = selectedShot?.tasks || [];
   shotTable.innerHTML = `
-    <div class="v2-panel-head"><span>Shot Pipeline Table</span><strong>${data.shots.length} shots</strong></div>
-    <div class="v2-shot-table">
-      <div class="v2-shot-header">
-        <span></span><span>Thumb</span><span>Shot Code</span><span>Status</span><span>Cut In</span><span>Cut Out</span><span>Dur</span>
-        ${trackingV2PipelineSteps.map((step) => `<span style="--step:${step.color}">${escapeHtml(step.label)}</span>`).join("")}
-        <span>Sequence</span><span>Description</span>
+    <div class="v2-panel-head"><span>Shot Pipeline Table</span><strong>${data.shots.length} shots · ${selectedShot ? escapeHtml(selectedShot.code) : "No selection"}</strong></div>
+    <div class="v2-shot-console">
+      <div class="v2-shot-table">
+        <div class="v2-shot-header">
+          <span></span><span>Thumb</span><span>Shot Code</span><span>Status</span><span>Cut In</span><span>Cut Out</span><span>Dur</span>
+          ${trackingV2PipelineSteps.map((step) => `<span style="--step:${step.color}">${escapeHtml(step.label)}</span>`).join("")}
+          <span>Sequence</span><span>Description</span>
+        </div>
+        ${sequenceGroups
+          .map(
+            ([sequence, rows]) => `
+              <div class="v2-sequence-row">${escapeHtml(sequence)} (${rows.length})</div>
+              ${rows
+                .map(
+                  (shot) => `
+                    <button class="v2-shot-row ${shot.id === selectedShot?.id ? "selected" : ""} ${trackingV2StatusClass(shot.status)}" type="button" data-v2-shot-select="${escapeHtml(shot.id)}" data-context-kind="tracker-shot" data-context-title="${escapeHtml(`${shot.code} · ${shot.title}`)}" data-context-meta="${escapeHtml(`${trackingV2StatusLabel(shot.status)} · ${percentText(shot.progress)}`)}">
+                      <span class="v2-check" aria-hidden="true"></span>
+                      <span class="v2-thumb">${escapeHtml(shot.sequence)}</span>
+                      <strong>${escapeHtml(shot.code)}</strong>
+                      <span>${trackingV2StatusDot(shot.status)}${escapeHtml(trackingV2StatusLabel(shot.status))}</span>
+                      <span>${shot.cutIn}</span><span>${shot.cutOut}</span><span>${shot.cutDuration}</span>
+                      ${trackingV2PipelineSteps.map((step) => `<span>${trackingV2StatusDot(shot.stepStatuses[step.key], step.label)}</span>`).join("")}
+                      <span>${escapeHtml(shot.sequence)}</span>
+                      <small>${escapeHtml(shot.title)} · ${escapeHtml(shot.location)}</small>
+                    </button>
+                  `,
+                )
+                .join("")}
+            `,
+          )
+          .join("")}
       </div>
-      ${sequenceGroups
-        .map(
-          ([sequence, rows]) => `
-            <div class="v2-sequence-row">${escapeHtml(sequence)} (${rows.length})</div>
-            ${rows
-              .map(
-                (shot) => `
-                  <button class="v2-shot-row" type="button" data-context-kind="tracker-shot" data-context-title="${escapeHtml(`${shot.code} · ${shot.title}`)}" data-context-meta="${escapeHtml(`${trackingV2StatusLabel(shot.status)} · ${percentText(shot.progress)}`)}">
-                    <span class="v2-check" aria-hidden="true"></span>
-                    <span class="v2-thumb">${escapeHtml(shot.sequence)}</span>
-                    <strong>${escapeHtml(shot.code)}</strong>
-                    <span>${trackingV2StatusDot(shot.status)}${escapeHtml(trackingV2StatusLabel(shot.status))}</span>
-                    <span>${shot.cutIn}</span><span>${shot.cutOut}</span><span>${shot.cutDuration}</span>
-                    ${trackingV2PipelineSteps.map((step) => `<span>${trackingV2StatusDot(shot.stepStatuses[step.key], step.label)}</span>`).join("")}
-                    <span>${escapeHtml(shot.sequence)}</span>
-                    <small>${escapeHtml(shot.title)} · ${escapeHtml(shot.location)}</small>
-                  </button>
-                `,
-              )
-              .join("")}
-          `,
-        )
-        .join("")}
+      <aside class="v2-shot-detail">
+        <span>Shot Detail</span>
+        <strong>${escapeHtml(selectedShot ? `${selectedShot.code} · ${selectedShot.title}` : "No shot selected")}</strong>
+        <small>${escapeHtml(selectedShot ? `${selectedShot.sequence} · ${selectedShot.location} · updated ${selectedShot.updatedAt}` : "Select a shot row")}</small>
+        <div class="v2-workorder-kpis">
+          <p><b>${escapeHtml(trackingV2StatusLabel(selectedShot?.status || "WAITING_TO_START"))}</b><small>Status</small></p>
+          <p><b>${selectedShotTasks.filter((task) => trackingV2TaskStatus(task.status) === "FINAL").length}/${selectedShotTasks.length}</b><small>Tasks final</small></p>
+          <p><b>${selectedShot ? percentText(selectedShot.progress) : "0%"}</b><small>Progress</small></p>
+        </div>
+        <div class="v2-detail-task-list">
+          <span>Pipeline Tasks</span>
+          ${selectedShotTasks.map((task) => `<p><b>${escapeHtml(task.label)}</b><small>${trackingV2StatusDot(task.status)}${escapeHtml(task.assignee)} · D${task.dueDay}</small></p>`).join("") || `<p><b>No tasks</b><small>Waiting for schedule.</small></p>`}
+        </div>
+        <div class="v2-workorder-actions">
+          <button type="button" data-v2-shot-status="IN_PROGRESS" data-v2-shot-id="${escapeHtml(selectedShot?.id || "")}">Start</button>
+          <button type="button" data-v2-shot-status="PENDING_REVIEW" data-v2-shot-id="${escapeHtml(selectedShot?.id || "")}">Review</button>
+          <button type="button" data-v2-shot-status="FINAL" data-v2-shot-id="${escapeHtml(selectedShot?.id || "")}">Final</button>
+          <button type="button" data-v2-shot-status="ON_HOLD" data-v2-shot-id="${escapeHtml(selectedShot?.id || "")}">Hold</button>
+        </div>
+      </aside>
     </div>
   `;
 
@@ -8972,34 +9040,58 @@ function renderTrackingV2Surface(tracker) {
       return map;
     }, new Map()),
   );
+  const selectedAsset = trackingV2SelectedAsset(data.assets);
   assetTable.innerHTML = `
-    <div class="v2-panel-head"><span>Asset Pipeline Table</span><strong>${data.assets.length} assets</strong></div>
-    <div class="v2-asset-table">
-      ${assetGroups
-        .map(
-          ([type, rows]) => `
-            <div class="v2-sequence-row">${escapeHtml(type)} (${rows.length})</div>
-            ${rows
-              .map(
-                (asset) => `
-                  <button class="v2-asset-row" type="button" data-context-kind="tracker-asset" data-context-title="${escapeHtml(`${asset.code} · ${asset.name}`)}" data-context-meta="${escapeHtml(`${asset.typeLabel} · ${trackingV2StatusLabel(asset.status)}`)}">
-                    <span class="v2-check" aria-hidden="true"></span>
-                    <span class="v2-large-thumb"><i>▶</i></span>
-                    <strong>${escapeHtml(asset.name)}</strong>
-                    <span>${escapeHtml(asset.typeLabel)}</span>
-                    <span>${trackingV2StatusDot(asset.status)}${escapeHtml(trackingV2StatusLabel(asset.status))}</span>
-                    ${trackingV2AssetSteps.map((step) => `<span>${trackingV2StatusDot(asset.stepStatuses[step.key], step.label)}</span>`).join("")}
-                    <small>${escapeHtml(asset.note || "No notes")}</small>
-                    <span>${escapeHtml(asset.linkedShots.join(", "))}</span>
-                    <span>${escapeHtml(asset.sequence)}</span>
-                    <span>${asset.openNotes}</span>
-                  </button>
-                `,
-              )
-              .join("")}
-          `,
-        )
-        .join("")}
+    <div class="v2-panel-head"><span>Asset Pipeline Table</span><strong>${data.assets.length} assets · ${selectedAsset ? escapeHtml(selectedAsset.name) : "No selection"}</strong></div>
+    <div class="v2-asset-console">
+      <div class="v2-asset-table">
+        ${assetGroups
+          .map(
+            ([type, rows]) => `
+              <div class="v2-sequence-row">${escapeHtml(type)} (${rows.length})</div>
+              ${rows
+                .map(
+                  (asset) => `
+                    <button class="v2-asset-row ${asset.id === selectedAsset?.id ? "selected" : ""} ${trackingV2StatusClass(asset.status)}" type="button" data-v2-asset-select="${escapeHtml(asset.id)}" data-context-kind="tracker-asset" data-context-title="${escapeHtml(`${asset.code} · ${asset.name}`)}" data-context-meta="${escapeHtml(`${asset.typeLabel} · ${trackingV2StatusLabel(asset.status)}`)}">
+                      <span class="v2-check" aria-hidden="true"></span>
+                      <span class="v2-large-thumb"><i>▶</i></span>
+                      <strong>${escapeHtml(asset.name)}</strong>
+                      <span>${escapeHtml(asset.typeLabel)}</span>
+                      <span>${trackingV2StatusDot(asset.status)}${escapeHtml(trackingV2StatusLabel(asset.status))}</span>
+                      ${trackingV2AssetSteps.map((step) => `<span>${trackingV2StatusDot(asset.stepStatuses[step.key], step.label)}</span>`).join("")}
+                      <small>${escapeHtml(asset.note || "No notes")}</small>
+                      <span>${escapeHtml(asset.linkedShots.join(", "))}</span>
+                      <span>${escapeHtml(asset.sequence)}</span>
+                      <span>${asset.openNotes}</span>
+                    </button>
+                  `,
+                )
+                .join("")}
+            `,
+          )
+          .join("")}
+      </div>
+      <aside class="v2-asset-detail">
+        <span>Asset Detail</span>
+        <strong>${escapeHtml(selectedAsset ? `${selectedAsset.name}` : "No asset selected")}</strong>
+        <small>${escapeHtml(selectedAsset ? `${selectedAsset.typeLabel} · ${selectedAsset.sequence} · updated ${selectedAsset.updatedAt}` : "Select an asset row")}</small>
+        <div class="v2-workorder-kpis">
+          <p><b>${escapeHtml(trackingV2StatusLabel(selectedAsset?.status || "WAITING_TO_START"))}</b><small>Status</small></p>
+          <p><b>${selectedAsset?.linkedShots?.length || 0}</b><small>Linked shots</small></p>
+          <p><b>${selectedAsset?.openNotes || 0}</b><small>Open notes</small></p>
+        </div>
+        <div class="v2-asset-links">
+          <span>Linked Shots</span>
+          ${(selectedAsset?.linkedShots || []).map((code) => `<b>${escapeHtml(code)}</b>`).join("") || `<b>No linked shots</b>`}
+        </div>
+        <p>${escapeHtml(selectedAsset?.note || "No notes.")}</p>
+        <div class="v2-workorder-actions">
+          <button type="button" data-v2-asset-status="IN_PROGRESS" data-v2-asset-id="${escapeHtml(selectedAsset?.id || "")}">Start</button>
+          <button type="button" data-v2-asset-status="PENDING_REVIEW" data-v2-asset-id="${escapeHtml(selectedAsset?.id || "")}">Review</button>
+          <button type="button" data-v2-asset-status="FINAL" data-v2-asset-id="${escapeHtml(selectedAsset?.id || "")}">Final</button>
+          <button type="button" data-v2-asset-status="ON_HOLD" data-v2-asset-id="${escapeHtml(selectedAsset?.id || "")}">Hold</button>
+        </div>
+      </aside>
     </div>
   `;
 
@@ -14874,6 +14966,32 @@ function setupProductionTrackerControls() {
     if (v2ProjectAction) {
       const action = v2ProjectAction.dataset.v2ProjectAction || "filter";
       setFormStatus(`Project ${action} 已准备，可继续接字段配置`, "good");
+      return;
+    }
+    const v2ShotSelect = event.target.closest("[data-v2-shot-select]");
+    if (v2ShotSelect) {
+      selectedV2ShotId = v2ShotSelect.dataset.v2ShotSelect || "";
+      const surface = document.querySelector("#trackingV2Surface");
+      if (surface) surface.dataset.activePanel = "shots";
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      return;
+    }
+    const v2ShotStatus = event.target.closest("[data-v2-shot-status]");
+    if (v2ShotStatus) {
+      trackingV2SetShotStatus(v2ShotStatus.dataset.v2ShotId || "", v2ShotStatus.dataset.v2ShotStatus || "IN_PROGRESS");
+      return;
+    }
+    const v2AssetSelect = event.target.closest("[data-v2-asset-select]");
+    if (v2AssetSelect) {
+      selectedV2AssetId = v2AssetSelect.dataset.v2AssetSelect || "";
+      const surface = document.querySelector("#trackingV2Surface");
+      if (surface) surface.dataset.activePanel = "assets";
+      renderTrackingV2Surface(productionTrackerWorkflowData());
+      return;
+    }
+    const v2AssetStatus = event.target.closest("[data-v2-asset-status]");
+    if (v2AssetStatus) {
+      trackingV2SetAssetStatus(v2AssetStatus.dataset.v2AssetId || "", v2AssetStatus.dataset.v2AssetStatus || "IN_PROGRESS");
       return;
     }
     const v2ResourceChart = event.target.closest("[data-v2-resource-chart]");
