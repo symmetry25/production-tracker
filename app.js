@@ -7765,6 +7765,488 @@ function productionTrackerWorkflowData() {
   };
 }
 
+const trackingV2PipelineSteps = [
+  { key: "LAY", label: "LAY", color: "#EF9F27" },
+  { key: "ANM", label: "ANM", color: "#378ADD" },
+  { key: "CFX", label: "CFX", color: "#17D4E0" },
+  { key: "FX", label: "FX", color: "#639922" },
+  { key: "LGT", label: "LGT", color: "#F9CB42" },
+  { key: "CMP", label: "CMP", color: "#7F77DD" },
+];
+
+const trackingV2AssetSteps = [
+  { key: "ART", label: "art", color: "#D85A30" },
+  { key: "MDL", label: "mdl", color: "#E24B4A" },
+  { key: "RIG", label: "rig", color: "#D4537E" },
+  { key: "TXT", label: "txt", color: "#EF9F27" },
+  { key: "CFX", label: "cfx", color: "#17D4E0" },
+];
+
+function trackingV2StatusLabel(status) {
+  return (
+    {
+      WAITING_TO_START: "Waiting",
+      READY_TO_START: "Ready",
+      NOT_STARTED: "Waiting",
+      IN_PROGRESS: "In Progress",
+      PENDING_REVIEW: "Pending Review",
+      CHANGES_REQUESTED: "Changes",
+      APPROVED: "Approved",
+      FINAL: "Final",
+      ON_HOLD: "On Hold",
+      OMIT: "Omit",
+    }[status] || status || "Waiting"
+  );
+}
+
+function trackingV2StatusClass(status) {
+  return (
+    {
+      WAITING_TO_START: "waiting",
+      READY_TO_START: "ready",
+      NOT_STARTED: "waiting",
+      IN_PROGRESS: "in-progress",
+      PENDING_REVIEW: "pending",
+      CHANGES_REQUESTED: "changes",
+      APPROVED: "final",
+      FINAL: "final",
+      ON_HOLD: "hold",
+      OMIT: "omit",
+    }[status] || "waiting"
+  );
+}
+
+function trackingV2TaskStatus(status) {
+  if (status === "APPROVED") return "FINAL";
+  if (status === "CHANGES_REQUESTED") return "ON_HOLD";
+  if (status === "NOT_STARTED") return "WAITING_TO_START";
+  return status || "WAITING_TO_START";
+}
+
+function trackingV2StatusDot(status, label = "") {
+  const normalized = trackingV2TaskStatus(status);
+  return `<span class="v2-status-dot ${trackingV2StatusClass(normalized)}" title="${escapeHtml(label || trackingV2StatusLabel(normalized))}"></span>`;
+}
+
+function trackingV2SequenceCode(sceneCode, index = 0) {
+  if (/^RAID|^TRU|^SEQ/i.test(String(sceneCode || ""))) return String(sceneCode).split(/[_\-\s]/u)[0].toUpperCase();
+  if (index < 4) return "RAID";
+  if (index < 8) return "TRU";
+  return "MAIN";
+}
+
+function trackingV2ShotCode(sceneCode, index = 0) {
+  const sequence = trackingV2SequenceCode(sceneCode, index);
+  return `${sequence}_${String((index + 1) * 10).padStart(4, "0")}`;
+}
+
+function trackingV2StepStatus(shot, stepKey) {
+  const stepMap = {
+    LAY: ["Shooting"],
+    ANM: ["Editorial"],
+    CFX: ["Ingest / DIT"],
+    FX: ["VFX / Color"],
+    LGT: ["Delivery"],
+    CMP: ["Review"],
+  };
+  const task = shot.tasks.find((row) => stepMap[stepKey]?.includes(row.name));
+  return task ? trackingV2TaskStatus(task.status) : "WAITING_TO_START";
+}
+
+function trackingV2ProgressStatus(progress, offset = 0) {
+  const rate = Math.max(0, Math.min(1, Number(progress) || 0));
+  const adjusted = Math.max(0, Math.min(1, rate - offset));
+  if (adjusted >= 0.92) return "FINAL";
+  if (adjusted >= 0.64) return "IN_PROGRESS";
+  if (adjusted >= 0.38) return "READY_TO_START";
+  if (adjusted > 0.08) return "IN_PROGRESS";
+  return "WAITING_TO_START";
+}
+
+function trackingV2ProjectCards(tracker) {
+  const rows = trackerProjectRows(tracker);
+  const usedNames = new Set(rows.map((row) => row.name));
+  const demoCards = [
+    { id: "v2-mkali", name: "Mkali's Mission", code: "MKALI", progress: 0.62, shotCount: 9, assetCount: 58, tone: "note", template: true },
+    { id: "v2-drednots", name: "Drednots", code: "DREDNOTS", progress: 0.41, shotCount: 32, assetCount: 74, tone: "good", template: true },
+    { id: "v2-winter", name: "Winter Joy Ride", code: "WJR", progress: 0.78, shotCount: 24, assetCount: 36, tone: "good", template: true },
+  ].filter((row) => !usedNames.has(row.name));
+  return [...rows, ...demoCards].slice(0, 6);
+}
+
+function trackingV2ShotRows(tracker) {
+  return tracker.shotRows.map((shot, index) => {
+    const code = trackingV2ShotCode(shot.code, index);
+    const sequence = trackingV2SequenceCode(shot.code, index);
+    const stepStatuses = trackingV2PipelineSteps.reduce((result, step) => {
+      result[step.key] = trackingV2StepStatus(shot, step.key);
+      return result;
+    }, {});
+    return {
+      ...shot,
+      originalCode: shot.code,
+      code,
+      sequence,
+      cutIn: shot.frameStart,
+      cutOut: shot.frameEnd,
+      cutDuration: Math.max(1, shot.frameEnd - shot.frameStart + 1),
+      status: shot.warning > 0 ? "ON_HOLD" : shot.pending > 0 ? "PENDING_REVIEW" : shot.progress >= 0.95 ? "FINAL" : shot.progress > 0 ? "IN_PROGRESS" : "WAITING_TO_START",
+      stepStatuses,
+    };
+  });
+}
+
+function trackingV2AssetRows(tracker) {
+  const linkedShots = trackingV2ShotRows(tracker).slice(0, 4).map((shot) => shot.code);
+  return tracker.assetRows.map((asset, index) => {
+    const stepStatuses = trackingV2AssetSteps.reduce((result, step, stepIndex) => {
+      result[step.key] = trackingV2ProgressStatus(asset.progress || 0, stepIndex * 0.11);
+      return result;
+    }, {});
+    return {
+      ...asset,
+      typeLabel: trackerAssetTypeLabel(asset.type),
+      status: trackingV2TaskStatus(asset.status),
+      linkedShots: linkedShots.slice(0, Math.max(1, (index % 3) + 1)),
+      sequence: index % 2 === 0 ? "RAID" : "TRU",
+      openNotes: asset.status === "CHANGES_REQUESTED" || asset.status === "ON_HOLD" ? 2 : asset.status === "PENDING_REVIEW" ? 1 : 0,
+      stepStatuses,
+    };
+  });
+}
+
+function trackingV2TaskRows(tracker) {
+  const dayWidth = Math.max(project.plannedDays || 1, 1);
+  return tracker.allTasks
+    .slice()
+    .sort((a, b) => {
+      const weight = { ON_HOLD: 0, CHANGES_REQUESTED: 1, PENDING_REVIEW: 2, IN_PROGRESS: 3, NOT_STARTED: 4, APPROVED: 5 };
+      return (weight[a.status] ?? 6) - (weight[b.status] ?? 6) || a.dueDay - b.dueDay;
+    })
+    .slice(0, 12)
+    .map((task, index) => {
+      const bid = Math.max(2, Math.round((task.dueDay % 5) + 2));
+      const logged = Math.round((bid * (task.progress || 0) + (task.status === "CHANGES_REQUESTED" ? 1.6 : task.status === "ON_HOLD" ? 2.2 : 0)) * 10) / 10;
+      const overUnder = Math.round((logged - bid) * 10) / 10;
+      const start = clampDay(Math.max(1, task.dueDay - bid + 1));
+      const end = clampDay(task.dueDay);
+      return {
+        ...task,
+        status: trackingV2TaskStatus(task.status),
+        reviewer: task.department === "post" || task.department === "vfx_color" ? "VFX Supervisor" : "Producer",
+        start,
+        end,
+        bid,
+        logged,
+        loggedPct: bid > 0 ? logged / bid : 0,
+        overUnder,
+        estimatedCost: Math.round((task.amount || 0) / Math.max(tracker.summary.totalTasks || 1, 1)) || Math.round(bid * 1200),
+        left: `${Math.max(0, ((start - 1) / dayWidth) * 100)}%`,
+        width: `${Math.max(5, ((end - start + 1) / dayWidth) * 100)}%`,
+        rowIndex: index,
+      };
+    });
+}
+
+function trackingV2ResourceData() {
+  const weeks = Array.from({ length: 6 }, (_, index) => {
+    const start = index * 7 + 1;
+    const end = Math.min(project.plannedDays || 42, start + 6);
+    return { index, label: `W${index + 1}`, range: `D${start}-${end}` };
+  });
+  const departmentsForRows = activeBudgetDepartments().slice(0, 9);
+  const rows = departmentsForRows.map((department, departmentIndex) => {
+    const members = people.filter((person) => person.dept === department.id);
+    const capacity = Math.max(1, members.length || 1) * 5;
+    const cells = weeks.map((week) => {
+      const sheetCount = callSheets.filter((sheet) => sheet.departments.includes(department.id) && sheet.day >= week.index * 7 + 1 && sheet.day <= week.index * 7 + 7).length;
+      const schedulePressure = productionScheduleRows().filter((task) => task.title === department.name && task.start <= week.index * 7 + 7 && task.end >= week.index * 7 + 1).length;
+      const workload = Math.max(0, Math.round(sheetCount * 1.7 + schedulePressure * 2.4 + ((departmentIndex + week.index) % 4) - 1));
+      const delta = workload - capacity;
+      return { ...week, capacity, workload, delta };
+    });
+    return { department, members, capacity, cells };
+  });
+  const totals = weeks.map((week) => {
+    const capacity = rows.reduce((sum, row) => sum + row.capacity, 0);
+    const workload = rows.reduce((sum, row) => sum + row.cells[week.index].workload, 0);
+    return { ...week, capacity, workload, delta: workload - capacity };
+  });
+  return { weeks, rows, totals };
+}
+
+function trackingV2InsightRows(tracker) {
+  const metrics = analysisMetrics();
+  const assets = trackingV2AssetRows(tracker);
+  const shots = trackingV2ShotRows(tracker);
+  const versions = vfxReviewRows();
+  const sequenceCount = new Set(shots.map((shot) => shot.sequence)).size;
+  const finalTasks = tracker.allTasks.filter((task) => task.status === "APPROVED").length;
+  const velocity = [1, 2, 3, 4, 5].map((week) => Math.max(0, Math.round(finalTasks * (week / 5) + week - 2)));
+  const versionStatus = {
+    pending: versions.filter((row) => row.status === "submitted").length,
+    viewed: versions.filter((row) => row.status === "notes" || row.status === "blocked").length,
+    approved: versions.filter((row) => row.status === "approved").length,
+  };
+  return [
+    { title: "Hero / Countdown", value: Math.max(0, (project.plannedDays || 1) - (project.currentDay || 1)), meta: `days until ${project.title || "Deadline"}`, kind: "hero" },
+    { title: "Assets", value: assets.length, meta: "stacked by status", kind: "assets" },
+    { title: "Shots", value: shots.length, meta: `${shots.filter((shot) => shot.status === "IN_PROGRESS").length} in progress`, kind: "shots" },
+    { title: "Tasks", value: tracker.summary.totalTasks, meta: `${tracker.summary.reviewTasks} review / ${tracker.summary.heldTasks} hold`, kind: "tasks" },
+    { title: "Velocity", value: velocity[velocity.length - 1], meta: velocity.join(" / "), kind: "velocity" },
+    { title: "Version Status", value: versions.length, meta: `${versionStatus.pending} pending · ${versionStatus.approved} approved`, kind: "versions" },
+    { title: "% Final by Department", value: percentText(tracker.summary.completionRate), meta: "pipeline close rate", kind: "final" },
+    { title: "Project Crew", value: people.length, meta: "Name / Email / Login", kind: "crew" },
+    { title: "Sequences", value: sequenceCount, meta: Array.from(new Set(shots.map((shot) => shot.sequence))).join(" / ") || "--", kind: "sequences" },
+    { title: "Shot Status", value: shots.filter((shot) => shot.status === "FINAL").length, meta: "large donut equivalent", kind: "shot-status" },
+    { title: "Asset Status", value: assets.filter((asset) => asset.status === "FINAL").length, meta: "horizontal bars", kind: "asset-status" },
+    { title: "Latest Versions", value: versions.length, meta: "filmstrip review", kind: "latest" },
+  ].map((row) => ({ ...row, tone: metrics.health.className }));
+}
+
+function trackingV2Data(tracker) {
+  return {
+    projectCards: trackingV2ProjectCards(tracker),
+    shots: trackingV2ShotRows(tracker),
+    assets: trackingV2AssetRows(tracker),
+    tasks: trackingV2TaskRows(tracker),
+    resource: trackingV2ResourceData(),
+    versions: vfxReviewRows(),
+    insights: trackingV2InsightRows(tracker),
+  };
+}
+
+function renderTrackingV2Surface(tracker) {
+  const surface = document.querySelector("#trackingV2Surface");
+  const toolbar = document.querySelector("#trackingV2Toolbar");
+  const projectGrid = document.querySelector("#trackingV2ProjectGrid");
+  const insights = document.querySelector("#trackingV2Insights");
+  const tabs = document.querySelector("#trackingV2Tabs");
+  const shotTable = document.querySelector("#trackingV2ShotTable");
+  const assetTable = document.querySelector("#trackingV2AssetTable");
+  const taskGantt = document.querySelector("#trackingV2TaskGantt");
+  const resourcePlanning = document.querySelector("#trackingV2ResourcePlanning");
+  const mediaCenter = document.querySelector("#trackingV2MediaCenter");
+  if (!surface || !toolbar || !projectGrid || !insights || !tabs || !shotTable || !assetTable || !taskGantt || !resourcePlanning || !mediaCenter) return;
+  const data = trackingV2Data(tracker);
+  const activePanel = surface.dataset.activePanel || "projects";
+
+  toolbar.innerHTML = `
+    <button type="button" data-workspace-view="overview" data-workspace-focus="trackingV2ProjectGrid">Add Project</button>
+    <button type="button">Sort</button>
+    <button type="button">Group</button>
+    <button type="button">Fields</button>
+    <button type="button">Filter</button>
+    <span>1 - ${data.projectCards.length} of ${Math.max(data.projectCards.length, 12)} Projects</span>
+  `;
+
+  projectGrid.innerHTML = data.projectCards
+    .map(
+      (card, index) => `
+        <button class="v2-project-card ${card.tone || "good"}" type="button" data-context-kind="tracker-project" data-context-title="${escapeHtml(card.name)}" data-context-meta="${escapeHtml(`${card.code} · ${card.shotCount} shots · ${card.assetCount} assets`)}">
+          <span class="v2-project-thumb">${card.template ? "Upload Thumbnail" : escapeHtml(card.code || `P${index + 1}`)}</span>
+          <strong>${escapeHtml(card.name)}</strong>
+          <small>${escapeHtml(card.code || "PROJECT")} · ${card.shotCount || 0} shots · ${card.assetCount || 0} assets · ${percentText(card.progress || 0)}</small>
+        </button>
+      `,
+    )
+    .join("");
+
+  insights.innerHTML = data.insights
+    .map(
+      (item) => `
+        <section class="v2-insight-widget ${item.kind}">
+          <header><button type="button" aria-label="Collapse">⌄</button><strong>${escapeHtml(item.title)}</strong><span>↻</span></header>
+          <div><b>${escapeHtml(String(item.value))}</b><small>${escapeHtml(item.meta)}</small></div>
+        </section>
+      `,
+    )
+    .join("");
+
+  tabs.innerHTML = [
+    ["projects", "Projects"],
+    ["shots", "Shots"],
+    ["assets", "Assets"],
+    ["tasks", "Tasks + Gantt"],
+    ["resource", "Resource Planning"],
+    ["media", "Media"],
+  ]
+    .map(([key, label]) => `<button class="${activePanel === key ? "active" : ""}" type="button" data-tracking-v2-panel="${escapeHtml(key)}">${escapeHtml(label)}</button>`)
+    .join("");
+
+  const sequenceGroups = Array.from(
+    data.shots.reduce((map, shot) => {
+      if (!map.has(shot.sequence)) map.set(shot.sequence, []);
+      map.get(shot.sequence).push(shot);
+      return map;
+    }, new Map()),
+  );
+  shotTable.innerHTML = `
+    <div class="v2-panel-head"><span>Shot Pipeline Table</span><strong>${data.shots.length} shots</strong></div>
+    <div class="v2-shot-table">
+      <div class="v2-shot-header">
+        <span></span><span>Thumb</span><span>Shot Code</span><span>Status</span><span>Cut In</span><span>Cut Out</span><span>Dur</span>
+        ${trackingV2PipelineSteps.map((step) => `<span style="--step:${step.color}">${escapeHtml(step.label)}</span>`).join("")}
+        <span>Sequence</span><span>Description</span>
+      </div>
+      ${sequenceGroups
+        .map(
+          ([sequence, rows]) => `
+            <div class="v2-sequence-row">${escapeHtml(sequence)} (${rows.length})</div>
+            ${rows
+              .map(
+                (shot) => `
+                  <button class="v2-shot-row" type="button" data-context-kind="tracker-shot" data-context-title="${escapeHtml(`${shot.code} · ${shot.title}`)}" data-context-meta="${escapeHtml(`${trackingV2StatusLabel(shot.status)} · ${percentText(shot.progress)}`)}">
+                    <span class="v2-check" aria-hidden="true"></span>
+                    <span class="v2-thumb">${escapeHtml(shot.sequence)}</span>
+                    <strong>${escapeHtml(shot.code)}</strong>
+                    <span>${trackingV2StatusDot(shot.status)}${escapeHtml(trackingV2StatusLabel(shot.status))}</span>
+                    <span>${shot.cutIn}</span><span>${shot.cutOut}</span><span>${shot.cutDuration}</span>
+                    ${trackingV2PipelineSteps.map((step) => `<span>${trackingV2StatusDot(shot.stepStatuses[step.key], step.label)}</span>`).join("")}
+                    <span>${escapeHtml(shot.sequence)}</span>
+                    <small>${escapeHtml(shot.title)} · ${escapeHtml(shot.location)}</small>
+                  </button>
+                `,
+              )
+              .join("")}
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+
+  const assetGroups = Array.from(
+    data.assets.reduce((map, asset) => {
+      if (!map.has(asset.typeLabel)) map.set(asset.typeLabel, []);
+      map.get(asset.typeLabel).push(asset);
+      return map;
+    }, new Map()),
+  );
+  assetTable.innerHTML = `
+    <div class="v2-panel-head"><span>Asset Pipeline Table</span><strong>${data.assets.length} assets</strong></div>
+    <div class="v2-asset-table">
+      ${assetGroups
+        .map(
+          ([type, rows]) => `
+            <div class="v2-sequence-row">${escapeHtml(type)} (${rows.length})</div>
+            ${rows
+              .map(
+                (asset) => `
+                  <button class="v2-asset-row" type="button" data-context-kind="tracker-asset" data-context-title="${escapeHtml(`${asset.code} · ${asset.name}`)}" data-context-meta="${escapeHtml(`${asset.typeLabel} · ${trackingV2StatusLabel(asset.status)}`)}">
+                    <span class="v2-check" aria-hidden="true"></span>
+                    <span class="v2-large-thumb"><i>▶</i></span>
+                    <strong>${escapeHtml(asset.name)}</strong>
+                    <span>${escapeHtml(asset.typeLabel)}</span>
+                    <span>${trackingV2StatusDot(asset.status)}${escapeHtml(trackingV2StatusLabel(asset.status))}</span>
+                    ${trackingV2AssetSteps.map((step) => `<span>${trackingV2StatusDot(asset.stepStatuses[step.key], step.label)}</span>`).join("")}
+                    <small>${escapeHtml(asset.note || "No notes")}</small>
+                    <span>${escapeHtml(asset.linkedShots.join(", "))}</span>
+                    <span>${escapeHtml(asset.sequence)}</span>
+                    <span>${asset.openNotes}</span>
+                  </button>
+                `,
+              )
+              .join("")}
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+
+  taskGantt.innerHTML = `
+    <div class="v2-panel-head"><span>Task Table + Gantt</span><strong>Gantt Display</strong></div>
+    <div class="v2-task-gantt">
+      <div class="v2-task-list">
+        ${data.tasks
+          .map(
+            (task) => `
+              <button class="v2-task-row ${task.overUnder > 0 ? "over" : ""}" type="button" data-context-kind="tracker-task" data-context-title="${escapeHtml(`${task.shotCode} · ${task.name}`)}" data-context-meta="${escapeHtml(`${trackingV2StatusLabel(task.status)} · ${task.assignee}`)}" data-tracker-task-id="${escapeHtml(task.id)}">
+                <strong>${escapeHtml(task.shotCode)} · ${escapeHtml(task.label)}</strong>
+                <span>${trackingV2StatusDot(task.status)}${escapeHtml(task.assignee)}</span>
+                <em>${task.start} → ${task.end} · ${formatProgressNumber(task.logged)}/${task.bid}d</em>
+                <b>${task.overUnder > 0 ? `+${formatProgressNumber(task.overUnder)}d` : `${formatProgressNumber(task.overUnder)}d`}</b>
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
+      <div class="v2-gantt-lanes">
+        ${data.tasks
+          .map(
+            (task) => `
+              <div class="v2-gantt-lane">
+                <span class="v2-gantt-bar ${trackingV2StatusClass(task.status)}" style="left:${task.left}; width:${task.width}" title="${escapeHtml(`${task.name} · ${task.assignee} · D${task.start}-D${task.end}`)}">${escapeHtml(task.label)}</span>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+
+  resourcePlanning.innerHTML = `
+    <div class="v2-panel-head"><span>Resource Planning</span><strong>Weekly · Person Days</strong></div>
+    <div class="v2-capacity-chart">
+      ${data.resource.totals
+        .map(
+          (week) => `
+            <div class="v2-capacity-week ${week.delta > 0 ? "over" : "under"}">
+              <span>${escapeHtml(week.label)}</span>
+              <i style="height:${Math.max(8, Math.min(88, (week.workload / Math.max(week.capacity, 1)) * 64))}px"></i>
+              <b>${week.delta > 0 ? `+${week.delta}` : week.delta}</b>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+    <div class="v2-resource-grid">
+      <div class="v2-resource-head"><span>Department</span>${data.resource.weeks.map((week) => `<span>${escapeHtml(week.range)}</span>`).join("")}</div>
+      ${data.resource.rows
+        .map(
+          (row) => `
+            <div class="v2-resource-row">
+              <strong>${escapeHtml(row.department.name)}</strong>
+              ${row.cells.map((cell) => `<span class="${cell.delta > 0 ? "over" : cell.workload === 0 ? "none" : "under"}">${cell.delta > 0 ? `+${cell.delta}` : cell.delta}<small>${cell.workload}/${cell.capacity}</small></span>`).join("")}
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+
+  mediaCenter.innerHTML = `
+    <div class="v2-panel-head"><span>Latest Versions Filmstrip</span><strong>1 - ${Math.min(data.versions.length, 25)} of ${data.versions.length} Versions</strong></div>
+    <div class="v2-filmstrip">
+      ${data.versions
+        .map(
+          (version) => `
+            <button class="v2-version-card ${trackingV2StatusClass(version.status === "approved" ? "FINAL" : version.status === "notes" ? "PENDING_REVIEW" : version.status === "blocked" ? "ON_HOLD" : "PENDING_REVIEW")}" type="button" data-workspace-view="audit" data-workspace-focus="vfxVersionList">
+              <span class="v2-version-thumb">${version.media?.previewUrl ? `<img src="${escapeHtml(version.media.previewUrl)}" alt="${escapeHtml(version.version)}" />` : "▶"}</span>
+              <strong>${escapeHtml(version.shotGroup)} · ${escapeHtml(version.version)}</strong>
+              <small>${trackingV2StatusDot(version.status === "approved" ? "FINAL" : version.status === "blocked" ? "ON_HOLD" : "PENDING_REVIEW")}${escapeHtml(version.vendor)}</small>
+            </button>
+          `,
+        )
+        .join("") || `<div class="producer-empty">暂无版本。</div>`}
+    </div>
+  `;
+
+  const panelMap = {
+    projects: [projectGrid, insights],
+    shots: [shotTable],
+    assets: [assetTable],
+    tasks: [taskGantt],
+    resource: [resourcePlanning],
+    media: [mediaCenter],
+  };
+  [projectGrid, insights, shotTable, assetTable, taskGantt, resourcePlanning, mediaCenter].forEach((node) => {
+    node.hidden = true;
+  });
+  (panelMap[activePanel] || panelMap.projects).forEach((node) => {
+    node.hidden = false;
+  });
+}
+
 function productionTrackingData() {
   const metrics = analysisMetrics();
   const production = productionDashboardData();
@@ -7942,6 +8424,7 @@ function renderProductionTrackingConsole() {
   const noteCount = data.rows.filter((row) => row.tone === "note").length + data.reviewRows.filter((row) => row.tone === "note").length;
   const tracker = data.tracker;
   const prdData = trackerPrdSuiteData(tracker);
+  renderTrackingV2Surface(tracker);
   const allAssignees = Array.from(new Set(tracker.allTasks.map((task) => task.assignee).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
   const filteredShots = trackerFilteredShots(tracker);
   if (trackerUiState.expandedShotCode && !filteredShots.some((shot) => shot.code === trackerUiState.expandedShotCode)) {
@@ -13187,6 +13670,15 @@ function setupProductionTrackerControls() {
     }
   });
   container.addEventListener("click", (event) => {
+    const v2PanelButton = event.target.closest("[data-tracking-v2-panel]");
+    if (v2PanelButton) {
+      const surface = document.querySelector("#trackingV2Surface");
+      if (surface) {
+        surface.dataset.activePanel = v2PanelButton.dataset.trackingV2Panel || "projects";
+        renderTrackingV2Surface(productionTrackerWorkflowData());
+      }
+      return;
+    }
     const roleFilter = event.target.closest("[data-tracker-role-filter]");
     if (roleFilter) {
       trackerUiState.role = roleFilter.dataset.trackerRoleFilter || "all";
