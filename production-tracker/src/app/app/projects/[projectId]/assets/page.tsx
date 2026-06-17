@@ -1,14 +1,16 @@
 import { AssetTable } from "@/components/asset/asset-table";
 import { CreateAssetForm } from "@/components/asset/create-asset-form";
 import { getAssetTableItems, type AssetTableItem } from "@/lib/asset-data";
+import { getShotTableItems, type ShotTableItem } from "@/lib/shot-data";
 
 export default async function ProjectAssetsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   let assets: AssetTableItem[] = [];
+  let shots: ShotTableItem[] = [];
   let error: string | null = null;
 
   try {
-    assets = await getAssetTableItems(projectId);
+    [assets, shots] = await Promise.all([getAssetTableItems(projectId), getShotTableItems(projectId)]);
   } catch (caught) {
     error = caught instanceof Error ? caught.message : "资产数据暂时无法读取。";
   }
@@ -37,7 +39,7 @@ export default async function ProjectAssetsPage({ params }: { params: Promise<{ 
           <p className="mt-3 max-w-3xl text-sm leading-6 text-[#c9c3b5]">{error}</p>
         </div>
       ) : (
-        <AssetTable assets={assets} />
+        <AssetTable assets={assets} shots={shots} />
       )}
     </>
   );
