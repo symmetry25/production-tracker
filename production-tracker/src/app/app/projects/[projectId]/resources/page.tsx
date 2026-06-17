@@ -1,4 +1,5 @@
 import { getDictionary, getLocale } from "@/lib/i18n";
+import { SankeyFlow } from "@/components/resource/sankey-flow";
 import {
   getResourceBudgetData,
   type AuditDocument,
@@ -65,6 +66,9 @@ export default async function ProjectResourcesPage({ params }: { params: Promise
       </div>
 
       <ControlSummary data={data} />
+      <div className="mb-5">
+        <SankeyFlow data={data} />
+      </div>
 
       <div className="grid grid-cols-[minmax(420px,0.88fr)_minmax(620px,1.12fr)] gap-5">
         <section className="space-y-5">
