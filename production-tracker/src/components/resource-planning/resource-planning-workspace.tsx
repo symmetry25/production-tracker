@@ -44,7 +44,9 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
   const calendarDraft = useCalendarDraft(calendarDraftKey);
   const calendarExceptions = calendarDraft?.exceptions ?? data.calendarExceptions;
 
+  const baselineData = useMemo(() => rebuildResourcePlanningWithCalendarExceptions(data, data.calendarExceptions), [data]);
   const activeData = useMemo(() => rebuildResourcePlanningWithCalendarExceptions(data, calendarExceptions), [data, calendarExceptions]);
+  const scenarioDelta = useMemo(() => buildScenarioDelta(activeData, baselineData), [activeData, baselineData]);
   const defaultCell = useMemo(() => findDefaultCell(activeData), [activeData]);
   const activeCell = selectedCell ?? defaultCell;
   const selectedUser = activeData.users.find((user) => user.id === activeCell?.userId) ?? activeData.users[0];
@@ -89,7 +91,12 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
         </div>
 
         <div className="border border-[#34322b] bg-[#181713]">
-          <PanelHeader eyebrow="summary" title="资源窗口" meta={`${activeData.weeks.length} weeks`} />
+          <PanelHeader
+            eyebrow="summary"
+            title="资源窗口"
+            meta={`${activeData.weeks.length} weeks`}
+            actions={<ExportPlanningButton data={activeData} filename={`resource-planning-${projectId}.csv`} />}
+          />
           <div className="grid grid-cols-2 border-b border-[#2a2a28]">
             <Metric label="Capacity" value={days(activeData.totals.capacity)} />
             <Metric label="Workload" value={days(activeData.totals.workload)} />
@@ -115,7 +122,14 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
 
       <section className="border border-[#34322b] bg-[#181713]">
         <PanelHeader eyebrow="calendar controls" title="日历例外与产能修正" meta={calendarDraft ? "Local draft" : "Project baseline"} />
-        <CalendarExceptionManager data={activeData} exceptions={calendarExceptions} baselineExceptions={data.calendarExceptions} draft={calendarDraft} storageKey={calendarDraftKey} />
+        <CalendarExceptionManager
+          data={activeData}
+          exceptions={calendarExceptions}
+          baselineExceptions={data.calendarExceptions}
+          draft={calendarDraft}
+          scenarioDelta={scenarioDelta}
+          storageKey={calendarDraftKey}
+        />
       </section>
 
       <section className="grid gap-0 border border-[#34322b] bg-[#181713] xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -478,17 +492,31 @@ function InspectDataRow({ row }: { row: InspectRow }) {
   );
 }
 
+function ExportPlanningButton({ data, filename }: { data: ResourcePlanningData; filename: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => downloadCsv(filename, buildPlanningCsv(data))}
+      className="h-8 border border-[#34322b] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
+    >
+      Export CSV
+    </button>
+  );
+}
+
 function CalendarExceptionManager({
   data,
   exceptions,
   baselineExceptions,
   draft,
+  scenarioDelta,
   storageKey,
 }: {
   data: ResourcePlanningData;
   exceptions: PlanningCalendarException[];
   baselineExceptions: PlanningCalendarException[];
   draft: CalendarDraft | null;
+  scenarioDelta: ReturnType<typeof buildScenarioDelta>;
   storageKey: string;
 }) {
   const defaultDate = data.weeks[0]?.start ?? new Date().toISOString().slice(0, 10);
@@ -546,6 +574,12 @@ function CalendarExceptionManager({
             <span className={draft ? "font-mono text-[#e8c678]" : "font-mono text-[#8f8a7e]"}>{draftLabel}</span>
           </div>
           {message ? <p className="mt-2 text-[#c9c3b5]">{message}</p> : null}
+        </div>
+
+        <div className="mb-4 grid grid-cols-3 border border-[#2f2c25] bg-[#151410] text-xs">
+          <ScenarioMetric label="Capacity Δ" value={signedDays(scenarioDelta.capacity)} tone={scenarioDelta.capacity < 0 ? "watch" : "ok"} />
+          <ScenarioMetric label="Loss Δ" value={signedDays(scenarioDelta.calendarLoss)} tone={scenarioDelta.calendarLoss > 0 ? "watch" : "ok"} />
+          <ScenarioMetric label="Overbooked Δ" value={`${scenarioDelta.overbookedUsers > 0 ? "+" : ""}${scenarioDelta.overbookedUsers}`} tone={scenarioDelta.overbookedUsers > 0 ? "over" : "ok"} />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
@@ -836,6 +870,15 @@ function Metric({ label, value, tone = "normal" }: { label: string; value: strin
   );
 }
 
+function ScenarioMetric({ label, value, tone = "normal" }: { label: string; value: string; tone?: "normal" | "ok" | "watch" | "over" }) {
+  return (
+    <div className="border-r border-[#2a2a28] px-3 py-2 last:border-r-0">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7f7a70]">{label}</p>
+      <p className={["mt-1 font-mono text-sm font-semibold", metricTone(tone)].join(" ")}>{value}</p>
+    </div>
+  );
+}
+
 function MiniMetric({ label, value, tone = "normal" }: { label: string; value: string; tone?: "normal" | "ok" | "over" }) {
   return (
     <div className="border-r border-[#2a2a28] px-2 py-3 last:border-r-0">
@@ -912,6 +955,55 @@ function signedDays(value: number) {
 
 function calendarLoss(data: ResourcePlanningData) {
   return roundDays(data.weeks.reduce((sum, week) => sum + week.unavailableDays * data.users.length, 0));
+}
+
+function buildScenarioDelta(activeData: ResourcePlanningData, baselineData: ResourcePlanningData) {
+  return {
+    capacity: roundDays(activeData.totals.capacity - baselineData.totals.capacity),
+    calendarLoss: roundDays(calendarLoss(activeData) - calendarLoss(baselineData)),
+    overbookedUsers: activeData.totals.overbookedUsers - baselineData.totals.overbookedUsers,
+  };
+}
+
+function buildPlanningCsv(data: ResourcePlanningData) {
+  const rows = [
+    ["department", "user", "week", "capacity_days", "workload_days", "delta_days", "task_count", "calendar_exception_days", "exceptions"],
+    ...data.users.flatMap((user) =>
+      user.weeks.map((week) => {
+        const weekMeta = data.weeks.find((item) => item.key === week.weekKey);
+
+        return [
+          user.department,
+          user.name,
+          weekMeta?.label ?? week.weekKey,
+          String(week.capacity),
+          String(week.workload),
+          String(week.delta),
+          String(week.tasks.length),
+          String(week.unavailableDays),
+          week.exceptions.map((exception) => `${exception.date} ${exception.description ?? exception.type}`).join(" | "),
+        ];
+      }),
+    ),
+  ];
+
+  return rows.map((row) => row.map(csvCell).join(",")).join("\n");
+}
+
+function csvCell(value: string) {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+function downloadCsv(filename: string, csv: string) {
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function roundDays(value: number) {
