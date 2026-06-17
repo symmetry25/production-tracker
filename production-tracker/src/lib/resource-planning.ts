@@ -43,6 +43,8 @@ export type PlanningUserWeek = {
     id: string;
     name: string;
     status: string;
+    startDate: string | null;
+    dueDate: string | null;
     contextLabel: string;
     days: number;
   }[];
@@ -79,6 +81,8 @@ export type UnassignedWeekRow = {
     id: string;
     name: string;
     status: string;
+    startDate: string | null;
+    dueDate: string | null;
     contextLabel: string;
     days: number;
   }[];
@@ -292,6 +296,8 @@ export function buildResourcePlanningData({ people, tasks, start, end, calendarE
             id: task.id,
             name: task.name,
             status: task.status,
+            startDate: task.startDate,
+            dueDate: task.dueDate,
             contextLabel: task.contextLabel,
             days: split.days,
           },
@@ -370,6 +376,8 @@ export function buildResourcePlanningData({ people, tasks, start, end, calendarE
         id: task.id,
         name: task.name,
         status: task.status,
+        startDate: task.startDate,
+        dueDate: task.dueDate,
         contextLabel: task.contextLabel,
         days: roundDays(split.days / Math.max(task.assignees.length, 1)),
       },

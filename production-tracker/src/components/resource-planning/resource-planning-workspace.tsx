@@ -1,6 +1,7 @@
 "use client";
 
 import * as ContextMenu from "@radix-ui/react-context-menu";
+import * as Popover from "@radix-ui/react-popover";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -204,21 +205,39 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
                     return (
                       <ContextMenu.Root key={week.weekKey}>
                         <ContextMenu.Trigger asChild>
-                          <button
-                            type="button"
+                          <div
+                            role="button"
+                            tabIndex={0}
                             onClick={() => setSelectedCell({ userId: user.id, weekKey: week.weekKey })}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setSelectedCell({ userId: user.id, weekKey: week.weekKey });
+                              }
+                            }}
                             className={[
-                              "min-h-16 border-l border-[#2a2a28] px-3 py-2 text-right font-mono transition hover:brightness-125 focus:outline-none focus:ring-2 focus:ring-[#d8b46a]",
+                              "group min-h-16 border-l border-[#2a2a28] px-3 py-2 text-right font-mono transition hover:brightness-125 focus:outline-none focus:ring-2 focus:ring-[#d8b46a]",
                               cellTone(week.delta),
                               isSelected ? "relative z-10 ring-2 ring-[#d8b46a]" : "",
                             ].join(" ")}
                             style={week.unavailableDays > 0 ? exceptionCellStyle : undefined}
-                            title={`${week.workload} of ${week.capacity} Days Assigned`}
+                            title={`${week.workload} of ${week.capacity} Days Assigned · Show Tasks`}
                           >
                             <p className="text-sm">{numberFormatter.format(week.workload)} / {numberFormatter.format(week.capacity)}</p>
                             <p className="mt-1 text-[10px] opacity-75">{signedDays(week.delta)}</p>
-                            <p className="mt-1 text-[10px] opacity-60">{week.tasks.length ? `${week.tasks.length} tasks` : "clear"}</p>
-                          </button>
+                            <Popover.Root>
+                              <Popover.Trigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="mt-1 inline-flex h-5 items-center justify-end border border-transparent px-1 text-[10px] uppercase tracking-[0.08em] opacity-65 transition hover:border-current hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#d8b46a]"
+                                >
+                                  {week.tasks.length ? `Show Tasks (${week.tasks.length})` : "clear"}
+                                </button>
+                              </Popover.Trigger>
+                              <ResourceTaskPopover user={user} week={week} weekLabel={activeData.weeks.find((item) => item.key === week.weekKey)?.label ?? week.weekKey} />
+                            </Popover.Root>
+                          </div>
                         </ContextMenu.Trigger>
                         <ResourceCellContextMenu
                           user={user}
@@ -397,11 +416,20 @@ function ResourceCellContextMenu({
           <ContextMetric label="Capacity" value={days(week.capacity)} />
           <ContextMetric label={pressureTone} value={signedDays(week.delta)} tone={week.delta > 0 ? "over" : "ok"} />
         </div>
-        <MenuItem onSelect={onInspect}>⌕ Inspect Cell</MenuItem>
+        <MenuItem onSelect={onInspect}>📋 Show Tasks ({week.tasks.length})</MenuItem>
+        <MenuItem onSelect={onInspect}>📅 View Week Detail</MenuItem>
         <MenuItem onSelect={() => void copyText(summary)}>⌘ Copy Summary</MenuItem>
         <ContextMenu.Item asChild className="flex cursor-default items-center px-3 py-2 text-[#d8d3c7] outline-none hover:bg-[#252523]">
           <Link href={`/app/resource-planning/${encodeURIComponent(user.department)}${linkQuery}`}>↳ Open Department Drilldown</Link>
         </ContextMenu.Item>
+        <Separator />
+        <ContextMenu.Item disabled className="cursor-default px-3 py-2 text-xs text-[#7f7a70] outline-none">
+          ➕ Assign New Task... · 任务页创建后自动进入资源规划
+        </ContextMenu.Item>
+        <ContextMenu.Item disabled className="cursor-default px-3 py-2 text-xs text-[#7f7a70] outline-none">
+          ↔ Reassign Tasks... · 批量重新分配待接入
+        </ContextMenu.Item>
+        <MenuItem onSelect={() => downloadCsv(`resource-week-${user.id}-${week.weekKey}.csv`, buildWeekCsv(user, week, weekLabel))}>📤 Export Week Data</MenuItem>
         <Separator />
         <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">Tasks</ContextMenu.Label>
         {week.tasks.length > 0 ? (
@@ -435,6 +463,77 @@ function ResourceCellContextMenu({
         ) : null}
       </ContextMenu.Content>
     </ContextMenu.Portal>
+  );
+}
+
+function ResourceTaskPopover({ user, week, weekLabel }: { user: PlanningUserRow; week: PlanningUserWeek; weekLabel: string }) {
+  return (
+    <Popover.Portal>
+      <Popover.Content
+        align="end"
+        sideOffset={8}
+        className="z-50 w-[380px] border border-[#3b382f] bg-[#181713] p-0 text-left text-[#d8d3c7] shadow-[0_18px_60px_rgba(0,0,0,0.45)]"
+      >
+        <div className="border-b border-[#302d26] px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#d8b46a]">assigned tasks</p>
+              <h3 className="mt-1 truncate text-sm font-semibold text-[#f4f1e8]">{user.name} · {weekLabel}</h3>
+              <p className="mt-1 text-xs text-[#8f8a7e]">{days(week.workload)} of {days(week.capacity)} assigned · {signedDays(week.delta)}</p>
+            </div>
+            <Popover.Close className="grid size-7 shrink-0 place-items-center border border-[#34322b] text-[#8f8a7e] transition hover:border-[#d8b46a] hover:text-[#f4f1e8]" aria-label="Close task popover">
+              ×
+            </Popover.Close>
+          </div>
+        </div>
+
+        <div className="max-h-[360px] overflow-auto p-3">
+          {week.tasks.length > 0 ? (
+            <div className="space-y-2">
+              {week.tasks.map((task) => (
+                <div key={task.id} className="border border-[#2a2a28] bg-[#151410] p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[#f4f1e8]">{task.contextLabel} · {task.name}</p>
+                      <p className="mt-1 text-xs text-[#8f8a7e]">{statusLabel(task.status)} · {task.startDate ?? "No start"} → {task.dueDate ?? "No due"}</p>
+                    </div>
+                    <span className="shrink-0 border border-[#3c3830] px-2 py-1 font-mono text-xs text-[#e8c678]">{days(task.days)}</span>
+                  </div>
+                  <MiniGanttBar taskStart={task.startDate} taskEnd={task.dueDate} weekStart={week.weekKey} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="border border-dashed border-[#34322b] px-4 py-10 text-center text-xs text-[#7f7a70]">
+              这一周没有已分配任务。可以在任务页新建或分配任务后回到这里检查容量。
+            </div>
+          )}
+        </div>
+      </Popover.Content>
+    </Popover.Portal>
+  );
+}
+
+function MiniGanttBar({ taskStart, taskEnd, weekStart }: { taskStart: string | null; taskEnd: string | null; weekStart: string }) {
+  const weekStartDate = parseDate(weekStart);
+  const taskStartDate = parseDate(taskStart);
+  const taskEndDate = parseDate(taskEnd);
+  const visibleStart = taskStartDate && weekStartDate ? Math.max(0, Math.min(6, diffDays(taskStartDate, weekStartDate))) : 0;
+  const visibleEnd = taskEndDate && weekStartDate ? Math.max(0, Math.min(6, diffDays(taskEndDate, weekStartDate))) : visibleStart;
+  const width = Math.max(12, ((visibleEnd - visibleStart + 1) / 7) * 100);
+  const left = (visibleStart / 7) * 100;
+
+  return (
+    <div className="mt-3">
+      <div className="mb-1 grid grid-cols-7 text-center font-mono text-[9px] text-[#5f5b52]">
+        {["M", "T", "W", "T", "F", "S", "S"].map((label, index) => (
+          <span key={`${label}-${index}`}>{label}</span>
+        ))}
+      </div>
+      <div className="relative h-2 bg-[#24231f]">
+        <div className="absolute top-0 h-full bg-[#d8b46a]" style={{ left: `${left}%`, width: `${Math.min(100 - left, width)}%` }} />
+      </div>
+    </div>
   );
 }
 
@@ -1111,6 +1210,42 @@ function buildPlanningCsv(data: ResourcePlanningData) {
   return rows.map((row) => row.map(csvCell).join(",")).join("\n");
 }
 
+function buildWeekCsv(user: PlanningUserRow, week: PlanningUserWeek, weekLabel: string) {
+  const rows = [
+    ["department", "user", "week", "capacity_days", "workload_days", "delta_days", "task", "context", "status", "task_days", "start_date", "due_date"],
+    [
+      user.department,
+      user.name,
+      weekLabel,
+      String(week.capacity),
+      String(week.workload),
+      String(week.delta),
+      "Week Total",
+      "",
+      "",
+      String(week.workload),
+      "",
+      "",
+    ],
+    ...week.tasks.map((task) => [
+      user.department,
+      user.name,
+      weekLabel,
+      String(week.capacity),
+      String(week.workload),
+      String(week.delta),
+      task.name,
+      task.contextLabel,
+      statusLabel(task.status),
+      String(task.days),
+      task.startDate ?? "",
+      task.dueDate ?? "",
+    ]),
+  ];
+
+  return rows.map((row) => row.map(csvCell).join(",")).join("\n");
+}
+
 function csvCell(value: string) {
   return `"${value.replaceAll('"', '""')}"`;
 }
@@ -1173,6 +1308,17 @@ async function copyText(value: string) {
   } catch {
     // Clipboard can be blocked in some browser contexts; the menu action should remain harmless.
   }
+}
+
+function parseDate(value: string | null) {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
+function diffDays(a: Date, b: Date) {
+  return Math.round((a.getTime() - b.getTime()) / 86_400_000);
 }
 
 const tooltipStyle = {
