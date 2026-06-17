@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type WheelEvent } from "react";
 
 import type { ResourceBudgetData, VendorSpend } from "@/lib/resource-data";
 
@@ -31,6 +31,9 @@ type PositionedNode = FlowNode & {
 const columnX = [48, 390, 746] as const;
 const nodeWidth = 170;
 const svgHeight = 640;
+const minZoom = 0.72;
+const maxZoom = 1.9;
+const zoomStep = 0.14;
 
 const vendorColors: Record<VendorSpend["category"], string> = {
   equipment: "#c84c39",
@@ -52,25 +55,45 @@ const categoryLabels: Record<VendorSpend["category"], string> = {
 
 export function SankeyFlow({ data }: { data: ResourceBudgetData }) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [isExpanded, setIsExpanded] = useState(false);
   const model = useMemo(() => buildSankeyModel(data), [data]);
   const activeLink = model.links.find((link) => link.id === activeId) ?? null;
 
   return (
-    <section className="border border-[#34322b] bg-[#181713]">
+    <section className={["border border-[#34322b] bg-[#181713]", isExpanded ? "fixed inset-4 z-50 flex flex-col shadow-2xl shadow-black/70" : ""].join(" ")}>
       <div className="flex items-start justify-between gap-5 border-b border-[#34322b] px-4 py-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#d8b46a]">sankey flow</p>
           <h2 className="mt-1 text-lg font-semibold">资金流向桑基图</h2>
         </div>
-        <div className="text-right text-xs text-[#8f8a7e]">
-          <p>总预算 → 部门/类别 → 供应商与执行项</p>
-          <p className="mt-1 font-mono text-[#e8c678]">{formatMoney(data.project.totalBudget)}</p>
+        <div className="flex items-start gap-4">
+          <div className="text-right text-xs text-[#8f8a7e]">
+            <p>总预算 → 部门/类别 → 供应商与执行项</p>
+            <p className="mt-1 font-mono text-[#e8c678]">{formatMoney(data.project.totalBudget)}</p>
+          </div>
+          <ChartToolbar
+            zoom={zoom}
+            isExpanded={isExpanded}
+            onZoomIn={() => setZoom((value) => clampZoom(value + zoomStep))}
+            onZoomOut={() => setZoom((value) => clampZoom(value - zoomStep))}
+            onReset={() => setZoom(1)}
+            onToggleExpanded={() => setIsExpanded((value) => !value)}
+          />
         </div>
       </div>
 
-      <div className="grid grid-cols-[1fr_260px]">
-        <div className="overflow-x-auto p-4">
-          <svg viewBox="0 0 980 640" className="h-[640px] min-w-[920px] w-full" role="img" aria-label="资金流向桑基图">
+      {isExpanded ? <div className="pointer-events-none fixed inset-0 -z-10 bg-black/70" /> : null}
+
+      <div className={["grid min-h-0 grid-cols-[1fr_260px]", isExpanded ? "flex-1" : ""].join(" ")}>
+        <div className={["overflow-auto p-4", isExpanded ? "h-full" : ""].join(" ")} onWheel={(event) => handleChartWheel(event, setZoom)}>
+          <svg
+            viewBox="0 0 980 640"
+            className={["origin-top-left transition-transform duration-150", isExpanded ? "h-[78vh]" : "h-[640px]", "min-w-[920px]"].join(" ")}
+            style={{ width: `${Math.round(100 * zoom)}%` }}
+            role="img"
+            aria-label="资金流向桑基图"
+          >
             <defs>
               <filter id="sankeyGlow" x="-20%" y="-20%" width="140%" height="140%">
                 <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor="#d8b46a" floodOpacity="0.22" />
@@ -172,12 +195,57 @@ export function SankeyFlow({ data }: { data: ResourceBudgetData }) {
   );
 }
 
+function ChartToolbar({
+  zoom,
+  isExpanded,
+  onZoomIn,
+  onZoomOut,
+  onReset,
+  onToggleExpanded,
+}: {
+  zoom: number;
+  isExpanded: boolean;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onReset: () => void;
+  onToggleExpanded: () => void;
+}) {
+  return (
+    <div className="flex items-center border border-[#34322b] bg-[#11110f] text-xs">
+      <ToolButton label="缩小图表" onClick={onZoomOut}>-</ToolButton>
+      <button type="button" onClick={onReset} className="min-w-16 border-l border-[#34322b] px-3 py-2 font-mono text-[#e8c678] hover:bg-[#1f1d18]" title="重置缩放">
+        {Math.round(zoom * 100)}%
+      </button>
+      <ToolButton label="放大图表" onClick={onZoomIn}>+</ToolButton>
+      <ToolButton label={isExpanded ? "退出全屏" : "全屏查看"} onClick={onToggleExpanded}>{isExpanded ? "Exit" : "Full"}</ToolButton>
+    </div>
+  );
+}
+
+function ToolButton({ children, label, onClick }: { children: string; label: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="border-l border-[#34322b] px-3 py-2 font-semibold text-[#c9c3b5] hover:bg-[#1f1d18] hover:text-[#f4f1e8] first:border-l-0" title={label} aria-label={label}>
+      {children}
+    </button>
+  );
+}
+
 function ColumnLabel({ x, label }: { x: number; label: string }) {
   return (
     <text x={x} y={24} fill="#7f7a70" fontSize="10" fontWeight="700" letterSpacing="2">
       {label.toUpperCase()}
     </text>
   );
+}
+
+function handleChartWheel(event: WheelEvent<HTMLDivElement>, setZoom: (updater: (value: number) => number) => void) {
+  if (!event.ctrlKey && !event.metaKey) return;
+  event.preventDefault();
+  setZoom((value) => clampZoom(value + (event.deltaY < 0 ? zoomStep : -zoomStep)));
+}
+
+function clampZoom(value: number) {
+  return Math.min(maxZoom, Math.max(minZoom, Number(value.toFixed(2))));
 }
 
 function buildSankeyModel(data: ResourceBudgetData) {
