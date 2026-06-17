@@ -1,0 +1,269 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  PRODUCER
+  SUPERVISOR
+  ARTIST
+  REVIEWER
+}
+
+enum TaskStatus {
+  WAITING_TO_START
+  READY_TO_START
+  IN_PROGRESS
+  PENDING_REVIEW
+  APPROVED
+  FINAL
+  ON_HOLD
+  OMIT
+}
+
+enum DependencyType {
+  FS
+  FF
+  SS
+  SF
+}
+
+enum AssetType {
+  CHARACTER
+  ENVIRONMENT
+  PROP
+  FX
+  VEHICLE
+  RIG
+}
+
+enum CalendarExceptionType {
+  HOLIDAY
+  REDUCED_HOURS
+  STUDIO_CLOSURE
+}
+
+enum VersionStatus {
+  PENDING_REVIEW
+  VIEWED
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+model User {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  password   String?
+  role       Role     @default(ARTIST)
+  department String?
+  avatarUrl  String?
+  capacity   Int      @default(5)
+  createdAt  DateTime @default(now())
+
+  assignments      Assignment[]
+  uploadedVersions Version[]
+  notes            Note[]
+}
+
+model Project {
+  id            String   @id @default(cuid())
+  name          String
+  code          String   @unique
+  thumbnailUrl  String?
+  description   String?
+  startDate     DateTime
+  dueDate       DateTime
+  milestone     String?
+  milestoneDate DateTime?
+  status        String   @default("active")
+  isTemplate    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  shots         Shot[]
+  assets        Asset[]
+  sequences     Sequence[]
+  phases        Phase[]
+  workOrders    WorkOrder[]
+  calExceptions CalendarException[]
+}
+
+model Sequence {
+  id          String     @id @default(cuid())
+  code        String
+  description String?
+  status      TaskStatus @default(WAITING_TO_START)
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  shots       Shot[]
+
+  @@unique([projectId, code])
+}
+
+model Shot {
+  id           String     @id @default(cuid())
+  code         String
+  description  String?
+  cutIn        Int?
+  cutOut       Int?
+  cutDuration  Int?
+  status       TaskStatus @default(WAITING_TO_START)
+  thumbnailUrl String?
+  projectId    String
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sequenceId   String?
+  sequence     Sequence?  @relation(fields: [sequenceId], references: [id], onDelete: SetNull)
+  createdAt    DateTime   @default(now())
+
+  tasks        Task[]
+  linkedAssets ShotAsset[]
+
+  @@unique([projectId, code])
+}
+
+model Asset {
+  id           String     @id @default(cuid())
+  name         String
+  type         AssetType
+  status       TaskStatus @default(WAITING_TO_START)
+  description  String?
+  thumbnailUrl String?
+  projectId    String
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  tasks       Task[]
+  linkedShots ShotAsset[]
+  notes       Note[]
+}
+
+model ShotAsset {
+  shotId  String
+  assetId String
+  shot    Shot   @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@id([shotId, assetId])
+}
+
+model Task {
+  id            String     @id @default(cuid())
+  name          String
+  status        TaskStatus @default(WAITING_TO_START)
+  priority      Int        @default(0)
+  startDate     DateTime?
+  dueDate       DateTime?
+  duration      Int?
+  timeLogged    Float      @default(0)
+  estimatedCost Float?
+  shotId        String?
+  shot          Shot?      @relation(fields: [shotId], references: [id], onDelete: Cascade)
+  assetId       String?
+  asset         Asset?     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  phaseId       String?
+  phase         Phase?     @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  assignments  Assignment[]
+  versions     Version[]
+  notes        Note[]
+  predecessors TaskDependency[] @relation("successor")
+  successors   TaskDependency[] @relation("predecessor")
+}
+
+model TaskDependency {
+  id            String         @id @default(cuid())
+  predecessorId String
+  predecessor   Task           @relation("predecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
+  successorId   String
+  successor     Task           @relation("successor", fields: [successorId], references: [id], onDelete: Cascade)
+  type          DependencyType @default(FS)
+  lagDays       Int            @default(0)
+
+  @@unique([predecessorId, successorId])
+}
+
+model Assignment {
+  id         String   @id @default(cuid())
+  taskId     String
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewerId String?
+  assignedAt DateTime @default(now())
+
+  @@unique([taskId, userId])
+}
+
+model Version {
+  id           String        @id @default(cuid())
+  number       Int
+  name         String
+  status       VersionStatus @default(PENDING_REVIEW)
+  taskId       String
+  task         Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User          @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  fileUrl      String
+  fileType     String
+  thumbnailUrl String?
+  description  String?
+  frameCount   Int?
+  fps          Float?        @default(24)
+  createdAt    DateTime      @default(now())
+
+  notes Note[]
+
+  @@unique([taskId, number])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  content   String
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assetId   String?
+  asset     Asset?   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  versionId String?
+  version   Version? @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Phase {
+  id        String   @id @default(cuid())
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+}
+
+model WorkOrder {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  status      String   @default("open")
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+}
+
+model CalendarException {
+  id            String                @id @default(cuid())
+  date          DateTime
+  type          CalendarExceptionType
+  description   String?
+  hoursWorked   Int                   @default(0)
+  projectId     String?
+  project       Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  inheritedFrom String?
+}
