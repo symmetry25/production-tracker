@@ -25,14 +25,14 @@ export function AppShell({ session, locale, dictionary, children }: AppShellProp
     { key: "assets", href: isDemoMode ? `${demoProjectBase}/assets` : "/app/projects" },
     { key: "tasks", href: isDemoMode ? `${demoProjectBase}/tasks` : "/app/projects" },
     { key: "review", href: isDemoMode ? `${demoProjectBase}/media` : "/app/projects" },
-    { key: "resources", href: "/app" },
+    { key: "resources", href: isDemoMode ? `${demoProjectBase}/resources` : "/app" },
     { key: "calendar", href: "/app" },
   ];
   const sideNavItems: SideNavItem[] = [
     { key: "overview", href: isDemoMode ? `${demoProjectBase}/overview` : "/app" },
     { key: "projectGrid", href: "/app/projects" },
     { key: "pipeline", href: isDemoMode ? `${demoProjectBase}/tasks` : "/app" },
-    { key: "resource", href: "/app" },
+    { key: "resource", href: isDemoMode ? `${demoProjectBase}/resources` : "/app" },
     { key: "review", href: isDemoMode ? `${demoProjectBase}/media` : "/app" },
     { key: "calendar", href: "/app" },
   ];

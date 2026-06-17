@@ -10,6 +10,7 @@ const projectTabs: { key: keyof Dictionary["shell"]["projectTabs"]; slug: string
   { key: "assets", slug: "assets" },
   { key: "shots", slug: "shots" },
   { key: "tasks", slug: "tasks" },
+  { key: "resources", slug: "resources" },
   { key: "phases", slug: "phases" },
   { key: "media", slug: "media" },
   { key: "workOrders", slug: "work-orders" },
