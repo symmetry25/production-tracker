@@ -2,7 +2,7 @@
 
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   Area,
   AreaChart,
@@ -33,13 +33,16 @@ type InspectGroup = "department" | "user";
 type SelectedCell = { userId: string; weekKey: string };
 type InspectRow = { name: string; subtitle: string; capacity: number; workload: number; delta: number };
 type ExceptionType = PlanningCalendarException["type"];
+type CalendarDraft = { exceptions: PlanningCalendarException[]; savedAt: string | null };
 
-export function ResourcePlanningWorkspace({ data }: { data: ResourcePlanningData }) {
+export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-mission" }: { data: ResourcePlanningData; projectId?: string }) {
   const [chartMode, setChartMode] = useState<ChartMode>("step");
   const [detailMode, setDetailMode] = useState<DetailMode>("heatmap");
   const [inspectGroup, setInspectGroup] = useState<InspectGroup>("department");
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
-  const [calendarExceptions, setCalendarExceptions] = useState(data.calendarExceptions);
+  const calendarDraftKey = useMemo(() => `production-tracker:calendar-exceptions:${projectId}`, [projectId]);
+  const calendarDraft = useCalendarDraft(calendarDraftKey);
+  const calendarExceptions = calendarDraft?.exceptions ?? data.calendarExceptions;
 
   const activeData = useMemo(() => rebuildResourcePlanningWithCalendarExceptions(data, calendarExceptions), [data, calendarExceptions]);
   const defaultCell = useMemo(() => findDefaultCell(activeData), [activeData]);
@@ -111,8 +114,8 @@ export function ResourcePlanningWorkspace({ data }: { data: ResourcePlanningData
       </section>
 
       <section className="border border-[#34322b] bg-[#181713]">
-        <PanelHeader eyebrow="calendar controls" title="日历例外与产能修正" meta="Local scenario" />
-        <CalendarExceptionManager data={activeData} exceptions={calendarExceptions} baselineExceptions={data.calendarExceptions} onChange={setCalendarExceptions} />
+        <PanelHeader eyebrow="calendar controls" title="日历例外与产能修正" meta={calendarDraft ? "Local draft" : "Project baseline"} />
+        <CalendarExceptionManager data={activeData} exceptions={calendarExceptions} baselineExceptions={data.calendarExceptions} draft={calendarDraft} storageKey={calendarDraftKey} />
       </section>
 
       <section className="grid gap-0 border border-[#34322b] bg-[#181713] xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -479,22 +482,26 @@ function CalendarExceptionManager({
   data,
   exceptions,
   baselineExceptions,
-  onChange,
+  draft,
+  storageKey,
 }: {
   data: ResourcePlanningData;
   exceptions: PlanningCalendarException[];
   baselineExceptions: PlanningCalendarException[];
-  onChange: (exceptions: PlanningCalendarException[]) => void;
+  draft: CalendarDraft | null;
+  storageKey: string;
 }) {
   const defaultDate = data.weeks[0]?.start ?? new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(defaultDate);
   const [type, setType] = useState<ExceptionType>("STUDIO_CLOSURE");
   const [hoursWorked, setHoursWorked] = useState(4);
   const [description, setDescription] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
   const sortedExceptions = exceptions
     .map((exception, index) => ({ exception, index }))
     .sort((a, b) => a.exception.date.localeCompare(b.exception.date) || a.exception.type.localeCompare(b.exception.type));
   const canAdd = date.trim().length > 0;
+  const draftLabel = draft?.savedAt ? `已保存 ${formatSavedAt(draft.savedAt)}` : "未保存，本次页面预览";
 
   function addException() {
     if (!canAdd) return;
@@ -507,17 +514,40 @@ function CalendarExceptionManager({
       inheritedFrom: "local-scenario",
     };
 
-    onChange([...exceptions, nextException].sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type)));
+    saveDraft(storageKey, [...exceptions, nextException].sort(sortExceptions));
+    setMessage("已加入本机草稿，刷新后仍会保留。");
     setDescription("");
   }
 
   function deleteException(index: number) {
-    onChange(exceptions.filter((_, itemIndex) => itemIndex !== index));
+    saveDraft(
+      storageKey,
+      exceptions.filter((_, itemIndex) => itemIndex !== index),
+    );
+    setMessage("已从本机草稿删除。");
+  }
+
+  function restoreBaseline() {
+    saveDraft(storageKey, baselineExceptions);
+    setMessage("已恢复为项目基线日历。");
+  }
+
+  function clearDraft() {
+    deleteDraft(storageKey);
+    setMessage("本机草稿已清空，正在使用项目基线。");
   }
 
   return (
     <div className="grid gap-0 xl:grid-cols-[420px_minmax(0,1fr)]">
       <div className="border-b border-[#2a2a28] p-4 xl:border-b-0 xl:border-r">
+        <div className="mb-4 border border-[#2f2c25] bg-[#11110f] px-3 py-2 text-xs">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">draft status</span>
+            <span className={draft ? "font-mono text-[#e8c678]" : "font-mono text-[#8f8a7e]"}>{draftLabel}</span>
+          </div>
+          {message ? <p className="mt-2 text-[#c9c3b5]">{message}</p> : null}
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
           <Field label="日期">
             <input
@@ -575,10 +605,17 @@ function CalendarExceptionManager({
           </button>
           <button
             type="button"
-            onClick={() => onChange(baselineExceptions)}
+            onClick={restoreBaseline}
             className="h-9 border border-[#34322b] px-3 text-sm text-[#aaa599] transition hover:bg-[#22201c] hover:text-[#f4f1e8]"
           >
             重置
+          </button>
+          <button
+            type="button"
+            onClick={clearDraft}
+            className="h-9 border border-[#34322b] px-3 text-sm text-[#7f7a70] transition hover:border-[#ff8b7c] hover:text-[#ff8b7c]"
+          >
+            清空草稿
           </button>
         </div>
       </div>
@@ -645,6 +682,90 @@ function exceptionLoss(exception: PlanningCalendarException) {
   }
 
   return 1;
+}
+
+function useCalendarDraft(storageKey: string) {
+  const subscribe = useCallback((onStoreChange: () => void) => {
+    if (typeof window === "undefined") return () => undefined;
+
+    window.addEventListener("storage", onStoreChange);
+    window.addEventListener("resource-planning-calendar-draft", onStoreChange);
+
+    return () => {
+      window.removeEventListener("storage", onStoreChange);
+      window.removeEventListener("resource-planning-calendar-draft", onStoreChange);
+    };
+  }, []);
+  const getSnapshot = useCallback(() => readDraftPayload(storageKey), [storageKey]);
+  const getServerSnapshot = useCallback(() => null, []);
+  const rawDraft = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
+  return useMemo(() => parseDraftPayload(rawDraft), [rawDraft]);
+}
+
+function saveDraft(storageKey: string, exceptions: PlanningCalendarException[]) {
+  if (typeof window === "undefined") return;
+
+  const draft: CalendarDraft = {
+    exceptions,
+    savedAt: new Date().toISOString(),
+  };
+
+  window.localStorage.setItem(storageKey, JSON.stringify(draft));
+  window.dispatchEvent(new Event("resource-planning-calendar-draft"));
+}
+
+function deleteDraft(storageKey: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(storageKey);
+  window.dispatchEvent(new Event("resource-planning-calendar-draft"));
+}
+
+function readDraftPayload(storageKey: string) {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(storageKey);
+}
+
+function parseDraftPayload(raw: string | null): CalendarDraft | null {
+  try {
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CalendarDraft>;
+    if (!Array.isArray(parsed.exceptions)) return null;
+
+    return {
+      exceptions: parsed.exceptions.filter(isPlanningCalendarException).sort(sortExceptions),
+      savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isPlanningCalendarException(value: unknown): value is PlanningCalendarException {
+  if (!value || typeof value !== "object") return false;
+
+  const item = value as Partial<PlanningCalendarException>;
+  return (
+    typeof item.date === "string" &&
+    (item.type === "HOLIDAY" || item.type === "REDUCED_HOURS" || item.type === "STUDIO_CLOSURE") &&
+    typeof item.hoursWorked === "number"
+  );
+}
+
+function sortExceptions(a: PlanningCalendarException, b: PlanningCalendarException) {
+  return a.date.localeCompare(b.date) || a.type.localeCompare(b.type);
+}
+
+function formatSavedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "本机草稿";
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function clampHours(value: number) {

@@ -109,7 +109,7 @@ export default async function DepartmentResourcePlanningPage({ params }: Departm
             </div>
           </section>
 
-          <ResourcePlanningWorkspace data={data} />
+          <ResourcePlanningWorkspace data={data} projectId="demo-mkali-mission" />
         </>
       )}
     </>

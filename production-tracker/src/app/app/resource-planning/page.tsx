@@ -21,7 +21,7 @@ export default async function ResourcePlanningPage() {
         </div>
       </div>
 
-      <ResourcePlanningWorkspace data={data} />
+      <ResourcePlanningWorkspace data={data} projectId="demo-mkali-mission" />
     </>
   );
 }
