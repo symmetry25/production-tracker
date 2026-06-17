@@ -1,3 +1,4 @@
+import { CreateShotForm } from "@/components/shot/create-shot-form";
 import { ShotTable } from "@/components/shot/shot-table";
 import { getShotTableItems, type ShotTableItem } from "@/lib/shot-data";
 
@@ -21,7 +22,7 @@ export default async function ProjectShotsPage({ params }: { params: Promise<{ p
           <p className="mt-2 text-sm text-[#aaa599]">按 Sequence 分组查看每个镜头在 LAY、ANM、CFX、FX、LGT、CMP 的状态。</p>
         </div>
         <div className="flex h-10 items-center gap-2 text-xs text-[#aaa599]">
-          <button className="h-10 bg-[#378add] px-4 font-semibold text-white">Add Shot</button>
+          <CreateShotForm projectId={projectId} />
           <button className="h-10 border border-[#3f3c33] px-3">Sort</button>
           <button className="h-10 border border-[#3f3c33] px-3">Group</button>
           <button className="h-10 border border-[#3f3c33] px-3">Fields</button>

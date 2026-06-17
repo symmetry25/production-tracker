@@ -6,7 +6,7 @@ export type ShotPipelineTask = {
   id: string;
   name: string;
   status: TaskStatus;
-  dueDate: Date | null;
+  dueDate: string | null;
   assignees: string[];
 };
 
@@ -52,7 +52,7 @@ export async function getShotTableItems(projectId: string): Promise<ShotTableIte
         id: task.id,
         name: task.name,
         status: task.status,
-        dueDate: task.dueDate,
+        dueDate: task.dueDate?.toISOString() ?? null,
         assignees: task.assignments.map((assignment) => assignment.user.name),
       };
     }
