@@ -1,4 +1,5 @@
 import type { TaskStatus } from "@/generated/prisma/enums";
+import type { AssetType } from "@/generated/prisma/enums";
 
 export const STATUS_COLORS: Record<
   TaskStatus,
@@ -33,3 +34,12 @@ export const PIPELINE_COLORS: Record<string, string> = {
 };
 
 export const PIPELINE_STEPS = ["LAY", "ANM", "CFX", "FX", "LGT", "CMP"] as const;
+
+export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
+  CHARACTER: "Character",
+  ENVIRONMENT: "Environment",
+  PROP: "Prop",
+  FX: "FX",
+  VEHICLE: "Vehicle",
+  RIG: "Rig",
+};
