@@ -1,5 +1,6 @@
 "use client";
 
+import * as ContextMenu from "@radix-ui/react-context-menu";
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import {
@@ -136,22 +137,31 @@ export function ResourcePlanningWorkspace({ data }: { data: ResourcePlanningData
                     const isSelected = activeCell?.userId === user.id && activeCell.weekKey === week.weekKey;
 
                     return (
-                      <button
-                        key={week.weekKey}
-                        type="button"
-                        onClick={() => setSelectedCell({ userId: user.id, weekKey: week.weekKey })}
-                        className={[
-                          "min-h-16 border-l border-[#2a2a28] px-3 py-2 text-right font-mono transition hover:brightness-125 focus:outline-none focus:ring-2 focus:ring-[#d8b46a]",
-                          cellTone(week.delta),
-                          isSelected ? "relative z-10 ring-2 ring-[#d8b46a]" : "",
-                        ].join(" ")}
-                        style={week.unavailableDays > 0 ? exceptionCellStyle : undefined}
-                        title={`${week.workload} of ${week.capacity} Days Assigned`}
-                      >
-                        <p className="text-sm">{numberFormatter.format(week.workload)} / {numberFormatter.format(week.capacity)}</p>
-                        <p className="mt-1 text-[10px] opacity-75">{signedDays(week.delta)}</p>
-                        <p className="mt-1 text-[10px] opacity-60">{week.tasks.length ? `${week.tasks.length} tasks` : "clear"}</p>
-                      </button>
+                      <ContextMenu.Root key={week.weekKey}>
+                        <ContextMenu.Trigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCell({ userId: user.id, weekKey: week.weekKey })}
+                            className={[
+                              "min-h-16 border-l border-[#2a2a28] px-3 py-2 text-right font-mono transition hover:brightness-125 focus:outline-none focus:ring-2 focus:ring-[#d8b46a]",
+                              cellTone(week.delta),
+                              isSelected ? "relative z-10 ring-2 ring-[#d8b46a]" : "",
+                            ].join(" ")}
+                            style={week.unavailableDays > 0 ? exceptionCellStyle : undefined}
+                            title={`${week.workload} of ${week.capacity} Days Assigned`}
+                          >
+                            <p className="text-sm">{numberFormatter.format(week.workload)} / {numberFormatter.format(week.capacity)}</p>
+                            <p className="mt-1 text-[10px] opacity-75">{signedDays(week.delta)}</p>
+                            <p className="mt-1 text-[10px] opacity-60">{week.tasks.length ? `${week.tasks.length} tasks` : "clear"}</p>
+                          </button>
+                        </ContextMenu.Trigger>
+                        <ResourceCellContextMenu
+                          user={user}
+                          week={week}
+                          weekLabel={data.weeks.find((item) => item.key === week.weekKey)?.label ?? week.weekKey}
+                          onInspect={() => setSelectedCell({ userId: user.id, weekKey: week.weekKey })}
+                        />
+                      </ContextMenu.Root>
                     );
                   })}
                   <div className={["border-l border-[#2a2a28] px-3 py-2 text-right font-mono", cellTone(user.delta)].join(" ")}>
@@ -293,6 +303,73 @@ function CellInspector({ user, week, weekLabel }: { user?: PlanningUserRow; week
   );
 }
 
+function ResourceCellContextMenu({
+  user,
+  week,
+  weekLabel,
+  onInspect,
+}: {
+  user: PlanningUserRow;
+  week: PlanningUserWeek;
+  weekLabel: string;
+  onInspect: () => void;
+}) {
+  const summary = buildCellSummary(user, week, weekLabel);
+  const pressureTone = week.delta > 0 ? "Overbooked" : week.delta < -2 ? "Available" : "Balanced";
+
+  return (
+    <ContextMenu.Portal>
+      <ContextMenu.Content className="z-50 w-80 border border-[#3b382f] bg-[#181713] p-1 text-sm text-[#d8d3c7] shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
+        <ContextMenu.Label className="px-3 py-2">
+          <span className="block text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">{user.name}</span>
+          <span className="mt-1 block truncate text-sm font-semibold text-[#f4f1e8]">{user.department} · {weekLabel}</span>
+        </ContextMenu.Label>
+        <div className="mx-2 mb-1 grid grid-cols-3 border border-[#2f2c25] bg-[#11110f] text-xs">
+          <ContextMetric label="Assigned" value={days(week.workload)} />
+          <ContextMetric label="Capacity" value={days(week.capacity)} />
+          <ContextMetric label={pressureTone} value={signedDays(week.delta)} tone={week.delta > 0 ? "over" : "ok"} />
+        </div>
+        <MenuItem onSelect={onInspect}>⌕ Inspect Cell</MenuItem>
+        <MenuItem onSelect={() => void copyText(summary)}>⌘ Copy Summary</MenuItem>
+        <ContextMenu.Item asChild className="flex cursor-default items-center px-3 py-2 text-[#d8d3c7] outline-none hover:bg-[#252523]">
+          <Link href={`/app/resource-planning/${encodeURIComponent(user.department)}`}>↳ Open Department Drilldown</Link>
+        </ContextMenu.Item>
+        <Separator />
+        <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">Tasks</ContextMenu.Label>
+        {week.tasks.length > 0 ? (
+          week.tasks.slice(0, 6).map((task) => (
+            <ContextMenu.Item key={task.id} className="cursor-default px-3 py-2 outline-none hover:bg-[#252523]">
+              <div className="flex items-start justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="block truncate text-xs font-semibold text-[#f4f1e8]">{task.contextLabel} · {task.name}</span>
+                  <span className="mt-1 block text-[11px] text-[#8f8a7e]">{statusLabel(task.status)}</span>
+                </span>
+                <span className="shrink-0 font-mono text-xs text-[#e8c678]">{days(task.days)}</span>
+              </div>
+            </ContextMenu.Item>
+          ))
+        ) : (
+          <ContextMenu.Item disabled className="cursor-default px-3 py-2 text-xs text-[#7f7a70] outline-none">
+            No assigned tasks this week
+          </ContextMenu.Item>
+        )}
+        {week.tasks.length > 6 ? <ContextMenu.Item disabled className="cursor-default px-3 py-2 text-xs text-[#7f7a70] outline-none">+{week.tasks.length - 6} more tasks</ContextMenu.Item> : null}
+        {week.exceptions.length > 0 ? (
+          <>
+            <Separator />
+            <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">Calendar exception</ContextMenu.Label>
+            {week.exceptions.map((exception) => (
+              <ContextMenu.Item key={`${exception.date}-${exception.type}`} className="cursor-default px-3 py-2 text-xs text-[#c9d9e8] outline-none hover:bg-[#102033]">
+                {exception.date} · {exception.description ?? exception.type}
+              </ContextMenu.Item>
+            ))}
+          </>
+        ) : null}
+      </ContextMenu.Content>
+    </ContextMenu.Portal>
+  );
+}
+
 function DepartmentHeatmap({ data }: { data: ResourcePlanningData }) {
   return (
     <div className="overflow-auto p-4">
@@ -315,6 +392,27 @@ function DepartmentHeatmap({ data }: { data: ResourcePlanningData }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function MenuItem({ children, onSelect }: { children: ReactNode; onSelect?: () => void }) {
+  return (
+    <ContextMenu.Item onSelect={onSelect} className="flex cursor-default items-center px-3 py-2 text-[#d8d3c7] outline-none hover:bg-[#252523]">
+      {children}
+    </ContextMenu.Item>
+  );
+}
+
+function Separator() {
+  return <ContextMenu.Separator className="my-1 h-px bg-[#302d26]" />;
+}
+
+function ContextMetric({ label, value, tone = "normal" }: { label: string; value: string; tone?: "normal" | "ok" | "over" }) {
+  return (
+    <div className="border-r border-[#2f2c25] px-2 py-2 last:border-r-0">
+      <p className="text-[10px] uppercase tracking-[0.12em] text-[#7f7a70]">{label}</p>
+      <p className={["mt-1 font-mono text-xs font-semibold", tone === "over" ? "text-[#ff8b7c]" : tone === "ok" ? "text-[#75d9a7]" : "text-[#f4f1e8]"].join(" ")}>{value}</p>
     </div>
   );
 }
@@ -533,6 +631,33 @@ function statusLabel(status: string) {
     .split("_")
     .map((part) => part[0]?.toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function buildCellSummary(user: PlanningUserRow, week: PlanningUserWeek, weekLabel: string) {
+  const taskLines = week.tasks.length
+    ? week.tasks.map((task) => `- ${task.contextLabel} / ${task.name}: ${days(task.days)} (${statusLabel(task.status)})`).join("\n")
+    : "- No assigned tasks";
+  const exceptionLines = week.exceptions.length
+    ? `\nCalendar exceptions:\n${week.exceptions.map((exception) => `- ${exception.date}: ${exception.description ?? exception.type}`).join("\n")}`
+    : "";
+
+  return [
+    `${user.name} · ${user.department} · ${weekLabel}`,
+    `Assigned: ${days(week.workload)} / Capacity: ${days(week.capacity)} / Delta: ${signedDays(week.delta)}`,
+    "Tasks:",
+    taskLines,
+    exceptionLines,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function copyText(value: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    // Clipboard can be blocked in some browser contexts; the menu action should remain harmless.
+  }
 }
 
 const tooltipStyle = {
