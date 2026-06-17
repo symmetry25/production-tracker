@@ -1,5 +1,12 @@
 import { getDictionary, getLocale } from "@/lib/i18n";
-import { getResourceBudgetData, type BudgetDepartment, type ResourceBudgetData, type VendorSpend } from "@/lib/resource-data";
+import {
+  getResourceBudgetData,
+  type AuditDocument,
+  type BudgetDepartment,
+  type PaymentMilestone,
+  type ResourceBudgetData,
+  type VendorSpend,
+} from "@/lib/resource-data";
 
 const moneyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -29,6 +36,13 @@ const vendorStatusLabels: Record<VendorSpend["status"], string> = {
   review: "待复核",
 };
 
+const paymentStatusLabels: Record<PaymentMilestone["status"], string> = {
+  blocked: "暂缓",
+  ready: "可付款",
+  scheduled: "已排期",
+  paid: "已支付",
+};
+
 export default async function ProjectResourcesPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   const locale = await getLocale();
@@ -50,19 +64,50 @@ export default async function ProjectResourcesPage({ params }: { params: Promise
         </div>
       </div>
 
+      <ControlSummary data={data} />
+
       <div className="grid grid-cols-[minmax(420px,0.88fr)_minmax(620px,1.12fr)] gap-5">
         <section className="space-y-5">
           <BudgetPanel title={t.departmentBudget} departments={data.departments} />
           <RiskPanel title={t.auditSignals} data={data} />
+          <DocumentPanel title={t.auditDocuments} documents={data.documents} />
         </section>
 
         <section className="space-y-5">
+          <PaymentPanel title={t.paymentGate} payments={data.payments} />
           <VendorPanel title={t.vendorSpend} vendors={data.vendors} />
           <PeoplePanel title={t.peopleCost} data={data} />
           <FundFlowPanel title={t.fundFlow} data={data} />
         </section>
       </div>
     </>
+  );
+}
+
+function ControlSummary({ data }: { data: ResourceBudgetData }) {
+  const blockedPayments = data.payments.filter((payment) => payment.status === "blocked");
+  const blockedTotal = blockedPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const missingDocs = data.documents.reduce((sum, document) => sum + Math.max(0, document.required - document.received), 0);
+  const overDepartments = data.departments.filter((department) => department.risk === "over");
+
+  return (
+    <section className="mb-5 grid grid-cols-[1.1fr_0.9fr_0.9fr_1.2fr] border border-[#34322b] bg-[#181713]">
+      <SummaryTile label="Producer decision" value={blockedTotal > 0 ? "Hold selected payments" : "Payment window clear"} tone={blockedTotal > 0 ? "over" : "ok"} />
+      <SummaryTile label="Blocked cash" value={money(blockedTotal)} tone={blockedTotal > 0 ? "over" : "ok"} />
+      <SummaryTile label="Missing docs" value={`${missingDocs} items`} tone={missingDocs > 5 ? "over" : missingDocs > 0 ? "watch" : "ok"} />
+      <SummaryTile label="Budget pressure" value={overDepartments.map((department) => department.name).join(" / ") || "No overrun"} tone={overDepartments.length ? "watch" : "ok"} />
+    </section>
+  );
+}
+
+function SummaryTile({ label, value, tone }: { label: string; value: string; tone: keyof typeof riskStyles }) {
+  return (
+    <div className="border-l border-[#34322b] p-4 first:border-l-0">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">{label}</p>
+      <p className={["mt-2 truncate text-lg font-semibold", tone === "over" ? "text-[#ff8b7c]" : tone === "watch" ? "text-[#e8c678]" : "text-[#75d9a7]"].join(" ")}>
+        {value}
+      </p>
+    </div>
   );
 }
 
@@ -128,6 +173,70 @@ function RiskPanel({ title, data }: { title: string; data: ResourceBudgetData })
             <p className="mt-2 text-xs leading-5 opacity-85">{insight.detail}</p>
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function PaymentPanel({ title, payments }: { title: string; payments: PaymentMilestone[] }) {
+  return (
+    <section className="border border-[#34322b] bg-[#181713]">
+      <PanelHeader eyebrow="payment gates" title={title} />
+      <div className="overflow-hidden">
+        <div className="grid grid-cols-[1.2fr_110px_120px_110px_1.1fr] border-y border-[#2a2a28] bg-[#1e1e1c] px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]">
+          <span>Milestone</span>
+          <span>Due</span>
+          <span>Amount</span>
+          <span>Status</span>
+          <span>Gate</span>
+        </div>
+        {payments.map((payment) => (
+          <div key={payment.id} className="grid min-h-16 grid-cols-[1.2fr_110px_120px_110px_1.1fr] border-b border-[#2a2a28] px-4 py-3 text-sm">
+            <div className="min-w-0">
+              <p className="truncate font-medium text-[#f4f1e8]">{payment.label}</p>
+              <p className="mt-1 truncate text-xs text-[#8f8a7e]">{payment.vendorName}</p>
+            </div>
+            <span className="font-mono text-xs text-[#aaa599]">{payment.dueDate}</span>
+            <span className="font-mono text-xs text-[#e8c678]">{money(payment.amount)}</span>
+            <span className={["h-fit w-fit border px-2 py-1 text-[11px]", payment.status === "blocked" ? riskStyles.over : payment.status === "ready" ? riskStyles.ok : "border-[#34322b] bg-[#11110f] text-[#aaa599]"].join(" ")}>
+              {paymentStatusLabels[payment.status]}
+            </span>
+            <p className="text-xs leading-5 text-[#aaa599]">{payment.gate}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DocumentPanel({ title, documents }: { title: string; documents: AuditDocument[] }) {
+  return (
+    <section className="border border-[#34322b] bg-[#181713]">
+      <PanelHeader eyebrow="paper trail" title={title} />
+      <div className="grid gap-3 p-4">
+        {documents.map((document) => {
+          const rate = document.required > 0 ? document.received / document.required : 0;
+
+          return (
+            <div key={document.id} className="border border-[#2f2c25] bg-[#11110f] p-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-[#f4f1e8]">{document.owner}</p>
+                  <p className="mt-1 text-xs text-[#8f8a7e]">{document.category}</p>
+                </div>
+                <span className={["border px-2 py-1 text-xs", riskStyles[document.severity]].join(" ")}>
+                  {document.received}/{document.required}
+                </span>
+              </div>
+              <div className="h-2 bg-[#26231d]">
+                <div className="h-full bg-[#d8b46a]" style={{ width: `${rate * 100}%` }} />
+              </div>
+              <p className="mt-2 text-xs leading-5 text-[#aaa599]">
+                {document.missing.length ? `缺：${document.missing.join("、")}` : "材料齐全"}
+              </p>
+            </div>
+          );
+        })}
       </div>
     </section>
   );

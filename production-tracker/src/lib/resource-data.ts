@@ -34,6 +34,27 @@ export type VendorSpend = {
   auditFlag: string;
 };
 
+export type PaymentMilestone = {
+  id: string;
+  vendorId: string;
+  vendorName: string;
+  label: string;
+  dueDate: string;
+  amount: number;
+  status: "blocked" | "ready" | "scheduled" | "paid";
+  gate: string;
+};
+
+export type AuditDocument = {
+  id: string;
+  owner: string;
+  category: string;
+  required: number;
+  received: number;
+  missing: string[];
+  severity: "ok" | "watch" | "over";
+};
+
 export type ResourceInsight = {
   id: string;
   title: string;
@@ -59,6 +80,8 @@ export type ResourceBudgetData = {
   departments: BudgetDepartment[];
   people: ResourcePerson[];
   vendors: VendorSpend[];
+  payments: PaymentMilestone[];
+  documents: AuditDocument[];
   insights: ResourceInsight[];
   fundFlow: FundFlowLink[];
 };
@@ -151,6 +174,107 @@ const vendors: VendorSpend[] = [
   },
 ];
 
+const payments: PaymentMilestone[] = [
+  {
+    id: "pay-camera-deposit",
+    vendorId: "v-camera",
+    vendorName: "Northlight Camera Rental",
+    label: "镜头包二期尾款",
+    dueDate: "2026-06-18",
+    amount: 38000,
+    status: "ready",
+    gate: "器材回执已齐，等待制片确认升级理由",
+  },
+  {
+    id: "pay-light-generator",
+    vendorId: "v-light",
+    vendorName: "Glow Rigging & Generator",
+    label: "发电车追加费用",
+    dueDate: "2026-06-20",
+    amount: 26000,
+    status: "blocked",
+    gate: "需拆分灯光器材与车辆科目",
+  },
+  {
+    id: "pay-hotel-block",
+    vendorId: "v-hotel",
+    vendorName: "Harbor Hotel Block",
+    label: "酒店团房定金",
+    dueDate: "2026-06-22",
+    amount: 54000,
+    status: "scheduled",
+    gate: "等住宿名单和夜戏天数最终确认",
+  },
+  {
+    id: "pay-location-cleaning",
+    vendorId: "v-location",
+    vendorName: "旧码头外景地",
+    label: "清洁押金返还",
+    dueDate: "2026-06-24",
+    amount: 12000,
+    status: "blocked",
+    gate: "缺物业清洁确认单",
+  },
+  {
+    id: "pay-vfx-v003",
+    vendorId: "v-vfx",
+    vendorName: "Pixel Harbor VFX",
+    label: "v003 审批节点款",
+    dueDate: "2026-06-28",
+    amount: 48000,
+    status: "blocked",
+    gate: "需绑定版本 Approved 状态和监制批注",
+  },
+];
+
+const documents: AuditDocument[] = [
+  {
+    id: "doc-camera",
+    owner: "Northlight Camera Rental",
+    category: "器材",
+    required: 6,
+    received: 5,
+    missing: ["镜头包升级说明"],
+    severity: "watch",
+  },
+  {
+    id: "doc-light",
+    owner: "Glow Rigging & Generator",
+    category: "灯光/发电车",
+    required: 7,
+    received: 4,
+    missing: ["发电车工时单", "车辆科目拆分", "现场签收"],
+    severity: "over",
+  },
+  {
+    id: "doc-hotel",
+    owner: "Harbor Hotel Block",
+    category: "酒店住宿",
+    required: 5,
+    received: 3,
+    missing: ["住宿名单", "退房损耗条款"],
+    severity: "watch",
+  },
+  {
+    id: "doc-location",
+    owner: "旧码头外景地",
+    category: "场地",
+    required: 6,
+    received: 5,
+    missing: ["物业清洁确认单"],
+    severity: "watch",
+  },
+  {
+    id: "doc-vfx",
+    owner: "Pixel Harbor VFX",
+    category: "VFX",
+    required: 8,
+    received: 5,
+    missing: ["v003 approved 截图", "付款节点确认", "交付清单"],
+    severity: "over",
+  },
+];
+
 export async function getResourceBudgetData(projectId: string): Promise<ResourceBudgetData> {
   if (!shouldUseDemoData() || projectId !== "demo-mkali-mission") {
     return createEmptyResourceBudgetData(projectId);
@@ -171,6 +295,8 @@ export async function getResourceBudgetData(projectId: string): Promise<Resource
     departments,
     people,
     vendors,
+    payments,
+    documents,
     insights: buildInsights(totalBudget, actualTotal),
     fundFlow: buildFundFlow(totalBudget),
   };
@@ -188,6 +314,8 @@ function createEmptyResourceBudgetData(projectId: string): ResourceBudgetData {
     departments: [],
     people: [],
     vendors: [],
+    payments: [],
+    documents: [],
     insights: [],
     fundFlow: [],
   };
@@ -196,6 +324,8 @@ function createEmptyResourceBudgetData(projectId: string): ResourceBudgetData {
 function buildInsights(totalBudget: number, actualTotal: number): ResourceInsight[] {
   const overDepartments = departments.filter((department) => department.risk === "over");
   const watchVendors = vendors.filter((vendor) => vendor.status === "review");
+  const blockedPaymentTotal = payments.filter((payment) => payment.status === "blocked").reduce((sum, payment) => sum + payment.amount, 0);
+  const missingDocumentTotal = documents.reduce((sum, document) => sum + Math.max(0, document.required - document.received), 0);
 
   return [
     {
@@ -216,6 +346,19 @@ function buildInsights(totalBudget: number, actualTotal: number): ResourceInsigh
       title: "供应商付款关口",
       detail: `${watchVendors.length} 个供应商需要在付款前补齐版本审批或合同拆分。`,
       severity: watchVendors.length ? "watch" : "ok",
+    },
+    {
+      id: "blocked-payments",
+      title: "应暂缓付款",
+      detail: `${money(blockedPaymentTotal)} 付款被材料、科目或版本审批卡住。`,
+      severity: blockedPaymentTotal > 0 ? "over" : "ok",
+      amount: blockedPaymentTotal,
+    },
+    {
+      id: "missing-documents",
+      title: "审计材料缺口",
+      detail: `仍缺 ${missingDocumentTotal} 份关键材料，集中在灯光/发电车、酒店住宿和 VFX。`,
+      severity: missingDocumentTotal > 5 ? "over" : "watch",
     },
   ];
 }
@@ -239,6 +382,14 @@ function buildFundFlow(totalBudget: number): FundFlowLink[] {
     })),
     { from: "总预算", to: "未分配/预备金", amount: Math.max(0, totalBudget - departments.reduce((sum, department) => sum + department.budget, 0)) },
   ];
+}
+
+function money(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 function categoryLabel(category: string) {
