@@ -325,6 +325,13 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
                   ]}
                   onChange={setInspectGroup}
                 />
+                <button
+                  type="button"
+                  onClick={() => downloadCsv(`resource-inspect-${inspectGroup}-${inspectWeekKey}.csv`, buildInspectCsv(inspectRows, inspectGroup, inspectWeek?.label ?? "All weeks"))}
+                  className="h-8 border border-[#34322b] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
+                >
+                  Export
+                </button>
               </div>
             }
           />
@@ -1337,6 +1344,17 @@ function buildWeekCsv(user: PlanningUserRow, week: PlanningUserWeek, weekLabel: 
   ];
 
   return rows.map((row) => row.map(csvCell).join(",")).join("\n");
+}
+
+function buildInspectCsv(rows: InspectRow[], group: InspectGroup, windowLabel: string) {
+  const total = buildInspectTotalRow(rows);
+  const csvRows = [
+    ["group_by", "window", "name", "subtitle", "capacity_days", "workload_days", "delta_days"],
+    ...rows.map((row) => [group, windowLabel, row.name, row.subtitle, String(row.capacity), String(row.workload), String(row.delta)]),
+    [group, windowLabel, total.name, total.subtitle, String(total.capacity), String(total.workload), String(total.delta)],
+  ];
+
+  return csvRows.map((row) => row.map(csvCell).join(",")).join("\n");
 }
 
 function csvCell(value: string) {
