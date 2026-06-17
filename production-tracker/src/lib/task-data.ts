@@ -1,5 +1,6 @@
 import type { AssetType, DependencyType, Role, TaskStatus } from "@/generated/prisma/enums";
 
+import { getDemoTaskFormOptions, getDemoTaskTableItems, shouldUseDemoData } from "@/lib/demo-data";
 import { getPrisma } from "@/lib/prisma";
 
 export const TASK_COST_PER_DAY = 100;
@@ -84,6 +85,16 @@ type GetTaskTableItemsFilters = {
 };
 
 export async function getTaskTableItems(filters: GetTaskTableItemsFilters): Promise<TaskTableItem[]> {
+  if (shouldUseDemoData()) {
+    return getDemoTaskTableItems(filters.projectId).filter((task) => {
+      if (filters.status && task.status !== filters.status) return false;
+      if (filters.shotId && task.context.id !== filters.shotId) return false;
+      if (filters.assetId && task.context.id !== filters.assetId) return false;
+      if (filters.assigneeId && !task.assignees.some((assignee) => assignee.id === filters.assigneeId)) return false;
+      return true;
+    });
+  }
+
   const prisma = getPrisma();
   const tasks = await prisma.task.findMany({
     where: {
@@ -200,6 +211,10 @@ export async function getTaskTableItems(filters: GetTaskTableItemsFilters): Prom
 }
 
 export async function getTaskFormOptions(projectId: string): Promise<TaskFormOptions> {
+  if (shouldUseDemoData()) {
+    return getDemoTaskFormOptions(projectId);
+  }
+
   const prisma = getPrisma();
   const [shots, assets, users] = await Promise.all([
     prisma.shot.findMany({

@@ -1,9 +1,12 @@
 import { ReviewWorkspace } from "@/components/review/review-workspace";
 import { UploadVersionForm } from "@/components/review/upload-version-form";
+import { getDictionary, getLocale } from "@/lib/i18n";
 import { getProjectReviewTaskOptions, getProjectReviewVersions, type ReviewTaskOption, type ReviewVersionItem } from "@/lib/review-data";
 
 export default async function ProjectMediaPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
+  const locale = await getLocale();
+  const t = getDictionary(locale).pages.media;
   let versions: ReviewVersionItem[] = [];
   let tasks: ReviewTaskOption[] = [];
   let error: string | null = null;
@@ -18,9 +21,9 @@ export default async function ProjectMediaPage({ params }: { params: Promise<{ p
     <>
       <div className="mb-4 flex items-end justify-between gap-5">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d8b46a]">Media</p>
-          <h1 className="mt-2 text-3xl font-semibold">版本审阅</h1>
-          <p className="mt-2 text-sm text-[#aaa599]">上传任务版本，集中播放视频/图片，记录导演、监制和供应商反馈。</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d8b46a]">{t.eyebrow}</p>
+          <h1 className="mt-2 text-3xl font-semibold">{t.title}</h1>
+          <p className="mt-2 text-sm text-[#aaa599]">{t.description}</p>
         </div>
         <div className="flex h-10 items-center gap-2 text-xs text-[#aaa599]">
           <UploadVersionForm tasks={tasks} />

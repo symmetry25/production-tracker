@@ -1,4 +1,5 @@
 import type { TaskStatus } from "@/generated/prisma/enums";
+import { getDemoShotTableItems, shouldUseDemoData } from "@/lib/demo-data";
 import { PIPELINE_STEPS } from "@/lib/status-colors";
 import { getPrisma } from "@/lib/prisma";
 
@@ -23,6 +24,10 @@ export type ShotTableItem = {
 };
 
 export async function getShotTableItems(projectId: string): Promise<ShotTableItem[]> {
+  if (shouldUseDemoData()) {
+    return getDemoShotTableItems(projectId);
+  }
+
   const prisma = getPrisma();
   const shots = await prisma.shot.findMany({
     where: { projectId },

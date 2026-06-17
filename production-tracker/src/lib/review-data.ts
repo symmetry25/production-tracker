@@ -1,5 +1,11 @@
 import type { VersionStatus } from "@/generated/prisma/enums";
 
+import {
+  getDemoProjectReviewTaskOptions,
+  getDemoProjectReviewVersions,
+  getDemoTaskReviewVersions,
+  shouldUseDemoData,
+} from "@/lib/demo-data";
 import { getPrisma } from "@/lib/prisma";
 
 export type ReviewNote = {
@@ -46,6 +52,10 @@ export type ReviewTaskOption = {
 };
 
 export async function getProjectReviewVersions(projectId: string): Promise<ReviewVersionItem[]> {
+  if (shouldUseDemoData()) {
+    return getDemoProjectReviewVersions(projectId);
+  }
+
   const prisma = getPrisma();
   const versions = await prisma.version.findMany({
     where: {
@@ -87,6 +97,10 @@ export async function getProjectReviewVersions(projectId: string): Promise<Revie
 }
 
 export async function getProjectReviewTaskOptions(projectId: string): Promise<ReviewTaskOption[]> {
+  if (shouldUseDemoData()) {
+    return getDemoProjectReviewTaskOptions(projectId);
+  }
+
   const prisma = getPrisma();
   const tasks = await prisma.task.findMany({
     where: {
@@ -107,6 +121,10 @@ export async function getProjectReviewTaskOptions(projectId: string): Promise<Re
 }
 
 export async function getTaskReviewVersions(taskId: string): Promise<ReviewVersionItem[]> {
+  if (shouldUseDemoData()) {
+    return getDemoTaskReviewVersions(taskId);
+  }
+
   const prisma = getPrisma();
   const versions = await prisma.version.findMany({
     where: { taskId },

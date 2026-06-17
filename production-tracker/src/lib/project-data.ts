@@ -1,4 +1,5 @@
 import type { Project } from "@/generated/prisma/client";
+import { getDemoProjectGridItems, shouldUseDemoData } from "@/lib/demo-data";
 import { getPrisma } from "@/lib/prisma";
 
 export type ProjectGridItem = Pick<
@@ -12,6 +13,10 @@ export type ProjectGridItem = Pick<
 };
 
 export async function getProjectGridItems(): Promise<ProjectGridItem[]> {
+  if (shouldUseDemoData()) {
+    return getDemoProjectGridItems();
+  }
+
   const prisma = getPrisma();
   const projects = await prisma.project.findMany({
     where: { status: { not: "deleted" } },

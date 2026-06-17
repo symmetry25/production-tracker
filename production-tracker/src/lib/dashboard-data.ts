@@ -1,5 +1,6 @@
 import type { AssetType, TaskStatus, VersionStatus } from "@/generated/prisma/enums";
 
+import { getDemoDashboardStats, shouldUseDemoData } from "@/lib/demo-data";
 import { getPrisma } from "@/lib/prisma";
 import type { ReviewVersionItem } from "@/lib/review-data";
 import { getProjectReviewVersions } from "@/lib/review-data";
@@ -92,6 +93,10 @@ export type CrewMemberDatum = {
 };
 
 export async function getDashboardStats(projectId: string): Promise<DashboardStats> {
+  if (shouldUseDemoData()) {
+    return getDemoDashboardStats(projectId);
+  }
+
   const prisma = getPrisma();
   const [project, shots, assets, tasks, versions] = await Promise.all([
     prisma.project.findUnique({

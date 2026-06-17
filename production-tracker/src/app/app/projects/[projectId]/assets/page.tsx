@@ -1,10 +1,13 @@
 import { AssetTable } from "@/components/asset/asset-table";
 import { CreateAssetForm } from "@/components/asset/create-asset-form";
 import { getAssetTableItems, type AssetTableItem } from "@/lib/asset-data";
+import { getDictionary, getLocale } from "@/lib/i18n";
 import { getShotTableItems, type ShotTableItem } from "@/lib/shot-data";
 
 export default async function ProjectAssetsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
+  const locale = await getLocale();
+  const t = getDictionary(locale).pages.assets;
   let assets: AssetTableItem[] = [];
   let shots: ShotTableItem[] = [];
   let error: string | null = null;
@@ -19,9 +22,9 @@ export default async function ProjectAssetsPage({ params }: { params: Promise<{ 
     <>
       <div className="mb-4 flex items-end justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d8b46a]">Assets</p>
-          <h1 className="mt-2 text-3xl font-semibold">资产流水线</h1>
-          <p className="mt-2 text-sm text-[#aaa599]">按资产类型分组查看角色、环境、道具、车辆和 FX 资产的任务状态。</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d8b46a]">{t.eyebrow}</p>
+          <h1 className="mt-2 text-3xl font-semibold">{t.title}</h1>
+          <p className="mt-2 text-sm text-[#aaa599]">{t.description}</p>
         </div>
         <div className="flex h-10 items-center gap-2 text-xs text-[#aaa599]">
           <CreateAssetForm projectId={projectId} />

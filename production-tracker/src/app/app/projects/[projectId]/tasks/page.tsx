@@ -1,9 +1,12 @@
 import { CreateTaskForm } from "@/components/task/create-task-form";
 import { TaskWorkspace } from "@/components/task/task-workspace";
+import { getDictionary, getLocale } from "@/lib/i18n";
 import { getTaskFormOptions, getTaskTableItems, type TaskFormOptions, type TaskTableItem } from "@/lib/task-data";
 
 export default async function ProjectTasksPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
+  const locale = await getLocale();
+  const t = getDictionary(locale).pages.tasks;
   let tasks: TaskTableItem[] = [];
   let options: TaskFormOptions = { shots: [], assets: [], users: [] };
   let error: string | null = null;
@@ -18,9 +21,9 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ p
     <>
       <div className="mb-4 flex items-end justify-between gap-5">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d8b46a]">Tasks</p>
-          <h1 className="mt-2 text-3xl font-semibold">任务表与甘特图</h1>
-          <p className="mt-2 text-sm text-[#aaa599]">把 Shot、Asset、负责人、预算、日期和依赖关系放在同一个制作追踪视图里。</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d8b46a]">{t.eyebrow}</p>
+          <h1 className="mt-2 text-3xl font-semibold">{t.title}</h1>
+          <p className="mt-2 text-sm text-[#aaa599]">{t.description}</p>
         </div>
         <div className="flex h-10 items-center gap-2 text-xs text-[#aaa599]">
           <CreateTaskForm projectId={projectId} options={options} />

@@ -1,4 +1,5 @@
 import type { AssetType, TaskStatus } from "@/generated/prisma/enums";
+import { getDemoAssetTableItems, shouldUseDemoData } from "@/lib/demo-data";
 import { PIPELINE_STEPS } from "@/lib/status-colors";
 import { getPrisma } from "@/lib/prisma";
 
@@ -23,6 +24,10 @@ export type AssetTableItem = {
 };
 
 export async function getAssetTableItems(projectId: string): Promise<AssetTableItem[]> {
+  if (shouldUseDemoData()) {
+    return getDemoAssetTableItems(projectId);
+  }
+
   const prisma = getPrisma();
   const assets = await prisma.asset.findMany({
     where: { projectId },
