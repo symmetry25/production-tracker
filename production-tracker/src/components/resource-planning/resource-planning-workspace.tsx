@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import {
   Area,
@@ -298,7 +299,9 @@ function DepartmentHeatmap({ data }: { data: ResourcePlanningData }) {
       <div className="min-w-[820px] space-y-2">
         {data.departments.map((department) => (
           <div key={department.department} className="grid items-center gap-2 text-xs" style={{ gridTemplateColumns: `160px repeat(${data.weeks.length}, minmax(64px, 1fr))` }}>
-            <div className="truncate text-[#c9c3b5]">{department.department}</div>
+            <Link href={`/app/resource-planning/${encodeURIComponent(department.department)}`} className="truncate text-[#c9c3b5] transition hover:text-[#e8c678]">
+              {department.department}
+            </Link>
             {department.weeks.map((week) => (
               <div
                 key={week.weekKey}

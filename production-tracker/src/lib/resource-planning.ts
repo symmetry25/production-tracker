@@ -199,6 +199,43 @@ export async function getResourcePlanningData(projectId: string, start = "2026-0
   });
 }
 
+export async function getDepartmentResourcePlanningData(projectId: string, department: string, start = "2026-05-01", end = "2026-06-30"): Promise<ResourcePlanningData> {
+  const data = await getResourcePlanningData(projectId, start, end);
+  return filterResourcePlanningByDepartment(data, department);
+}
+
+export function filterResourcePlanningByDepartment(data: ResourcePlanningData, department: string): ResourcePlanningData {
+  const users = data.users.filter((user) => user.department === department);
+  const departments = data.departments.filter((row) => row.department === department);
+  const capacity = data.weeks.map((week) => {
+    const weekCapacity = roundDays(users.reduce((sum, user) => sum + (user.weeks.find((item) => item.weekKey === week.key)?.capacity ?? 0), 0));
+    const workload = roundDays(users.reduce((sum, user) => sum + (user.weeks.find((item) => item.weekKey === week.key)?.workload ?? 0), 0));
+
+    return {
+      ...week,
+      capacity: weekCapacity,
+      workload,
+      daysOverUnder: roundDays(workload - weekCapacity),
+    };
+  });
+  const totalCapacity = roundDays(capacity.reduce((sum, week) => sum + week.capacity, 0));
+  const totalWorkload = roundDays(capacity.reduce((sum, week) => sum + week.workload, 0));
+
+  return {
+    ...data,
+    capacity,
+    users,
+    departments,
+    totals: {
+      capacity: totalCapacity,
+      workload: totalWorkload,
+      delta: roundDays(totalWorkload - totalCapacity),
+      overbookedUsers: users.filter((user) => user.delta > 0).length,
+      unassignedWorkload: 0,
+    },
+  };
+}
+
 export function buildResourcePlanningData({ people, tasks, start, end, calendarExceptions = [] }: BuildResourcePlanningInput): ResourcePlanningData {
   const weeks = buildWeeks(start, end, calendarExceptions);
   const userRows = people.map((person) => {

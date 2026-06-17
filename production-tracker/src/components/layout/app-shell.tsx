@@ -56,6 +56,12 @@ export function AppShell({ session, locale, dictionary, children }: AppShellProp
     { title: dictionary.pages.resources.title, subtitle: "Budget, audit, Sankey / 预算审计资金流", href: `${demoProjectBase}/resources`, keywords: ["budget", "audit", "sankey", "fund", "预算", "审计", "桑基图", "资金流"] },
     { title: t.projectTabs.phases, subtitle: "Production phases / 制片阶段", href: `${demoProjectBase}/phases`, keywords: ["phase", "schedule", "阶段", "节点"] },
     { title: t.projectTabs.workOrders, subtitle: "Work orders / 制作工单", href: `${demoProjectBase}/work-orders`, keywords: ["work order", "order", "工单", "制片"] },
+    ...["DIT组", "调色/VFX组", "摄影组", "灯光电工组", "场地运输组", "后期统筹组"].map((department) => ({
+      title: `${department} 资源下钻`,
+      subtitle: "Department capacity drill-down / 部门资源明细",
+      href: `/app/resource-planning/${encodeURIComponent(department)}`,
+      keywords: ["department", "resource", "capacity", "部门", "资源", "下钻", department],
+    })),
   ];
 
   return (
