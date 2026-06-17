@@ -18,6 +18,8 @@ export async function GET(request: Request) {
     const data = await getResourcePlanningData(projectId, start, end);
     return ok({
       weeks: data.capacity,
+      unassignedWeeks: data.unassignedWeeks,
+      calendarExceptions: data.calendarExceptions,
       totals: data.totals,
     });
   } catch (error) {

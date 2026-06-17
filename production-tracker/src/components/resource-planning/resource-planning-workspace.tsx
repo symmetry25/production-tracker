@@ -317,6 +317,7 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
               {inspectRows.map((row) => (
                 <InspectDataRow key={`${inspectGroup}-${row.name}`} row={row} />
               ))}
+              <InspectDataRow row={buildInspectTotalRow(inspectRows)} total />
             </div>
           </div>
         </div>
@@ -655,13 +656,13 @@ function OverUnderArea({ data }: { data: ResourcePlanningData }) {
   );
 }
 
-function InspectDataRow({ row }: { row: InspectRow }) {
+function InspectDataRow({ row, total = false }: { row: InspectRow; total?: boolean }) {
   const maxValue = Math.max(row.capacity, row.workload, 1);
   const capacityWidth = `${Math.max(4, (row.capacity / maxValue) * 100)}%`;
   const workloadWidth = `${Math.max(4, (row.workload / maxValue) * 100)}%`;
 
   return (
-    <div className="border border-[#2a2a28] px-3 py-2 text-xs">
+    <div className={["border px-3 py-2 text-xs", total ? "border-[#5a4524] bg-[#201b12]" : "border-[#2a2a28]"].join(" ")}>
       <div className="grid grid-cols-[1fr_72px] gap-3">
         <div className="min-w-0">
           <p className="truncate font-medium text-[#c9c3b5]">{row.name}</p>
@@ -679,6 +680,19 @@ function InspectDataRow({ row }: { row: InspectRow }) {
       </div>
     </div>
   );
+}
+
+function buildInspectTotalRow(rows: InspectRow[]): InspectRow {
+  const capacity = roundDays(rows.reduce((sum, row) => sum + row.capacity, 0));
+  const workload = roundDays(rows.reduce((sum, row) => sum + row.workload, 0));
+
+  return {
+    name: "Total",
+    subtitle: `${rows.length} rows`,
+    capacity,
+    workload,
+    delta: roundDays(workload - capacity),
+  };
 }
 
 function ExportPlanningButton({ data, filename }: { data: ResourcePlanningData; filename: string }) {
