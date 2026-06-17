@@ -21,6 +21,7 @@ import {
 
 import {
   type PlanningCalendarException,
+  type CapacityWeek,
   type PlanningUserRow,
   type PlanningUserWeek,
   type ResourcePlanningData,
@@ -41,6 +42,7 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
   const [chartMode, setChartMode] = useState<ChartMode>("step");
   const [detailMode, setDetailMode] = useState<DetailMode>("heatmap");
   const [inspectGroup, setInspectGroup] = useState<InspectGroup>("department");
+  const [inspectWeekKey, setInspectWeekKey] = useState<string | "all">("all");
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
   const searchParams = useSearchParams();
   const searchParamString = searchParams.toString();
@@ -57,7 +59,8 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
   const selectedUser = activeData.users.find((user) => user.id === activeCell?.userId) ?? activeData.users[0];
   const selectedWeek = selectedUser?.weeks.find((week) => week.weekKey === activeCell?.weekKey) ?? selectedUser?.weeks[0];
   const selectedWeekMeta = activeData.weeks.find((week) => week.key === selectedWeek?.weekKey) ?? activeData.weeks[0];
-  const inspectRows = useMemo(() => buildInspectRows(activeData, inspectGroup), [activeData, inspectGroup]);
+  const inspectWeek = inspectWeekKey === "all" ? null : activeData.weeks.find((week) => week.key === inspectWeekKey) ?? null;
+  const inspectRows = useMemo(() => buildInspectRows(activeData, inspectGroup, inspectWeekKey), [activeData, inspectGroup, inspectWeekKey]);
   const lineType = chartMode === "step" ? "stepAfter" : "monotone";
   const gridTemplateColumns = `232px repeat(${activeData.weeks.length}, minmax(116px, 1fr)) 124px`;
 
@@ -83,13 +86,23 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
           />
           <div className="h-[320px] p-4">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={activeData.capacity} margin={{ top: 10, right: 18, left: -14, bottom: 0 }}>
+              <LineChart
+                data={activeData.capacity}
+                margin={{ top: 10, right: 18, left: -14, bottom: 0 }}
+                onClick={(event) => {
+                  const weekKey = activeData.capacity.find((week) => week.label === event?.activeLabel)?.key;
+                  if (weekKey) setInspectWeekKey(weekKey);
+                }}
+              >
                 <CartesianGrid stroke="#2a2a28" vertical={false} />
                 <XAxis dataKey="label" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={tooltipStyle} cursor={{ stroke: "#5a564e" }} />
-                <Line type={lineType} dataKey="capacity" name="Capacity" stroke="#4a9eff" strokeWidth={2} dot={false} />
-                <Line type={lineType} dataKey="workload" name="Workload" stroke="#d8b46a" strokeWidth={2} dot={{ r: 3 }} />
+                <Tooltip
+                  content={<CapacityTooltip onInspect={(weekKey) => setInspectWeekKey(weekKey)} />}
+                  cursor={{ stroke: "#5a564e" }}
+                />
+                <Line type={lineType} dataKey="capacity" name="Capacity" stroke="#4a9eff" strokeWidth={2} dot={(props) => <CapacityDot {...props} inspectWeekKey={inspectWeekKey} dataKeyName="capacity" />} />
+                <Line type={lineType} dataKey="workload" name="Workload" stroke="#d8b46a" strokeWidth={2} dot={(props) => <CapacityDot {...props} inspectWeekKey={inspectWeekKey} dataKeyName="workload" />} />
                 <Line type={lineType} dataKey="daysOverUnder" name="Over / Under" stroke="#ff8b7c" strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
               </LineChart>
             </ResponsiveContainer>
@@ -287,17 +300,32 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
           <PanelHeader
             eyebrow="inspect chart data"
             title={inspectGroup === "department" ? "部门容量明细" : "人员容量明细"}
-            meta="capacity / workload / delta"
+            meta={inspectWeek ? inspectWeek.label : "full window"}
             actions={
-              <SegmentedControl
-                label="Inspect group"
-                value={inspectGroup}
-                options={[
-                  { value: "department", label: "Dept" },
-                  { value: "user", label: "User" },
-                ]}
-                onChange={setInspectGroup}
-              />
+              <div className="flex items-center gap-2">
+                <select
+                  value={inspectWeekKey}
+                  onChange={(event) => setInspectWeekKey(event.target.value)}
+                  className="h-8 border border-[#34322b] bg-[#11110f] px-2 text-xs text-[#c9c3b5] outline-none focus:border-[#d8b46a]"
+                  aria-label="Inspect week"
+                >
+                  <option value="all">All weeks</option>
+                  {activeData.weeks.map((week) => (
+                    <option key={week.key} value={week.key}>
+                      {week.label}
+                    </option>
+                  ))}
+                </select>
+                <SegmentedControl
+                  label="Inspect group"
+                  value={inspectGroup}
+                  options={[
+                    { value: "department", label: "Dept" },
+                    { value: "user", label: "User" },
+                  ]}
+                  onChange={setInspectGroup}
+                />
+              </div>
             }
           />
           <div className="p-4">
@@ -635,6 +663,56 @@ function ContextMetric({ label, value, tone = "normal" }: { label: string; value
       <p className="text-[10px] uppercase tracking-[0.12em] text-[#7f7a70]">{label}</p>
       <p className={["mt-1 font-mono text-xs font-semibold", tone === "over" ? "text-[#ff8b7c]" : tone === "ok" ? "text-[#75d9a7]" : "text-[#f4f1e8]"].join(" ")}>{value}</p>
     </div>
+  );
+}
+
+function CapacityTooltip({ active, payload, label, onInspect }: { active?: boolean; payload?: { payload?: CapacityWeek }[]; label?: string; onInspect: (weekKey: string) => void }) {
+  const point = payload?.[0]?.payload;
+  if (!active || !point) return null;
+
+  return (
+    <div className="w-64 border border-[#3b382f] bg-[#181713] p-3 text-xs text-[#d8d3c7] shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#d8b46a]">week inspect</p>
+          <p className="mt-1 font-semibold text-[#f4f1e8]">{label ?? point.label}</p>
+        </div>
+        <button type="button" onClick={() => onInspect(point.key)} className="border border-[#34322b] px-2 py-1 text-[11px] text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]">
+          Inspect
+        </button>
+      </div>
+      <div className="mt-3 grid grid-cols-3 border border-[#2a2a28] bg-[#11110f]">
+        <ContextMetric label="Capacity" value={days(point.capacity)} />
+        <ContextMetric label="Workload" value={days(point.workload)} />
+        <ContextMetric label={point.daysOverUnder > 0 ? "Over" : "Under"} value={signedDays(point.daysOverUnder)} tone={point.daysOverUnder > 0 ? "over" : "ok"} />
+      </div>
+      {point.exceptions.length > 0 ? (
+        <div className="mt-3 border border-[#22354a] bg-[#101b28] px-2 py-2 text-[#c9d9e8]">
+          <p className="font-semibold uppercase tracking-[0.12em] text-[#8cc6ff]">calendar</p>
+          <p className="mt-1 font-mono">-{days(point.unavailableDays)} capacity</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CapacityDot(props: { cx?: number; cy?: number; payload?: CapacityWeek; stroke?: string; inspectWeekKey: string | "all"; dataKeyName: string }) {
+  const { cx, cy, payload, stroke, inspectWeekKey, dataKeyName } = props;
+  if (typeof cx !== "number" || typeof cy !== "number") return null;
+  const active = inspectWeekKey !== "all" && payload?.key === inspectWeekKey;
+  const isWorkload = dataKeyName === "workload";
+
+  if (!active && !isWorkload) return null;
+
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={active ? 5 : 3}
+      fill={active ? "#181713" : stroke}
+      stroke={active ? "#f4f1e8" : stroke}
+      strokeWidth={active ? 2 : 1}
+    />
   );
 }
 
@@ -1098,24 +1176,25 @@ function metricTone(tone: "normal" | "ok" | "watch" | "over") {
   return "text-[#f4f1e8]";
 }
 
-function buildInspectRows(data: ResourcePlanningData, group: InspectGroup): InspectRow[] {
+function buildInspectRows(data: ResourcePlanningData, group: InspectGroup, weekKey: string | "all"): InspectRow[] {
   if (group === "user") {
     return data.users.map((user) => ({
       name: user.name,
-      subtitle: user.department,
-      capacity: user.totalCapacity,
-      workload: user.totalWorkload,
-      delta: user.delta,
+      subtitle: weekKey === "all" ? user.department : `${user.department} · ${weekKey}`,
+      capacity: weekKey === "all" ? user.totalCapacity : user.weeks.find((week) => week.weekKey === weekKey)?.capacity ?? 0,
+      workload: weekKey === "all" ? user.totalWorkload : user.weeks.find((week) => week.weekKey === weekKey)?.workload ?? 0,
+      delta: weekKey === "all" ? user.delta : user.weeks.find((week) => week.weekKey === weekKey)?.delta ?? 0,
     }));
   }
 
   return data.departments.map((department) => {
-    const capacity = roundDays(department.weeks.reduce((sum, week) => sum + week.capacity, 0));
-    const workload = roundDays(department.weeks.reduce((sum, week) => sum + week.workload, 0));
+    const weeks = weekKey === "all" ? department.weeks : department.weeks.filter((week) => week.weekKey === weekKey);
+    const capacity = roundDays(weeks.reduce((sum, week) => sum + week.capacity, 0));
+    const workload = roundDays(weeks.reduce((sum, week) => sum + week.workload, 0));
 
     return {
       name: department.department,
-      subtitle: `${department.weeks.length} weeks`,
+      subtitle: weekKey === "all" ? `${department.weeks.length} weeks` : weekKey,
       capacity,
       workload,
       delta: roundDays(workload - capacity),
