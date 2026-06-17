@@ -66,6 +66,7 @@ export default async function ProjectResourcesPage({ params }: { params: Promise
       </div>
 
       <ControlSummary data={data} />
+      <ResourceCommandDeck data={data} />
       <div className="mb-5">
         <SankeyFlow data={data} />
       </div>
@@ -73,11 +74,15 @@ export default async function ProjectResourcesPage({ params }: { params: Promise
       <div className="grid grid-cols-[minmax(420px,0.88fr)_minmax(620px,1.12fr)] gap-5">
         <section className="space-y-5">
           <BudgetPanel title={t.departmentBudget} departments={data.departments} />
+          <DepartmentForecastPanel data={data} />
           <RiskPanel title={t.auditSignals} data={data} />
           <DocumentPanel title={t.auditDocuments} documents={data.documents} />
         </section>
 
         <section className="space-y-5">
+          <ApprovalQueuePanel data={data} />
+          <CashWindowPanel data={data} />
+          <VendorRiskMatrixPanel data={data} />
           <PaymentPanel title={t.paymentGate} payments={data.payments} />
           <VendorPanel title={t.vendorSpend} vendors={data.vendors} />
           <PeoplePanel title={t.peopleCost} data={data} />
@@ -115,12 +120,131 @@ function SummaryTile({ label, value, tone }: { label: string; value: string; ton
   );
 }
 
+function ResourceCommandDeck({ data }: { data: ResourceBudgetData }) {
+  const blockedPayments = data.payments.filter((payment) => payment.status === "blocked");
+  const dueSoonPayments = data.payments.filter((payment) => payment.status !== "paid" && daysUntil(payment.dueDate) <= 7);
+  const blockedTotal = blockedPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const dueSoonTotal = dueSoonPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const requiredDocuments = data.documents.reduce((sum, document) => sum + document.required, 0);
+  const receivedDocuments = data.documents.reduce((sum, document) => sum + document.received, 0);
+  const auditRate = requiredDocuments > 0 ? receivedDocuments / requiredDocuments : 1;
+  const reserve = data.project.totalBudget - data.project.committedTotal;
+  const projectedOverrun = getDepartmentForecasts(data).reduce((sum, item) => sum + Math.max(0, item.variance), 0);
+
+  return (
+    <section className="mb-5 border border-[#34322b] bg-[#181713]">
+      <div className="grid grid-cols-[1fr_1.2fr]">
+        <div className="border-r border-[#34322b] p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">producer control room</p>
+          <h2 className="mt-2 text-xl font-semibold text-[#f4f1e8]">制片资源指令台</h2>
+          <p className="mt-2 max-w-2xl text-xs leading-6 text-[#aaa599]">
+            把预算余量、付款关口、审计材料和部门压力集中在一个会前视图里，方便监制、制片主任和财务快速判断放款顺序。
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <CommandMetric label="7日应付" value={money(dueSoonTotal)} meta={`${dueSoonPayments.length} 个节点`} tone={dueSoonTotal > 0 ? "watch" : "ok"} />
+            <CommandMetric label="冻结付款" value={money(blockedTotal)} meta={`${blockedPayments.length} 个暂缓`} tone={blockedTotal > 0 ? "over" : "ok"} />
+            <CommandMetric label="预算余量" value={money(reserve)} meta="按已承诺口径" tone={reserve < 0 ? "over" : reserve < data.project.totalBudget * 0.12 ? "watch" : "ok"} />
+            <CommandMetric label="预测超支" value={money(projectedOverrun)} meta="部门+供应商暴露" tone={projectedOverrun > 0 ? "over" : "ok"} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-[0.95fr_1.05fr]">
+          <div className="border-r border-[#34322b] p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7f7a70]">next actions</p>
+            <div className="mt-3 space-y-2">
+              {data.payments.slice().sort(sortPaymentsForDecision).slice(0, 4).map((payment) => {
+                const decision = getPaymentDecision(payment);
+
+                return (
+                  <div key={payment.id} className="border border-[#2f2c25] bg-[#11110f] p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-[#f4f1e8]">{payment.label}</p>
+                        <p className="mt-1 truncate text-xs text-[#8f8a7e]">{payment.vendorName} · {payment.dueDate}</p>
+                      </div>
+                      <DecisionBadge decision={decision} />
+                    </div>
+                    <p className="mt-2 font-mono text-sm text-[#e8c678]">{money(payment.amount)}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7f7a70]">readiness</p>
+            <div className="mt-3 border border-[#2f2c25] bg-[#11110f] p-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[#c9c3b5]">审计材料完整率</span>
+                <span className="font-mono text-[#e8c678]">{Math.round(auditRate * 100)}%</span>
+              </div>
+              <div className="mt-2 h-2 bg-[#26231d]">
+                <div className="h-full bg-[#d8b46a]" style={{ width: `${Math.min(auditRate, 1) * 100}%` }} />
+              </div>
+              <p className="mt-3 text-xs leading-5 text-[#8f8a7e]">
+                已收 {receivedDocuments} / 应收 {requiredDocuments}。付款前优先补齐 VFX、灯光/发电车和酒店住宿材料。
+              </p>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <MiniStat label="Review vendors" value={data.vendors.filter((vendor) => vendor.status === "review").length.toString()} />
+              <MiniStat label="Avg trust" value={averageTrust(data.people).toString()} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CommandMetric({ label, value, meta, tone }: { label: string; value: string; meta: string; tone: keyof typeof riskStyles }) {
+  return (
+    <div className={`border p-3 ${riskStyles[tone]}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-70">{label}</p>
+      <p className="mt-2 font-mono text-lg font-semibold">{value}</p>
+      <p className="mt-1 text-xs opacity-75">{meta}</p>
+    </div>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-36 border-l border-[#34322b] px-4 py-3 first:border-l-0">
       <p className="text-[#8f8a7e]">{label}</p>
       <p className="mt-1 font-mono text-lg font-semibold text-[#f4f1e8]">{value}</p>
     </div>
+  );
+}
+
+function DepartmentForecastPanel({ data }: { data: ResourceBudgetData }) {
+  const forecasts = getDepartmentForecasts(data).slice().sort((a, b) => b.exposureRate - a.exposureRate);
+
+  return (
+    <section className="border border-[#34322b] bg-[#181713]">
+      <PanelHeader eyebrow="forecast variance" title="部门消耗预测" />
+      <div className="overflow-hidden">
+        <div className="grid grid-cols-[1.1fr_90px_90px_88px_92px] border-y border-[#2a2a28] bg-[#1e1e1c] px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]">
+          <span>Department</span>
+          <span>Used</span>
+          <span>Forecast</span>
+          <span>Variance</span>
+          <span>Signal</span>
+        </div>
+        {forecasts.map((item) => (
+          <div key={item.department.id} className="grid min-h-14 grid-cols-[1.1fr_90px_90px_88px_92px] items-center border-b border-[#2a2a28] px-4 py-3 text-xs">
+            <div className="min-w-0 pr-3">
+              <p className="truncate font-medium text-[#f4f1e8]">{item.department.name}</p>
+              <div className="mt-2 h-1.5 bg-[#26231d]">
+                <div className="h-full" style={{ width: `${Math.min(item.exposureRate, 1.15) * 86}%`, backgroundColor: item.department.color }} />
+              </div>
+            </div>
+            <span className="font-mono text-[#aaa599]">{Math.round(item.actualRate * 100)}%</span>
+            <span className="font-mono text-[#e8c678]">{money(item.forecast)}</span>
+            <span className={item.variance > 0 ? "font-mono text-[#ff8b7c]" : "font-mono text-[#75d9a7]"}>{money(item.variance)}</span>
+            <span className={["w-fit border px-2 py-1", riskStyles[item.tone]].join(" ")}>{item.label}</span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -158,6 +282,117 @@ function BudgetPanel({ title, departments }: { title: string; departments: Budge
             </div>
           );
         })}
+      </div>
+    </section>
+  );
+}
+
+function ApprovalQueuePanel({ data }: { data: ResourceBudgetData }) {
+  const payments = data.payments.slice().sort(sortPaymentsForDecision);
+
+  return (
+    <section className="border border-[#34322b] bg-[#181713]">
+      <PanelHeader eyebrow="approval queue" title="付款审批队列" />
+      <div className="overflow-hidden">
+        <div className="grid grid-cols-[96px_1.1fr_120px_105px_1fr] border-y border-[#2a2a28] bg-[#1e1e1c] px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]">
+          <span>Action</span>
+          <span>Milestone</span>
+          <span>Amount</span>
+          <span>Owner</span>
+          <span>Release condition</span>
+        </div>
+        {payments.map((payment) => {
+          const decision = getPaymentDecision(payment);
+
+          return (
+            <div key={payment.id} className="grid min-h-16 grid-cols-[96px_1.1fr_120px_105px_1fr] border-b border-[#2a2a28] px-4 py-3 text-sm">
+              <DecisionBadge decision={decision} />
+              <div className="min-w-0">
+                <p className="truncate font-medium text-[#f4f1e8]">{payment.label}</p>
+                <p className="mt-1 truncate text-xs text-[#8f8a7e]">{payment.vendorName} · {payment.dueDate}</p>
+              </div>
+              <span className="font-mono text-xs text-[#e8c678]">{money(payment.amount)}</span>
+              <span className="text-xs text-[#c9c3b5]">{decision.owner}</span>
+              <p className="text-xs leading-5 text-[#aaa599]">{payment.gate}</p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function CashWindowPanel({ data }: { data: ResourceBudgetData }) {
+  const scheduled = data.payments
+    .filter((payment) => payment.status !== "paid")
+    .slice()
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const max = Math.max(...scheduled.map((payment) => payment.amount), 1);
+  const releaseTotal = scheduled.filter((payment) => payment.status !== "blocked").reduce((sum, payment) => sum + payment.amount, 0);
+  const blockedTotal = scheduled.filter((payment) => payment.status === "blocked").reduce((sum, payment) => sum + payment.amount, 0);
+
+  return (
+    <section className="border border-[#34322b] bg-[#181713]">
+      <PanelHeader eyebrow="cash window" title="近期待付现金流" />
+      <div className="grid grid-cols-[180px_1fr] border-b border-[#2a2a28]">
+        <div className="border-r border-[#2a2a28] p-4">
+          <MiniStat label="可排款" value={money(releaseTotal)} />
+          <div className="mt-4">
+            <MiniStat label="需暂缓" value={money(blockedTotal)} />
+          </div>
+        </div>
+        <div className="space-y-3 p-4">
+          {scheduled.map((payment) => {
+            const decision = getPaymentDecision(payment);
+            const day = daysUntil(payment.dueDate);
+
+            return (
+              <div key={payment.id} className="grid grid-cols-[78px_1fr_86px] items-center gap-3 text-xs">
+                <div>
+                  <p className="font-mono text-[#f4f1e8]">D{day >= 0 ? `+${day}` : day}</p>
+                  <p className="mt-1 text-[#7f7a70]">{payment.dueDate.slice(5)}</p>
+                </div>
+                <div>
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <span className="truncate text-[#c9c3b5]">{payment.label}</span>
+                    <span className="font-mono text-[#e8c678]">{money(payment.amount)}</span>
+                  </div>
+                  <div className="h-2 bg-[#26231d]">
+                    <div className={["h-full", decision.tone === "over" ? "bg-[#e24b4a]" : decision.tone === "watch" ? "bg-[#d8b46a]" : "bg-[#1d9e75]"].join(" ")} style={{ width: `${(payment.amount / max) * 100}%` }} />
+                  </div>
+                </div>
+                <DecisionBadge decision={decision} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function VendorRiskMatrixPanel({ data }: { data: ResourceBudgetData }) {
+  const risks = data.vendors.map((vendor) => getVendorRisk(vendor, data)).sort((a, b) => b.score - a.score);
+
+  return (
+    <section className="border border-[#34322b] bg-[#181713]">
+      <PanelHeader eyebrow="vendor diligence" title="供应商风险矩阵" />
+      <div className="grid grid-cols-2 gap-3 p-4">
+        {risks.map(({ vendor, score, tone, blockers }) => (
+          <div key={vendor.id} className="border border-[#2f2c25] bg-[#11110f] p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-[#f4f1e8]">{vendor.name}</p>
+                <p className="mt-1 text-xs text-[#8f8a7e]">{vendor.owner} · {vendorCategoryLabels[vendor.category]}</p>
+              </div>
+              <span className={["border px-2 py-1 text-xs", riskStyles[tone]].join(" ")}>{score}</span>
+            </div>
+            <div className="mt-3 h-1.5 bg-[#26231d]">
+              <div className="h-full bg-[#d8b46a]" style={{ width: `${Math.min(score, 100)}%` }} />
+            </div>
+            <p className="mt-3 text-xs leading-5 text-[#aaa599]">{blockers.join("；") || "材料和付款条件正常。"}</p>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -348,6 +583,88 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       <p className="mt-1 font-mono text-[#c9c3b5]">{value}</p>
     </div>
   );
+}
+
+type PaymentDecision = {
+  label: string;
+  tone: keyof typeof riskStyles;
+  owner: string;
+};
+
+function getPaymentDecision(payment: PaymentMilestone): PaymentDecision {
+  if (payment.status === "blocked") {
+    return { label: "HOLD", tone: "over", owner: "审计" };
+  }
+
+  if (payment.status === "ready") {
+    return { label: "RELEASE", tone: "ok", owner: "制片" };
+  }
+
+  if (payment.status === "scheduled") {
+    return { label: "SCHEDULE", tone: "watch", owner: "财务" };
+  }
+
+  return { label: "CLOSED", tone: "ok", owner: "财务" };
+}
+
+function DecisionBadge({ decision }: { decision: PaymentDecision }) {
+  return <span className={["h-fit w-fit border px-2 py-1 text-[11px] font-semibold", riskStyles[decision.tone]].join(" ")}>{decision.label}</span>;
+}
+
+function sortPaymentsForDecision(a: PaymentMilestone, b: PaymentMilestone) {
+  const priority: Record<PaymentMilestone["status"], number> = {
+    blocked: 0,
+    ready: 1,
+    scheduled: 2,
+    paid: 3,
+  };
+
+  return priority[a.status] - priority[b.status] || a.dueDate.localeCompare(b.dueDate);
+}
+
+function getDepartmentForecasts(data: ResourceBudgetData) {
+  return data.departments.map((department) => {
+    const vendorExposure = data.vendors.filter((vendor) => vendor.owner === department.name).reduce((sum, vendor) => sum + vendor.amount, 0);
+    const forecast = Math.max(department.committed, department.actual) + vendorExposure * 0.35;
+    const variance = forecast - department.budget;
+    const exposureRate = department.budget > 0 ? forecast / department.budget : 0;
+    const actualRate = department.budget > 0 ? department.actual / department.budget : 0;
+    const tone: keyof typeof riskStyles = variance > 0 ? "over" : exposureRate > 0.82 ? "watch" : "ok";
+    const label = tone === "over" ? "overrun" : tone === "watch" ? "watch" : "clear";
+
+    return { department, vendorExposure, forecast, variance, exposureRate, actualRate, tone, label };
+  });
+}
+
+function getVendorRisk(vendor: VendorSpend, data: ResourceBudgetData) {
+  const document = data.documents.find((item) => item.owner === vendor.name);
+  const blockedPayment = data.payments.find((payment) => payment.vendorId === vendor.id && payment.status === "blocked");
+  const blockers = [
+    vendor.status === "review" ? "供应商状态待复核" : "",
+    blockedPayment ? `付款暂缓：${blockedPayment.label}` : "",
+    document && document.missing.length ? `缺 ${document.missing.join("、")}` : "",
+    vendor.progress < 55 ? "执行进度低于付款节奏" : "",
+  ].filter(Boolean);
+  const score =
+    (vendor.status === "review" ? 28 : 0) +
+    (blockedPayment ? 32 : 0) +
+    ((document?.missing.length ?? 0) * 9) +
+    (vendor.progress < 55 ? 12 : 0) +
+    Math.min(18, vendor.amount / 10000);
+  const tone: keyof typeof riskStyles = score >= 58 ? "over" : score >= 28 ? "watch" : "ok";
+
+  return { vendor, score: Math.round(score), tone, blockers };
+}
+
+function daysUntil(date: string) {
+  const today = Date.UTC(2026, 5, 18);
+  const target = Date.parse(`${date}T00:00:00Z`);
+  return Math.ceil((target - today) / 86_400_000);
+}
+
+function averageTrust(people: ResourceBudgetData["people"]) {
+  if (!people.length) return 0;
+  return Math.round(people.reduce((sum, person) => sum + person.trustScore, 0) / people.length);
 }
 
 function money(value: number) {
