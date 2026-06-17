@@ -20,19 +20,23 @@ export function AppShell({ session, locale, dictionary, children }: AppShellProp
   const isDemoMode = shouldUseDemoData();
   const demoProjectBase = "/app/projects/demo-mkali-mission";
   const topNavItems: TopNavItem[] = [
+    { key: "inbox", href: "/app/inbox" },
+    { key: "myTasks", href: "/app/my-tasks" },
+    { key: "media", href: "/app/media" },
     { key: "projects", href: "/app/projects" },
+    { key: "people", href: "/app/admin/users" },
     { key: "shots", href: isDemoMode ? `${demoProjectBase}/shots` : "/app/projects" },
     { key: "assets", href: isDemoMode ? `${demoProjectBase}/assets` : "/app/projects" },
     { key: "tasks", href: isDemoMode ? `${demoProjectBase}/tasks` : "/app/projects" },
     { key: "review", href: isDemoMode ? `${demoProjectBase}/media` : "/app/projects" },
-    { key: "resources", href: isDemoMode ? `${demoProjectBase}/resources` : "/app" },
+    { key: "resources", href: "/app/resource-planning" },
     { key: "calendar", href: "/app" },
   ];
   const sideNavItems: SideNavItem[] = [
     { key: "overview", href: isDemoMode ? `${demoProjectBase}/overview` : "/app" },
     { key: "projectGrid", href: "/app/projects" },
     { key: "pipeline", href: isDemoMode ? `${demoProjectBase}/tasks` : "/app" },
-    { key: "resource", href: isDemoMode ? `${demoProjectBase}/resources` : "/app" },
+    { key: "resource", href: "/app/resource-planning" },
     { key: "review", href: isDemoMode ? `${demoProjectBase}/media` : "/app" },
     { key: "calendar", href: "/app" },
   ];
