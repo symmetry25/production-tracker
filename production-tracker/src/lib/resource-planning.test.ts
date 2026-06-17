@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { buildResourcePlanningData, filterResourcePlanningByDepartment, type PlanningPerson, type PlanningTask } from "@/lib/resource-planning";
+import {
+  buildResourcePlanningData,
+  filterResourcePlanningByDepartment,
+  type PlanningCalendarException,
+  type PlanningPerson,
+  type PlanningTask,
+} from "@/lib/resource-planning";
+import { rebuildResourcePlanningWithCalendarExceptions } from "@/lib/resource-planning-calendar";
 
 describe("buildResourcePlanningData", () => {
   it("splits task workload across assigned users and weeks", () => {
@@ -123,5 +130,55 @@ describe("buildResourcePlanningData", () => {
     expect(animation.totals.workload).toBe(5);
     expect(animation.capacity[0]?.workload).toBe(5);
     expect(animation.users[0]?.name).toBe("Animator");
+  });
+
+  it("rebuilds capacity when local calendar exceptions change", () => {
+    const people: PlanningPerson[] = [{ id: "u1", name: "Artist One", department: "FX", capacity: 5 }];
+    const tasks: PlanningTask[] = [];
+    const data = buildResourcePlanningData({ people, tasks, start: "2026-06-01", end: "2026-06-07" });
+    const exception: PlanningCalendarException = {
+      date: "2026-06-02",
+      type: "STUDIO_CLOSURE",
+      description: "Local outage",
+      hoursWorked: 0,
+    };
+
+    const withException = rebuildResourcePlanningWithCalendarExceptions(data, [exception]);
+    const restored = rebuildResourcePlanningWithCalendarExceptions(withException, []);
+
+    expect(withException.totals.capacity).toBe(4);
+    expect(withException.weeks[0]?.exceptions).toHaveLength(1);
+    expect(restored.totals.capacity).toBe(5);
+    expect(restored.weeks[0]?.exceptions).toHaveLength(0);
+  });
+
+  it("preserves existing weekly workload when calendar exceptions change", () => {
+    const people: PlanningPerson[] = [{ id: "u1", name: "Artist One", department: "FX", capacity: 5 }];
+    const tasks: PlanningTask[] = [
+      {
+        id: "t1",
+        name: "FX pass",
+        status: "IN_PROGRESS",
+        startDate: "2026-06-01",
+        dueDate: "2026-06-14",
+        duration: 10,
+        contextLabel: "FX_001",
+        assignees: [people[0]!],
+      },
+    ];
+    const data = buildResourcePlanningData({ people, tasks, start: "2026-06-01", end: "2026-06-14" });
+
+    const withException = rebuildResourcePlanningWithCalendarExceptions(data, [
+      {
+        date: "2026-06-03",
+        type: "STUDIO_CLOSURE",
+        description: "Local outage",
+        hoursWorked: 0,
+      },
+    ]);
+
+    expect(data.capacity.map((week) => week.workload)).toEqual([5, 5]);
+    expect(withException.capacity.map((week) => week.workload)).toEqual([5, 5]);
+    expect(withException.users[0]?.weeks.map((week) => week.tasks.length)).toEqual([1, 1]);
   });
 });

@@ -2,6 +2,7 @@ import { addDays, differenceInCalendarDays, eachWeekOfInterval, endOfWeek, forma
 
 import { getDemoTaskTableItems, shouldUseDemoData } from "@/lib/demo-data";
 import { getPrisma } from "@/lib/prisma";
+export { rebuildResourcePlanningWithCalendarExceptions } from "@/lib/resource-planning-calendar";
 import type { TaskTableItem } from "@/lib/task-data";
 
 export type PlanningPerson = {

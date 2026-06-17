@@ -17,7 +17,13 @@ import {
   YAxis,
 } from "recharts";
 
-import type { PlanningUserRow, PlanningUserWeek, ResourcePlanningData } from "@/lib/resource-planning";
+import {
+  type PlanningCalendarException,
+  type PlanningUserRow,
+  type PlanningUserWeek,
+  type ResourcePlanningData,
+} from "@/lib/resource-planning";
+import { rebuildResourcePlanningWithCalendarExceptions } from "@/lib/resource-planning-calendar";
 
 const numberFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
@@ -26,19 +32,22 @@ type DetailMode = "heatmap" | "area";
 type InspectGroup = "department" | "user";
 type SelectedCell = { userId: string; weekKey: string };
 type InspectRow = { name: string; subtitle: string; capacity: number; workload: number; delta: number };
+type ExceptionType = PlanningCalendarException["type"];
 
 export function ResourcePlanningWorkspace({ data }: { data: ResourcePlanningData }) {
   const [chartMode, setChartMode] = useState<ChartMode>("step");
   const [detailMode, setDetailMode] = useState<DetailMode>("heatmap");
   const [inspectGroup, setInspectGroup] = useState<InspectGroup>("department");
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
+  const [calendarExceptions, setCalendarExceptions] = useState(data.calendarExceptions);
 
-  const defaultCell = useMemo(() => findDefaultCell(data), [data]);
+  const activeData = useMemo(() => rebuildResourcePlanningWithCalendarExceptions(data, calendarExceptions), [data, calendarExceptions]);
+  const defaultCell = useMemo(() => findDefaultCell(activeData), [activeData]);
   const activeCell = selectedCell ?? defaultCell;
-  const selectedUser = data.users.find((user) => user.id === activeCell?.userId) ?? data.users[0];
+  const selectedUser = activeData.users.find((user) => user.id === activeCell?.userId) ?? activeData.users[0];
   const selectedWeek = selectedUser?.weeks.find((week) => week.weekKey === activeCell?.weekKey) ?? selectedUser?.weeks[0];
-  const selectedWeekMeta = data.weeks.find((week) => week.key === selectedWeek?.weekKey) ?? data.weeks[0];
-  const inspectRows = useMemo(() => buildInspectRows(data, inspectGroup), [data, inspectGroup]);
+  const selectedWeekMeta = activeData.weeks.find((week) => week.key === selectedWeek?.weekKey) ?? activeData.weeks[0];
+  const inspectRows = useMemo(() => buildInspectRows(activeData, inspectGroup), [activeData, inspectGroup]);
   const lineType = chartMode === "step" ? "stepAfter" : "monotone";
 
   return (
@@ -63,7 +72,7 @@ export function ResourcePlanningWorkspace({ data }: { data: ResourcePlanningData
           />
           <div className="h-[320px] p-4">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.capacity} margin={{ top: 10, right: 18, left: -14, bottom: 0 }}>
+              <LineChart data={activeData.capacity} margin={{ top: 10, right: 18, left: -14, bottom: 0 }}>
                 <CartesianGrid stroke="#2a2a28" vertical={false} />
                 <XAxis dataKey="label" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -77,28 +86,33 @@ export function ResourcePlanningWorkspace({ data }: { data: ResourcePlanningData
         </div>
 
         <div className="border border-[#34322b] bg-[#181713]">
-          <PanelHeader eyebrow="summary" title="资源窗口" meta={`${data.weeks.length} weeks`} />
+          <PanelHeader eyebrow="summary" title="资源窗口" meta={`${activeData.weeks.length} weeks`} />
           <div className="grid grid-cols-2 border-b border-[#2a2a28]">
-            <Metric label="Capacity" value={days(data.totals.capacity)} />
-            <Metric label="Workload" value={days(data.totals.workload)} />
-            <Metric label="Over / Under" value={signedDays(data.totals.delta)} tone={data.totals.delta > 0 ? "over" : "ok"} />
-            <Metric label="Overbooked" value={`${data.totals.overbookedUsers} users`} tone={data.totals.overbookedUsers ? "watch" : "ok"} />
+            <Metric label="Capacity" value={days(activeData.totals.capacity)} />
+            <Metric label="Workload" value={days(activeData.totals.workload)} />
+            <Metric label="Over / Under" value={signedDays(activeData.totals.delta)} tone={activeData.totals.delta > 0 ? "over" : "ok"} />
+            <Metric label="Overbooked" value={`${activeData.totals.overbookedUsers} users`} tone={activeData.totals.overbookedUsers ? "watch" : "ok"} />
           </div>
           <div className="grid grid-cols-[1fr_1fr] border-b border-[#2a2a28]">
             <div className="p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7f7a70]">unassigned</p>
-              <p className="mt-2 font-mono text-2xl font-semibold text-[#e8c678]">{days(data.totals.unassignedWorkload)}</p>
+              <p className="mt-2 font-mono text-2xl font-semibold text-[#e8c678]">{days(activeData.totals.unassignedWorkload)}</p>
             </div>
             <div className="border-l border-[#2a2a28] p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7f7a70]">calendar loss</p>
-              <p className="mt-2 font-mono text-2xl font-semibold text-[#7bb8ff]">{days(calendarLoss(data))}</p>
+              <p className="mt-2 font-mono text-2xl font-semibold text-[#7bb8ff]">{days(calendarLoss(activeData))}</p>
             </div>
           </div>
           <div className="p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7f7a70]">next exception</p>
-            <CalendarExceptionList data={data} compact />
+            <CalendarExceptionList data={activeData} compact />
           </div>
         </div>
+      </section>
+
+      <section className="border border-[#34322b] bg-[#181713]">
+        <PanelHeader eyebrow="calendar controls" title="日历例外与产能修正" meta="Local scenario" />
+        <CalendarExceptionManager data={activeData} exceptions={calendarExceptions} baselineExceptions={data.calendarExceptions} onChange={setCalendarExceptions} />
       </section>
 
       <section className="grid gap-0 border border-[#34322b] bg-[#181713] xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -108,10 +122,10 @@ export function ResourcePlanningWorkspace({ data }: { data: ResourcePlanningData
             <div className="min-w-[1180px]">
               <div
                 className="grid border-b border-[#2a2a28] bg-[#1e1e1c] text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]"
-                style={{ gridTemplateColumns: `232px repeat(${data.weeks.length}, minmax(116px, 1fr)) 124px` }}
+                style={{ gridTemplateColumns: `232px repeat(${activeData.weeks.length}, minmax(116px, 1fr)) 124px` }}
               >
                 <div className="px-4 py-2">User</div>
-                {data.weeks.map((week) => (
+                {activeData.weeks.map((week) => (
                   <div key={week.key} className={["border-l border-[#2a2a28] px-3 py-2 text-right", week.unavailableDays > 0 ? "text-[#8cc6ff]" : ""].join(" ")}>
                     <p>{week.label}</p>
                     {week.unavailableDays > 0 ? <p className="mt-1 font-mono text-[10px] normal-case tracking-normal">-{days(week.unavailableDays)}</p> : null}
@@ -120,11 +134,11 @@ export function ResourcePlanningWorkspace({ data }: { data: ResourcePlanningData
                 <div className="border-l border-[#2a2a28] px-3 py-2 text-right">Total</div>
               </div>
 
-              {data.users.map((user) => (
+              {activeData.users.map((user) => (
                 <div
                   key={user.id}
                   className="grid min-h-16 border-b border-[#2a2a28] text-xs"
-                  style={{ gridTemplateColumns: `232px repeat(${data.weeks.length}, minmax(116px, 1fr)) 124px` }}
+                  style={{ gridTemplateColumns: `232px repeat(${activeData.weeks.length}, minmax(116px, 1fr)) 124px` }}
                 >
                   <div className="flex min-w-0 items-center gap-3 px-4">
                     <div className="grid size-9 shrink-0 place-items-center border border-[#34322b] bg-[#11110f] font-semibold text-[#e8c678]">{initials(user.name)}</div>
@@ -158,7 +172,7 @@ export function ResourcePlanningWorkspace({ data }: { data: ResourcePlanningData
                         <ResourceCellContextMenu
                           user={user}
                           week={week}
-                          weekLabel={data.weeks.find((item) => item.key === week.weekKey)?.label ?? week.weekKey}
+                          weekLabel={activeData.weeks.find((item) => item.key === week.weekKey)?.label ?? week.weekKey}
                           onInspect={() => setSelectedCell({ userId: user.id, weekKey: week.weekKey })}
                         />
                       </ContextMenu.Root>
@@ -195,7 +209,7 @@ export function ResourcePlanningWorkspace({ data }: { data: ResourcePlanningData
               />
             }
           />
-          {detailMode === "heatmap" ? <DepartmentHeatmap data={data} /> : <OverUnderArea data={data} />}
+          {detailMode === "heatmap" ? <DepartmentHeatmap data={activeData} /> : <OverUnderArea data={activeData} />}
         </div>
 
         <div className="border border-[#34322b] bg-[#181713]">
@@ -461,6 +475,145 @@ function InspectDataRow({ row }: { row: InspectRow }) {
   );
 }
 
+function CalendarExceptionManager({
+  data,
+  exceptions,
+  baselineExceptions,
+  onChange,
+}: {
+  data: ResourcePlanningData;
+  exceptions: PlanningCalendarException[];
+  baselineExceptions: PlanningCalendarException[];
+  onChange: (exceptions: PlanningCalendarException[]) => void;
+}) {
+  const defaultDate = data.weeks[0]?.start ?? new Date().toISOString().slice(0, 10);
+  const [date, setDate] = useState(defaultDate);
+  const [type, setType] = useState<ExceptionType>("STUDIO_CLOSURE");
+  const [hoursWorked, setHoursWorked] = useState(4);
+  const [description, setDescription] = useState("");
+  const sortedExceptions = exceptions
+    .map((exception, index) => ({ exception, index }))
+    .sort((a, b) => a.exception.date.localeCompare(b.exception.date) || a.exception.type.localeCompare(b.exception.type));
+  const canAdd = date.trim().length > 0;
+
+  function addException() {
+    if (!canAdd) return;
+
+    const nextException: PlanningCalendarException = {
+      date,
+      type,
+      hoursWorked: type === "REDUCED_HOURS" ? clampHours(hoursWorked) : 0,
+      description: description.trim() || exceptionTypeLabel(type),
+      inheritedFrom: "local-scenario",
+    };
+
+    onChange([...exceptions, nextException].sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type)));
+    setDescription("");
+  }
+
+  function deleteException(index: number) {
+    onChange(exceptions.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  return (
+    <div className="grid gap-0 xl:grid-cols-[420px_minmax(0,1fr)]">
+      <div className="border-b border-[#2a2a28] p-4 xl:border-b-0 xl:border-r">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+          <Field label="日期">
+            <input
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+              className="h-10 w-full border border-[#34322b] bg-[#11110f] px-3 font-mono text-sm text-[#f4f1e8] outline-none focus:border-[#d8b46a]"
+            />
+          </Field>
+
+          <Field label="例外类型">
+            <select
+              value={type}
+              onChange={(event) => setType(event.target.value as ExceptionType)}
+              className="h-10 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm text-[#f4f1e8] outline-none focus:border-[#d8b46a]"
+            >
+              <option value="STUDIO_CLOSURE">棚内停工</option>
+              <option value="REDUCED_HOURS">半日/缩短工时</option>
+              <option value="HOLIDAY">节假日</option>
+            </select>
+          </Field>
+
+          <Field label="可工作小时">
+            <input
+              type="number"
+              min="0"
+              max="8"
+              step="0.5"
+              value={type === "REDUCED_HOURS" ? hoursWorked : 0}
+              onChange={(event) => setHoursWorked(Number(event.target.value))}
+              disabled={type !== "REDUCED_HOURS"}
+              className="h-10 w-full border border-[#34322b] bg-[#11110f] px-3 font-mono text-sm text-[#f4f1e8] outline-none focus:border-[#d8b46a] disabled:text-[#5f5b52]"
+            />
+          </Field>
+
+          <Field label="备注">
+            <input
+              type="text"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="例如：棚内电力检修 / 供应商半日审查"
+              className="h-10 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm text-[#f4f1e8] outline-none placeholder:text-[#5f5b52] focus:border-[#d8b46a]"
+            />
+          </Field>
+        </div>
+
+        <div className="mt-4 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={addException}
+            disabled={!canAdd}
+            className="h-9 bg-[#d8b46a] px-4 text-sm font-semibold text-[#171713] transition hover:bg-[#edc875] disabled:opacity-50"
+          >
+            加入修正
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange(baselineExceptions)}
+            className="h-9 border border-[#34322b] px-3 text-sm text-[#aaa599] transition hover:bg-[#22201c] hover:text-[#f4f1e8]"
+          >
+            重置
+          </button>
+        </div>
+      </div>
+
+      <div className="min-w-0">
+        <div className="grid grid-cols-[116px_140px_1fr_112px_78px] border-b border-[#2a2a28] bg-[#1e1e1c] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6e6e69]">
+          <span>Date</span>
+          <span>Type</span>
+          <span>Note</span>
+          <span className="text-right">Impact</span>
+          <span className="text-right">Action</span>
+        </div>
+
+        <div className="max-h-[236px] overflow-auto">
+          {sortedExceptions.length > 0 ? (
+            sortedExceptions.map(({ exception, index }) => (
+              <div key={`${exception.date}-${exception.type}-${index}`} className="grid grid-cols-[116px_140px_1fr_112px_78px] items-center border-b border-[#2a2a28] px-4 py-3 text-xs">
+                <span className="font-mono text-[#8cc6ff]">{exception.date}</span>
+                <span className="text-[#c9c3b5]">{exceptionTypeLabel(exception.type)}</span>
+                <span className="min-w-0 truncate text-[#aaa599]">{exception.description ?? "No note"}</span>
+                <span className="text-right font-mono text-[#e8c678]">-{days(exceptionLoss(exception) * data.users.length)}</span>
+                <button type="button" onClick={() => deleteException(index)} className="text-right text-[#7f7a70] transition hover:text-[#ff8b7c]">
+                  删除
+                </button>
+              </div>
+            ))
+          ) : (
+            <div className="px-4 py-10 text-center text-sm text-[#8f8a7e]">没有例外日期，当前按完整工作周计算。</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CalendarExceptionList({ data, compact = false }: { data: ResourcePlanningData; compact?: boolean }) {
   const exceptions = data.calendarExceptions.slice(0, compact ? 2 : undefined);
 
@@ -477,6 +630,34 @@ function CalendarExceptionList({ data, compact = false }: { data: ResourcePlanni
         </div>
       ))}
     </div>
+  );
+}
+
+function exceptionTypeLabel(type: ExceptionType) {
+  if (type === "REDUCED_HOURS") return "缩短工时";
+  if (type === "HOLIDAY") return "节假日";
+  return "棚内停工";
+}
+
+function exceptionLoss(exception: PlanningCalendarException) {
+  if (exception.type === "REDUCED_HOURS") {
+    return roundDays(Math.max(0, Math.min(1, (8 - exception.hoursWorked) / 8)));
+  }
+
+  return 1;
+}
+
+function clampHours(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(8, value));
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">{label}</span>
+      {children}
+    </label>
   );
 }
 
