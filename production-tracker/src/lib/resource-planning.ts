@@ -27,6 +27,8 @@ export type PlanningWeek = {
   start: string;
   end: string;
   label: string;
+  unavailableDays: number;
+  exceptions: PlanningCalendarException[];
 };
 
 export type PlanningUserWeek = {
@@ -34,9 +36,12 @@ export type PlanningUserWeek = {
   capacity: number;
   workload: number;
   delta: number;
+  unavailableDays: number;
+  exceptions: PlanningCalendarException[];
   tasks: {
     id: string;
     name: string;
+    status: string;
     contextLabel: string;
     days: number;
   }[];
@@ -62,7 +67,16 @@ export type DepartmentHeatmapRow = {
     capacity: number;
     workload: number;
     delta: number;
+    unavailableDays: number;
   }[];
+};
+
+export type PlanningCalendarException = {
+  date: string;
+  type: "HOLIDAY" | "REDUCED_HOURS" | "STUDIO_CLOSURE";
+  description: string | null;
+  hoursWorked: number;
+  inheritedFrom?: string | null;
 };
 
 export type ResourcePlanningData = {
@@ -70,6 +84,7 @@ export type ResourcePlanningData = {
   capacity: CapacityWeek[];
   users: PlanningUserRow[];
   departments: DepartmentHeatmapRow[];
+  calendarExceptions: PlanningCalendarException[];
   totals: {
     capacity: number;
     workload: number;
@@ -84,6 +99,7 @@ type BuildResourcePlanningInput = {
   tasks: PlanningTask[];
   start: string;
   end: string;
+  calendarExceptions?: PlanningCalendarException[];
 };
 
 export async function getResourcePlanningData(projectId: string, start = "2026-05-01", end = "2026-06-30"): Promise<ResourcePlanningData> {
@@ -93,11 +109,12 @@ export async function getResourcePlanningData(projectId: string, start = "2026-0
       tasks: getDemoTaskTableItems(projectId).map(taskTableItemToPlanningTask),
       start,
       end,
+      calendarExceptions: getDemoCalendarExceptions(),
     });
   }
 
   const prisma = getPrisma();
-  const [users, tasks] = await Promise.all([
+  const [users, tasks, calendarExceptions] = await Promise.all([
     prisma.user.findMany({
       orderBy: [{ department: "asc" }, { name: "asc" }],
       select: {
@@ -129,6 +146,23 @@ export async function getResourcePlanningData(projectId: string, start = "2026-0
         },
       },
     }),
+    prisma.calendarException.findMany({
+      where: {
+        date: {
+          gte: new Date(start),
+          lte: new Date(end),
+        },
+        OR: [{ projectId }, { projectId: null }],
+      },
+      orderBy: { date: "asc" },
+      select: {
+        date: true,
+        type: true,
+        description: true,
+        hoursWorked: true,
+        inheritedFrom: true,
+      },
+    }),
   ]);
 
   return buildResourcePlanningData({
@@ -155,22 +189,31 @@ export async function getResourcePlanningData(projectId: string, start = "2026-0
     })),
     start,
     end,
+    calendarExceptions: calendarExceptions.map((exception) => ({
+      date: exception.date.toISOString().slice(0, 10),
+      type: exception.type,
+      description: exception.description,
+      hoursWorked: exception.hoursWorked,
+      inheritedFrom: exception.inheritedFrom,
+    })),
   });
 }
 
-export function buildResourcePlanningData({ people, tasks, start, end }: BuildResourcePlanningInput): ResourcePlanningData {
-  const weeks = buildWeeks(start, end);
+export function buildResourcePlanningData({ people, tasks, start, end, calendarExceptions = [] }: BuildResourcePlanningInput): ResourcePlanningData {
+  const weeks = buildWeeks(start, end, calendarExceptions);
   const userRows = people.map((person) => {
     const weekRows = weeks.map((week) => {
       const assigned = tasks.flatMap((task) => workloadForTaskAndPerson(task, person.id, week));
       const workload = roundDays(assigned.reduce((sum, task) => sum + task.days, 0));
-      const capacity = person.capacity;
+      const capacity = Math.max(0, roundDays(person.capacity - week.unavailableDays));
 
       return {
         weekKey: week.key,
         capacity,
         workload,
         delta: roundDays(workload - capacity),
+        unavailableDays: week.unavailableDays,
+        exceptions: week.exceptions,
         tasks: assigned,
       };
     });
@@ -216,6 +259,7 @@ export function buildResourcePlanningData({ people, tasks, start, end }: BuildRe
           capacity,
           workload,
           delta: roundDays(workload - capacity),
+          unavailableDays: week.unavailableDays,
         };
       }),
     };
@@ -228,6 +272,7 @@ export function buildResourcePlanningData({ people, tasks, start, end }: BuildRe
     capacity,
     users: userRows,
     departments,
+    calendarExceptions,
     totals: {
       capacity: totalCapacity,
       workload: totalWorkload,
@@ -246,6 +291,7 @@ export function buildResourcePlanningData({ people, tasks, start, end }: BuildRe
       {
         id: task.id,
         name: task.name,
+        status: task.status,
         contextLabel: task.contextLabel,
         days: roundDays(split.days / Math.max(task.assignees.length, 1)),
       },
@@ -318,7 +364,26 @@ function getDemoPlanningPeople(projectId: string): PlanningPerson[] {
   return Array.from(seen.values()).sort((a, b) => a.department.localeCompare(b.department) || a.name.localeCompare(b.name));
 }
 
-function buildWeeks(start: string, end: string): PlanningWeek[] {
+function getDemoCalendarExceptions(): PlanningCalendarException[] {
+  return [
+    {
+      date: "2026-05-25",
+      type: "STUDIO_CLOSURE",
+      description: "棚内电力检修，拍摄组与后期组容量下调",
+      hoursWorked: 0,
+      inheritedFrom: "studio",
+    },
+    {
+      date: "2026-06-08",
+      type: "REDUCED_HOURS",
+      description: "VFX 供应商半日审查，团队仅保留 4 小时窗口",
+      hoursWorked: 4,
+      inheritedFrom: "vendor",
+    },
+  ];
+}
+
+function buildWeeks(start: string, end: string, calendarExceptions: PlanningCalendarException[] = []): PlanningWeek[] {
   return eachWeekOfInterval(
     {
       start: parseISO(start),
@@ -328,14 +393,30 @@ function buildWeeks(start: string, end: string): PlanningWeek[] {
   ).map((weekStart) => {
     const startDate = weekStart < parseISO(start) ? parseISO(start) : weekStart;
     const endDate = endOfWeek(weekStart, { weekStartsOn: 1 }) > parseISO(end) ? parseISO(end) : endOfWeek(weekStart, { weekStartsOn: 1 });
+    const exceptions = calendarExceptions.filter((exception) =>
+      isWithinInterval(parseISO(exception.date), {
+        start: startDate,
+        end: endDate,
+      }),
+    );
 
     return {
       key: format(startDate, "yyyy-MM-dd"),
       start: format(startDate, "yyyy-MM-dd"),
       end: format(endDate, "yyyy-MM-dd"),
       label: `${format(startDate, "MMM d")} - ${format(addDays(endDate, 0), "MMM d")}`,
+      unavailableDays: roundDays(exceptions.reduce((sum, exception) => sum + exceptionToUnavailableDays(exception), 0)),
+      exceptions,
     };
   });
+}
+
+function exceptionToUnavailableDays(exception: PlanningCalendarException) {
+  if (exception.type === "REDUCED_HOURS") {
+    return Math.max(0, Math.min(1, (8 - exception.hoursWorked) / 8));
+  }
+
+  return 1;
 }
 
 function roundDays(value: number) {
