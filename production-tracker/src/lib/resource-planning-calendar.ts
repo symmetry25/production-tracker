@@ -70,6 +70,7 @@ export function rebuildResourcePlanningWithCalendarExceptions(data: ResourcePlan
     capacity,
     users,
     departments,
+    unassignedWeeks: data.unassignedWeeks,
     calendarExceptions,
     totals: {
       ...data.totals,

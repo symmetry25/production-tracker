@@ -2,6 +2,7 @@
 
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   Area,
@@ -40,6 +41,9 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
   const [detailMode, setDetailMode] = useState<DetailMode>("heatmap");
   const [inspectGroup, setInspectGroup] = useState<InspectGroup>("department");
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
+  const searchParams = useSearchParams();
+  const searchParamString = searchParams.toString();
+  const linkQuery = searchParamString ? `?${searchParamString}` : "";
   const calendarDraftKey = useMemo(() => `production-tracker:calendar-exceptions:${projectId}`, [projectId]);
   const calendarDraft = useCalendarDraft(calendarDraftKey);
   const calendarExceptions = calendarDraft?.exceptions ?? data.calendarExceptions;
@@ -54,6 +58,7 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
   const selectedWeekMeta = activeData.weeks.find((week) => week.key === selectedWeek?.weekKey) ?? activeData.weeks[0];
   const inspectRows = useMemo(() => buildInspectRows(activeData, inspectGroup), [activeData, inspectGroup]);
   const lineType = chartMode === "step" ? "stepAfter" : "monotone";
+  const gridTemplateColumns = `232px repeat(${activeData.weeks.length}, minmax(116px, 1fr)) 124px`;
 
   return (
     <div className="space-y-5">
@@ -134,14 +139,14 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
 
       <section className="grid gap-0 border border-[#34322b] bg-[#181713] xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
-          <PanelHeader eyebrow="person-day grid" title="人员周人天网格" meta="Click a cell to inspect assignments" />
+          <PanelHeader eyebrow="person-day grid" title="人员周人天网格" meta="Click / right-click cells to inspect assignments" />
           <div className="overflow-auto">
             <div className="min-w-[1180px]">
               <div
                 className="grid border-b border-[#2a2a28] bg-[#1e1e1c] text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]"
-                style={{ gridTemplateColumns: `232px repeat(${activeData.weeks.length}, minmax(116px, 1fr)) 124px` }}
+                style={{ gridTemplateColumns }}
               >
-                <div className="px-4 py-2">User</div>
+                <div className="sticky left-0 z-20 bg-[#1e1e1c] px-4 py-2 shadow-[1px_0_0_#2a2a28]">User</div>
                 {activeData.weeks.map((week) => (
                   <div key={week.key} className={["border-l border-[#2a2a28] px-3 py-2 text-right", week.unavailableDays > 0 ? "text-[#8cc6ff]" : ""].join(" ")}>
                     <p>{week.label}</p>
@@ -151,13 +156,42 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
                 <div className="border-l border-[#2a2a28] px-3 py-2 text-right">Total</div>
               </div>
 
+              <ResourceGridSummaryRow
+                label="Days Over / Under"
+                subtitle="工作量 - 容量"
+                weeks={activeData.capacity.map((week) => ({
+                  weekKey: week.key,
+                  value: week.daysOverUnder,
+                  title: `${week.label}: ${signedDays(week.daysOverUnder)} over / under`,
+                }))}
+                totalValue={activeData.totals.delta}
+                totalLabel={signedDays(activeData.totals.delta)}
+                gridTemplateColumns={gridTemplateColumns}
+                mode="delta"
+              />
+
+              <ResourceGridSummaryRow
+                label="Unassigned Workload"
+                subtitle="未分配任务"
+                weeks={activeData.unassignedWeeks.map((week) => ({
+                  weekKey: week.weekKey,
+                  value: week.workload,
+                  detail: week.tasks.length ? `${week.tasks.length} tasks` : "clear",
+                  title: week.tasks.length ? week.tasks.map((task) => `${task.contextLabel} / ${task.name}: ${days(task.days)}`).join("\n") : "No unassigned workload",
+                }))}
+                totalValue={activeData.totals.unassignedWorkload}
+                totalLabel={days(activeData.totals.unassignedWorkload)}
+                gridTemplateColumns={gridTemplateColumns}
+                mode="unassigned"
+              />
+
               {activeData.users.map((user) => (
                 <div
                   key={user.id}
                   className="grid min-h-16 border-b border-[#2a2a28] text-xs"
-                  style={{ gridTemplateColumns: `232px repeat(${activeData.weeks.length}, minmax(116px, 1fr)) 124px` }}
+                  style={{ gridTemplateColumns }}
                 >
-                  <div className="flex min-w-0 items-center gap-3 px-4">
+                  <div className="sticky left-0 z-10 flex min-w-0 items-center gap-3 bg-[#181713] px-4 shadow-[1px_0_0_#2a2a28]">
                     <div className="grid size-9 shrink-0 place-items-center border border-[#34322b] bg-[#11110f] font-semibold text-[#e8c678]">{initials(user.name)}</div>
                     <div className="min-w-0">
                       <p className="truncate font-medium text-[#f4f1e8]">{user.name}</p>
@@ -190,6 +224,7 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
                           user={user}
                           week={week}
                           weekLabel={activeData.weeks.find((item) => item.key === week.weekKey)?.label ?? week.weekKey}
+                          linkQuery={linkQuery}
                           onInspect={() => setSelectedCell({ userId: user.id, weekKey: week.weekKey })}
                         />
                       </ContextMenu.Root>
@@ -226,7 +261,7 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
               />
             }
           />
-          {detailMode === "heatmap" ? <DepartmentHeatmap data={activeData} /> : <OverUnderArea data={activeData} />}
+          {detailMode === "heatmap" ? <DepartmentHeatmap data={activeData} linkQuery={linkQuery} /> : <OverUnderArea data={activeData} />}
         </div>
 
         <div className="border border-[#34322b] bg-[#181713]">
@@ -338,11 +373,13 @@ function ResourceCellContextMenu({
   user,
   week,
   weekLabel,
+  linkQuery,
   onInspect,
 }: {
   user: PlanningUserRow;
   week: PlanningUserWeek;
   weekLabel: string;
+  linkQuery: string;
   onInspect: () => void;
 }) {
   const summary = buildCellSummary(user, week, weekLabel);
@@ -363,7 +400,7 @@ function ResourceCellContextMenu({
         <MenuItem onSelect={onInspect}>⌕ Inspect Cell</MenuItem>
         <MenuItem onSelect={() => void copyText(summary)}>⌘ Copy Summary</MenuItem>
         <ContextMenu.Item asChild className="flex cursor-default items-center px-3 py-2 text-[#d8d3c7] outline-none hover:bg-[#252523]">
-          <Link href={`/app/resource-planning/${encodeURIComponent(user.department)}`}>↳ Open Department Drilldown</Link>
+          <Link href={`/app/resource-planning/${encodeURIComponent(user.department)}${linkQuery}`}>↳ Open Department Drilldown</Link>
         </ContextMenu.Item>
         <Separator />
         <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">Tasks</ContextMenu.Label>
@@ -401,13 +438,66 @@ function ResourceCellContextMenu({
   );
 }
 
-function DepartmentHeatmap({ data }: { data: ResourcePlanningData }) {
+function ResourceGridSummaryRow({
+  label,
+  subtitle,
+  weeks,
+  totalValue,
+  totalLabel,
+  gridTemplateColumns,
+  mode,
+}: {
+  label: string;
+  subtitle: string;
+  weeks: { weekKey: string; value: number; detail?: string; title: string }[];
+  totalValue: number;
+  totalLabel: string;
+  gridTemplateColumns: string;
+  mode: "delta" | "unassigned";
+}) {
+  return (
+    <div className="grid min-h-14 border-b border-[#34322b] text-xs" style={{ gridTemplateColumns }}>
+      <div className="sticky left-0 z-10 flex min-w-0 items-center justify-between gap-3 bg-[#20201d] px-4 shadow-[1px_0_0_#34322b]">
+        <div className="min-w-0">
+          <p className="truncate font-semibold text-[#f4f1e8]">{label}</p>
+          <p className="mt-1 truncate text-[11px] text-[#8f8a7e]">{subtitle}</p>
+        </div>
+        <span className="shrink-0 border border-[#3a372f] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[#8f8a7e]">sum</span>
+      </div>
+      {weeks.map((week) => (
+        <div key={week.weekKey} className={["border-l border-[#34322b] px-3 py-2 text-right font-mono", summaryTone(week.value, mode)].join(" ")} title={week.title}>
+          <p className="text-sm">{mode === "delta" ? signedDays(week.value) : days(week.value)}</p>
+          <p className="mt-1 text-[10px] opacity-70">{week.detail ?? summaryDetail(week.value, mode)}</p>
+        </div>
+      ))}
+      <div className={["border-l border-[#34322b] px-3 py-2 text-right font-mono", summaryTone(totalValue, mode)].join(" ")}>
+        <p>{totalLabel}</p>
+        <p className="mt-1 text-[10px] opacity-70">window</p>
+      </div>
+    </div>
+  );
+}
+
+function DepartmentHeatmap({ data, linkQuery }: { data: ResourcePlanningData; linkQuery: string }) {
   return (
     <div className="overflow-auto p-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">heatmap legend</p>
+          <p className="mt-1 text-[#aaa599]">蓝色代表富余，红色代表超载，斜纹代表当周有停工或缩短工时。</p>
+        </div>
+        <div className="flex items-center gap-2 font-mono text-[11px]">
+          <span className="bg-[#102944] px-2 py-1 text-[#8cc6ff]">&lt; -6d</span>
+          <span className="bg-[#142233] px-2 py-1 text-[#7bb8ff]">under</span>
+          <span className="bg-[#20201d] px-2 py-1 text-[#aaa599]">0d</span>
+          <span className="bg-[#2d1a1a] px-2 py-1 text-[#ff8b7c]">over</span>
+          <span className="bg-[#4a1f1f] px-2 py-1 text-[#ffb0a4]">&gt; +4d</span>
+        </div>
+      </div>
       <div className="min-w-[820px] space-y-2">
         {data.departments.map((department) => (
           <div key={department.department} className="grid items-center gap-2 text-xs" style={{ gridTemplateColumns: `160px repeat(${data.weeks.length}, minmax(64px, 1fr))` }}>
-            <Link href={`/app/resource-planning/${encodeURIComponent(department.department)}`} className="truncate text-[#c9c3b5] transition hover:text-[#e8c678]">
+            <Link href={`/app/resource-planning/${encodeURIComponent(department.department)}${linkQuery}`} className="truncate text-[#c9c3b5] transition hover:text-[#e8c678]">
               {department.department}
             </Link>
             {department.weeks.map((week) => (
@@ -944,6 +1034,22 @@ function heatTone(delta: number) {
   return "bg-[#20201d] text-[#aaa599]";
 }
 
+function summaryTone(value: number, mode: "delta" | "unassigned") {
+  if (mode === "unassigned") {
+    if (value > 0) return "bg-[#2c2514] text-[#e8c678]";
+    return "bg-[#11110f] text-[#7f7a70]";
+  }
+
+  return cellTone(value);
+}
+
+function summaryDetail(value: number, mode: "delta" | "unassigned") {
+  if (mode === "unassigned") return value > 0 ? "needs owner" : "clear";
+  if (value > 1) return "over";
+  if (value < -2) return "available";
+  return "balanced";
+}
+
 function days(value: number) {
   return `${numberFormatter.format(value)}d`;
 }
@@ -968,6 +1074,21 @@ function buildScenarioDelta(activeData: ResourcePlanningData, baselineData: Reso
 function buildPlanningCsv(data: ResourcePlanningData) {
   const rows = [
     ["department", "user", "week", "capacity_days", "workload_days", "delta_days", "task_count", "calendar_exception_days", "exceptions"],
+    ...data.unassignedWeeks.flatMap((week) => {
+      const weekMeta = data.weeks.find((item) => item.key === week.weekKey);
+
+      return week.tasks.map((task) => [
+        "Unassigned",
+        "Unassigned",
+        weekMeta?.label ?? week.weekKey,
+        "0",
+        String(task.days),
+        String(task.days),
+        "1",
+        "0",
+        `${task.contextLabel} ${task.name} ${statusLabel(task.status)}`,
+      ]);
+    }),
     ...data.users.flatMap((user) =>
       user.weeks.map((week) => {
         const weekMeta = data.weeks.find((item) => item.key === week.weekKey);

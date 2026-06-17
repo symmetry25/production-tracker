@@ -72,6 +72,18 @@ export type DepartmentHeatmapRow = {
   }[];
 };
 
+export type UnassignedWeekRow = {
+  weekKey: string;
+  workload: number;
+  tasks: {
+    id: string;
+    name: string;
+    status: string;
+    contextLabel: string;
+    days: number;
+  }[];
+};
+
 export type PlanningCalendarException = {
   date: string;
   type: "HOLIDAY" | "REDUCED_HOURS" | "STUDIO_CLOSURE";
@@ -85,6 +97,7 @@ export type ResourcePlanningData = {
   capacity: CapacityWeek[];
   users: PlanningUserRow[];
   departments: DepartmentHeatmapRow[];
+  unassignedWeeks: UnassignedWeekRow[];
   calendarExceptions: PlanningCalendarException[];
   totals: {
     capacity: number;
@@ -227,6 +240,7 @@ export function filterResourcePlanningByDepartment(data: ResourcePlanningData, d
     capacity,
     users,
     departments,
+    unassignedWeeks: data.weeks.map((week) => ({ weekKey: week.key, workload: 0, tasks: [] })),
     totals: {
       capacity: totalCapacity,
       workload: totalWorkload,
@@ -264,6 +278,31 @@ export function buildResourcePlanningData({ people, tasks, start, end, calendarE
       totalCapacity,
       totalWorkload,
       delta: roundDays(totalWorkload - totalCapacity),
+    };
+  });
+  const unassignedWeeks = weeks.map((week) => {
+    const tasksForWeek = tasks
+      .filter((task) => task.assignees.length === 0)
+      .flatMap((task) => {
+        const split = taskWeeks(task, [week])[0];
+        if (!split || split.days <= 0) return [];
+
+        return [
+          {
+            id: task.id,
+            name: task.name,
+            status: task.status,
+            contextLabel: task.contextLabel,
+            days: split.days,
+          },
+        ];
+      });
+    const workload = roundDays(tasksForWeek.reduce((sum, task) => sum + task.days, 0));
+
+    return {
+      weekKey: week.key,
+      workload,
+      tasks: tasksForWeek,
     };
   });
   const unassignedWorkload = roundDays(
@@ -310,6 +349,7 @@ export function buildResourcePlanningData({ people, tasks, start, end, calendarE
     capacity,
     users: userRows,
     departments,
+    unassignedWeeks,
     calendarExceptions,
     totals: {
       capacity: totalCapacity,

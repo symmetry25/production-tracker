@@ -1,18 +1,27 @@
 import Link from "next/link";
 
+import { ResourcePlanningRangeControls } from "@/components/resource-planning/resource-planning-range-controls";
 import { ResourcePlanningWorkspace } from "@/components/resource-planning/resource-planning-workspace";
 import { getDepartmentResourcePlanningData, getResourcePlanningData, type ResourcePlanningData } from "@/lib/resource-planning";
 
 type DepartmentResourcePlanningPageProps = {
   params: Promise<{ department: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function DepartmentResourcePlanningPage({ params }: DepartmentResourcePlanningPageProps) {
+const defaultRange = {
+  start: "2026-05-01",
+  end: "2026-06-30",
+};
+
+export default async function DepartmentResourcePlanningPage({ params, searchParams }: DepartmentResourcePlanningPageProps) {
   const { department: rawDepartment } = await params;
+  const range = parseRange(await searchParams);
+  const rangeQuery = `?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}`;
   const department = decodeURIComponent(rawDepartment);
-  const fullData = await getResourcePlanningData("demo-mkali-mission");
+  const fullData = await getResourcePlanningData("demo-mkali-mission", range.start, range.end);
   const departmentNames = fullData.departments.map((row) => row.department);
-  const data = await getDepartmentResourcePlanningData("demo-mkali-mission", department);
+  const data = await getDepartmentResourcePlanningData("demo-mkali-mission", department, range.start, range.end);
   const busiestWeek = getBusiestWeek(data);
   const busiestUser = data.users.slice().sort((a, b) => b.totalWorkload - a.totalWorkload)[0];
   const riskTasks = getRiskTasks(data);
@@ -21,7 +30,7 @@ export default async function DepartmentResourcePlanningPage({ params }: Departm
     <>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-5">
         <div>
-          <Link href="/app/resource-planning" className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8f8a7e] transition hover:text-[#d8b46a]">
+          <Link href={`/app/resource-planning${rangeQuery}`} className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8f8a7e] transition hover:text-[#d8b46a]">
             Resource Planning / Back
           </Link>
           <h1 className="mt-2 text-3xl font-semibold">{department} 资源下钻</h1>
@@ -29,19 +38,22 @@ export default async function DepartmentResourcePlanningPage({ params }: Departm
             聚焦一个部门的人天容量、周负载、任务压力和停工例外，适合制片主任与部门负责人开排期会时使用。
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          {departmentNames.map((name) => (
-            <Link
-              key={name}
-              href={`/app/resource-planning/${encodeURIComponent(name)}`}
-              className={[
-                "h-9 border px-3 py-2 transition",
-                name === department ? "border-[#d8b46a] bg-[#d8b46a] font-semibold text-[#171713]" : "border-[#34322b] text-[#c9c3b5] hover:border-[#d8b46a] hover:text-[#e8c678]",
-              ].join(" ")}
-            >
-              {name}
-            </Link>
-          ))}
+        <div className="flex max-w-[720px] flex-col items-end gap-3">
+          <ResourcePlanningRangeControls key={`${range.start}-${range.end}`} range={range} compact />
+          <div className="flex flex-wrap justify-end gap-2 text-xs">
+            {departmentNames.map((name) => (
+              <Link
+                key={name}
+                href={`/app/resource-planning/${encodeURIComponent(name)}${rangeQuery}`}
+                className={[
+                  "h-9 border px-3 py-2 transition",
+                  name === department ? "border-[#d8b46a] bg-[#d8b46a] font-semibold text-[#171713]" : "border-[#34322b] text-[#c9c3b5] hover:border-[#d8b46a] hover:text-[#e8c678]",
+                ].join(" ")}
+              >
+                {name}
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -114,6 +126,25 @@ export default async function DepartmentResourcePlanningPage({ params }: Departm
       )}
     </>
   );
+}
+
+function parseRange(searchParams: Record<string, string | string[] | undefined>) {
+  const start = first(searchParams.start);
+  const end = first(searchParams.end);
+
+  if (isDate(start) && isDate(end) && start <= end) {
+    return { start, end };
+  }
+
+  return defaultRange;
+}
+
+function first(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function isDate(value: string | undefined): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 function DepartmentMetric({ label, value, meta, tone = "normal" }: { label: string; value: string; meta: string; tone?: "normal" | "ok" | "over" }) {

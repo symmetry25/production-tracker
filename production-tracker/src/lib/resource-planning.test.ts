@@ -56,6 +56,8 @@ describe("buildResourcePlanningData", () => {
 
     expect(data.totals.unassignedWorkload).toBe(3);
     expect(data.totals.workload).toBe(0);
+    expect(data.unassignedWeeks[0]?.workload).toBe(3);
+    expect(data.unassignedWeeks[0]?.tasks[0]?.name).toBe("FX pass");
   });
 
   it("reduces weekly capacity for calendar exceptions", () => {
