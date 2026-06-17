@@ -18,7 +18,7 @@ export default function LoginPage() {
           <p className="mb-4 text-xs font-semibold uppercase tracking-[0.34em] text-[#898477]">Step 2</p>
           <h1 className="max-w-xl text-5xl font-semibold leading-[1.02]">登录后进入项目、镜头、资产和资源规划工作台。</h1>
           <p className="mt-5 max-w-lg text-sm leading-7 text-[#aaa599]">
-            Credentials 登录已经接入 Prisma 用户表。运行数据库迁移和 seed 后，可以用演示管理员账号进入正式版后台。
+            本地开发环境没有数据库时，会启用演示登录；接入 PostgreSQL 后会自动读取 Prisma 用户表。
           </p>
         </div>
 
@@ -42,7 +42,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md border border-[#353229] bg-[#181713]/90 p-8 shadow-[0_22px_70px_rgba(0,0,0,0.38)]">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d8b46a]">Sign in</p>
           <h2 className="mt-3 text-2xl font-semibold">制片后台入口</h2>
-          <p className="mt-3 text-sm leading-6 text-[#aaa599]">默认演示账号会在 seed 脚本里创建。</p>
+          <p className="mt-3 text-sm leading-6 text-[#aaa599]">本地演示账号：admin@studio.com / admin123</p>
           <LoginForm />
         </div>
       </section>

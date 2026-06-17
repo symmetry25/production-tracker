@@ -17,7 +17,7 @@ export async function loginAction(_: LoginState, formData: FormData): Promise<Lo
     });
   } catch (error) {
     if (error instanceof AuthError) {
-      return { error: "邮箱或密码不正确。请先运行 seed，默认账号是 admin@studio.com / admin123。" };
+      return { error: "邮箱或密码不正确。当前本地演示账号是 admin@studio.com / admin123。" };
     }
 
     throw error;

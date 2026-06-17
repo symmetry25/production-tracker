@@ -6,6 +6,11 @@ import { z } from "zod";
 import authConfig from "@/auth.config";
 import { getPrisma } from "@/lib/prisma";
 
+const demoCredentials = {
+  email: "admin@studio.com",
+  password: "admin123",
+};
+
 const credentialsSchema = z.object({
   email: z.email().trim().toLowerCase(),
   password: z.string().min(1),
@@ -24,6 +29,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!parsed.success) {
           return null;
+        }
+
+        if (!process.env.DATABASE_URL && process.env.NODE_ENV !== "production") {
+          if (parsed.data.email !== demoCredentials.email || parsed.data.password !== demoCredentials.password) {
+            return null;
+          }
+
+          return {
+            id: "demo-admin",
+            name: "Admin User",
+            email: demoCredentials.email,
+            image: null,
+            role: "ADMIN",
+            department: "Production",
+          };
         }
 
         const prisma = getPrisma();
