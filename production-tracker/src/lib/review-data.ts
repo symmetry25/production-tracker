@@ -161,6 +161,46 @@ export async function getTaskReviewVersions(taskId: string): Promise<ReviewVersi
   return versions.map(mapVersion);
 }
 
+export async function getReviewVersion(versionId: string): Promise<ReviewVersionItem | null> {
+  if (shouldUseDemoData()) {
+    return getDemoProjectReviewVersions("demo-mkali-mission").find((version) => version.id === versionId) ?? null;
+  }
+
+  const prisma = getPrisma();
+  const version = await prisma.version.findUnique({
+    where: { id: versionId },
+    include: {
+      uploadedBy: {
+        select: {
+          id: true,
+          name: true,
+          department: true,
+        },
+      },
+      task: {
+        include: {
+          shot: { select: { code: true } },
+          asset: { select: { name: true } },
+        },
+      },
+      notes: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              department: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return version ? mapVersion(version) : null;
+}
+
 function mapVersion(version: {
   id: string;
   number: number;
