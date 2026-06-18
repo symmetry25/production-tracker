@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+import { CreateRecordPanel } from "@/components/extensions/create-record-panel";
+import { ImportActionsPanel } from "@/components/extensions/import-actions-panel";
+import { TemplateInstallButton } from "@/components/extensions/template-install-button";
 import type { EntityTypeItem, ImportPreview } from "@/lib/custom-data-store";
 import type { FieldDefinition } from "@/lib/field-types";
 
@@ -73,6 +76,7 @@ export function EntityTypeDetail({ entity }: { entity: EntityTypeItem }) {
         <Metric label="Required" value={entity.fields.filter((field) => field.required).length} />
         <Metric label="Formula" value={entity.fields.filter((field) => field.type === "formula").length} />
       </div>
+      <CreateRecordPanel entityId={entity.id} fields={entity.fields} />
       <div className="overflow-auto border border-[#34322b] bg-[#181713]">
         <table className="min-w-[1040px] w-full border-collapse text-left text-xs">
           <thead className="bg-[#1e1e1c] text-[11px] uppercase tracking-[0.12em] text-[#6e6e69]">
@@ -128,7 +132,7 @@ export function EntitySettings({ entity }: { entity: EntityTypeItem }) {
   );
 }
 
-export function EntityImportPageView({ entity, preview }: { entity: EntityTypeItem; preview: ImportPreview }) {
+export function EntityImportPageView({ entity, preview, sourceText }: { entity: EntityTypeItem; preview: ImportPreview; sourceText: string }) {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Excel import" title={`${entity.name} 导入向导`} description="支持 CSV、TSV、从 Excel 复制的表格文本，以及 API multipart Excel 文件上传。这里展示默认样例的字段映射和预检结果。" />
@@ -154,6 +158,7 @@ export function EntityImportPageView({ entity, preview }: { entity: EntityTypeIt
           <Metric label="Total Rows" value={preview.validation.totalRows} />
           <Metric label="Valid Rows" value={preview.validation.validRows} />
           <Metric label="Error Rows" value={preview.validation.errorRows} />
+          <ImportActionsPanel entityId={entity.id} sourceText={sourceText} />
           <div className="border border-[#34322b] bg-[#181713] p-4">
             <p className="text-sm font-semibold">错误详情</p>
             <div className="mt-3 space-y-2 text-xs text-[#ff9c8c]">
@@ -162,6 +167,16 @@ export function EntityImportPageView({ entity, preview }: { entity: EntityTypeIt
           </div>
         </aside>
       </div>
+    </div>
+  );
+}
+
+export function TemplateInstallCard({ id, name, description }: { id: string; name: string; description: string }) {
+  return (
+    <div className="border border-[#2f2c25] bg-[#11110f] p-3">
+      <p className="font-semibold text-[#f4f1e8]">{name}</p>
+      <p className="mt-2 text-xs leading-5 text-[#8f8a7e]">{description}</p>
+      <TemplateInstallButton templateId={id} templateName={name} />
     </div>
   );
 }

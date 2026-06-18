@@ -1,4 +1,5 @@
 import { PageHeader, Metric } from "@/components/extensions/entity-type-pages";
+import { AiRecognizerPanel } from "@/components/ai/ai-recognizer-panel";
 import type { AiScanItem } from "@/lib/ai-recognition";
 
 export function AiRecognizePageView({ scans }: { scans: AiScanItem[] }) {
@@ -11,23 +12,7 @@ export function AiRecognizePageView({ scans }: { scans: AiScanItem[] }) {
         <Metric label="Provider" value={scans[0]?.provider ?? "mock"} />
         <Metric label="Avg Conf." value={`${Math.round((scans.reduce((sum, scan) => sum + scan.confidence, 0) / Math.max(1, scans.length)) * 100)}%`} />
       </div>
-      <section className="grid gap-4 xl:grid-cols-[1fr_360px]">
-        <div className="border border-dashed border-[#4a463d] bg-[#181713] p-8">
-          <p className="text-lg font-semibold">拖拽图片 / PDF / 手写单据到这里</p>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-[#aaa599]">前端上传组件预留给真实文件流；API 已支持 invoice、table、document、card、custom 五种模式，并会把扫描历史写入识别记录。</p>
-          <div className="mt-6 grid gap-2 md:grid-cols-5">
-            {["invoice", "table", "document", "card", "custom"].map((mode) => <span key={mode} className="border border-[#34322b] bg-[#11110f] px-3 py-2 text-center font-mono text-xs text-[#e8c678]">{mode}</span>)}
-          </div>
-        </div>
-        <aside className="border border-[#34322b] bg-[#181713] p-4">
-          <p className="text-sm font-semibold">调用示例</p>
-          <pre className="mt-3 overflow-auto bg-[#11110f] p-3 text-xs leading-5 text-[#8f8a7e]">{`POST /api/ai/recognize
-{
-  "mode": "invoice",
-  "entityTypeId": "retail-purchase-order"
-}`}</pre>
-        </aside>
-      </section>
+      <AiRecognizerPanel />
       <AiScansTable scans={scans} />
     </div>
   );

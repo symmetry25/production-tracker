@@ -2,7 +2,9 @@
 
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
+import { WidgetAddPanel } from "@/components/dashboard-builder/widget-add-panel";
 import { PageHeader, Metric } from "@/components/extensions/entity-type-pages";
+import type { EntityTypeItem } from "@/lib/custom-data-store";
 import type { DashboardItem, WidgetConfig } from "@/lib/dashboard-builder";
 
 const palette = ["#d8b46a", "#4a9eff", "#1d9e75", "#ef9f27", "#7f77dd", "#e24b4a", "#4f7f9b"];
@@ -46,10 +48,11 @@ export function DashboardView({ dashboard, widgetData }: { dashboard: DashboardI
   );
 }
 
-export function DashboardEditor({ dashboard }: { dashboard: DashboardItem }) {
+export function DashboardEditor({ dashboard, entities }: { dashboard: DashboardItem; entities: EntityTypeItem[] }) {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Edit dashboard" title={`${dashboard.name} 构建器`} description="左侧是 Widget 库，中间是画布，右侧是数据映射。当前版本提供可视化配置预览；API 已支持添加、更新、删除 Widget 和批量布局保存。" />
+      <WidgetAddPanel dashboardId={dashboard.id} entities={entities} />
       <div className="grid min-h-[620px] grid-cols-[240px_minmax(0,1fr)_320px] border border-[#34322b] bg-[#181713]">
         <aside className="border-r border-[#34322b] p-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#d8b46a]">Widget Library</p>

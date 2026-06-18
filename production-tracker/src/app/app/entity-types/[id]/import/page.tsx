@@ -10,5 +10,5 @@ export default async function EntityImportPage({ params }: { params: Promise<{ i
   const entity = getEntityType(id);
   const preview = previewImport(id, { sourceText: sampleText });
   if (!entity || !preview) notFound();
-  return <EntityImportPageView entity={entity} preview={preview} />;
+  return <EntityImportPageView entity={entity} preview={preview} sourceText={sampleText} />;
 }

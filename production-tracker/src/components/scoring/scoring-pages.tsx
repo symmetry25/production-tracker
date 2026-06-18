@@ -3,6 +3,7 @@
 import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import { PageHeader, Metric } from "@/components/extensions/entity-type-pages";
+import { ScoreUpdatePanel } from "@/components/scoring/score-update-panel";
 import type { getScoreLeaderboard, getUserScorecard, listSkills } from "@/lib/scoring";
 
 type Scorecard = NonNullable<ReturnType<typeof getUserScorecard>>;
@@ -21,6 +22,7 @@ export function ScorecardPageView({ scorecard, leaderboard }: { scorecard: Score
         <Metric label="Department" value={scorecard.user.department} />
         <Metric label="Skills" value={scorecard.skills.length} />
       </div>
+      <ScoreUpdatePanel userId={scorecard.user.id} rows={scorecard.rows} />
       <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
         <section className="border border-[#34322b] bg-[#181713] p-4">
           <p className="text-sm font-semibold">维度雷达图</p>

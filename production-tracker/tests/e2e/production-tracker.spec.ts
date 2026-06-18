@@ -28,21 +28,41 @@ test.describe("production tracker smoke flow", () => {
     await expect(page.getByRole("heading", { name: "实体类型与通用数据表" })).toBeVisible();
     await expect(page.getByRole("link", { name: /采购单/ })).toBeVisible();
 
+    await page.goto("/app/entity-types/new");
+    await page.getByRole("button", { name: "安装模板" }).first().click();
+    await expect(page.getByText("已安装")).toBeVisible();
+
+    await page.goto("/app/entity-types/retail-purchase-order");
+    await expect(page.getByText("快速新增记录")).toBeVisible();
+    await page.getByRole("button", { name: "保存记录" }).click();
+    await expect(page.getByText("记录已保存，页面数据已刷新。")).toBeVisible();
+
     await page.goto("/app/entity-types/retail-purchase-order/import");
     await expect(page.getByRole("heading", { name: "采购单 导入向导" })).toBeVisible();
     await expect(page.getByText(/行 3: unit_cost - 非数字值/)).toBeVisible();
+    await page.getByRole("button", { name: "仅导入有效行" }).click();
+    await expect(page.getByText(/已导入 1 条，跳过 1 条/)).toBeVisible();
 
     await page.goto("/app/dashboards/dashboard-producer-demo");
     await expect(page.getByRole("heading", { name: "制片数据驾驶舱" })).toBeVisible();
     await expect(page.getByText("供应商支出排行")).toBeVisible();
 
+    await page.goto("/app/dashboards/dashboard-producer-demo/edit");
+    await expect(page.getByText("添加 Widget")).toBeVisible();
+    await page.getByRole("button", { name: "添加" }).click();
+    await expect(page.getByText("Widget 已添加。")).toBeVisible();
+
     await page.goto("/app/ai/recognize");
     await expect(page.getByRole("heading", { name: "AI 单据识别工作台" })).toBeVisible();
     await expect(page.getByText("INV-2026-0618")).toBeVisible();
+    await page.getByRole("button", { name: "开始识别" }).click();
+    await expect(page.getByText("invoice_number")).toBeVisible();
 
     await page.goto("/app/users/demo-user-vfx/scorecard");
     await expect(page.getByRole("heading", { name: "Nora Li 评分卡" })).toBeVisible();
     await expect(page.getByText("团队排行榜")).toBeVisible();
+    await page.getByRole("button", { name: "更新评分" }).click();
+    await expect(page.getByText("已更新")).toBeVisible();
 
     await page.goto("/app/projects/demo-mkali-mission/overview");
     await expect(page.getByRole("heading", { name: /Mkali's Mission · MKALI/ })).toBeVisible();
