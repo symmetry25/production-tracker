@@ -11,6 +11,7 @@ import { resetDashboardsForTests } from "@/lib/dashboard-builder";
 import { resetScoringForTests } from "@/lib/scoring";
 
 import { POST as recognizeDocument } from "./ai/recognize/route";
+import { GET as listRecognizedScans } from "./ai/scans/route";
 import { DELETE as deleteWidget } from "./dashboards/[dashboardId]/widgets/[widgetId]/route";
 import { POST as createWidget } from "./dashboards/[dashboardId]/widgets/route";
 import { POST as readWidgetData } from "./dashboards/widget-data/route";
@@ -274,6 +275,75 @@ describe("extension API routes", () => {
       },
       error: null,
     });
+  });
+
+  it("persists and lists AI scan history through Prisma when a database is configured", async () => {
+    process.env.DATABASE_URL = "postgresql://unit.test/db";
+    vi.mocked(getPrisma).mockReturnValue({
+      aiScan: {
+        create: vi.fn().mockResolvedValue({
+          id: "scan-db-1",
+          recordId: null,
+          entityTypeId: "retail-purchase-order",
+          mode: "invoice",
+          imageUrl: "mock://sample-document",
+          rawResult: { invoice_number: "INV-2026-0618", confidence: 0.91, __provider: "mock" },
+          appliedData: null,
+          confidence: 0.91,
+          createdAt: new Date("2026-06-18T00:00:00.000Z"),
+        }),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "scan-db-1",
+            recordId: null,
+            entityTypeId: "retail-purchase-order",
+            mode: "invoice",
+            imageUrl: "mock://sample-document",
+            rawResult: { invoice_number: "INV-2026-0618", confidence: 0.91, __provider: "mock" },
+            appliedData: null,
+            confidence: 0.91,
+            createdAt: new Date("2026-06-18T00:00:00.000Z"),
+          },
+        ]),
+      },
+      entityType: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+    } as never);
+
+    const recognizeResponse = await recognizeDocument(
+      new Request("http://app.test/api/ai/recognize", {
+        method: "POST",
+        body: JSON.stringify({ mode: "invoice", entityTypeId: "retail-purchase-order" }),
+      }),
+    );
+
+    await expect(recognizeResponse.json()).resolves.toMatchObject({
+      data: {
+        scan: {
+          id: "scan-db-1",
+          entityTypeId: "retail-purchase-order",
+          provider: "mock",
+          rawResult: { invoice_number: "INV-2026-0618" },
+        },
+      },
+      error: null,
+    });
+
+    const scansResponse = await listRecognizedScans(new Request("http://app.test/api/ai/scans?entityTypeId=retail-purchase-order"));
+
+    await expect(scansResponse.json()).resolves.toMatchObject({
+      data: [
+        {
+          id: "scan-db-1",
+          entityTypeId: "retail-purchase-order",
+          provider: "mock",
+          rawResult: { invoice_number: "INV-2026-0618" },
+        },
+      ],
+      error: null,
+    });
+    expect(getPrisma).toHaveBeenCalled();
   });
 
   it("aggregates widget data from dynamic entity records", async () => {

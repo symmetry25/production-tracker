@@ -1,4 +1,6 @@
 import type { FieldDefinition } from "@/lib/field-types";
+import { getPrisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 
 export type AiRecognitionMode = "invoice" | "table" | "document" | "card" | "custom";
 
@@ -18,6 +20,18 @@ export type AiScanItem = {
 type AiState = {
   scans: AiScanItem[];
   sequence: number;
+};
+
+type DbAiScan = {
+  id: string;
+  recordId: string | null;
+  entityTypeId: string | null;
+  mode: string;
+  imageUrl: string;
+  rawResult: unknown;
+  appliedData: unknown;
+  confidence: number | null;
+  createdAt: Date | string;
 };
 
 const globalForAi = globalThis as typeof globalThis & {
@@ -46,12 +60,33 @@ export async function recognizeDocument(input: {
 }) {
   const provider = getProvider();
   const rawResult = mockResult(input.mode, input.fields ?? []);
+  const imageUrl = input.imageBase64 ? `inline:${input.imageType ?? "application/octet-stream"}` : "mock://sample-document";
+
+  if (shouldUsePersistentStore()) {
+    const scan = await createAiScanAsync({
+      recordId: input.recordId ?? null,
+      entityTypeId: input.entityTypeId ?? null,
+      mode: input.mode,
+      imageUrl,
+      rawResult: { ...rawResult, __provider: provider },
+      appliedData: null,
+      confidence: Number(rawResult.confidence ?? 0.88),
+    });
+    return {
+      scan,
+      prompt: buildRecognitionPrompt(input.mode, input.fields),
+      result: rawResult,
+      provider,
+      note: provider === "mock" ? "未配置 AI API Key，当前返回可测试的模拟识别结果。" : "接口已按 AI Provider 形态返回，生产环境可在此接入真实模型调用。",
+    };
+  }
+
   const scan: AiScanItem = {
     id: `scan-${nextSequence()}`,
     recordId: input.recordId ?? null,
     entityTypeId: input.entityTypeId ?? null,
     mode: input.mode,
-    imageUrl: input.imageBase64 ? `inline:${input.imageType ?? "application/octet-stream"}` : "mock://sample-document",
+    imageUrl,
     rawResult,
     appliedData: null,
     confidence: Number(rawResult.confidence ?? 0.88),
@@ -77,8 +112,88 @@ export function listAiScans(filters: { recordId?: string | null; entityTypeId?: 
   });
 }
 
+export async function listAiScansAsync(filters: { recordId?: string | null; entityTypeId?: string | null } = {}) {
+  if (!shouldUsePersistentStore()) return listAiScans(filters);
+
+  const scans = await getPrisma().aiScan.findMany({
+    where: {
+      ...(filters.recordId ? { recordId: filters.recordId } : {}),
+      ...(filters.entityTypeId ? { entityTypeId: filters.entityTypeId } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  return scans.map(scanFromDb);
+}
+
 export function resetAiRecognitionForTests() {
   globalForAi.__productionTrackerAiState = createState();
+}
+
+async function createAiScanAsync(input: {
+  recordId: string | null;
+  entityTypeId: string | null;
+  mode: AiRecognitionMode;
+  imageUrl: string;
+  rawResult: Record<string, unknown>;
+  appliedData: Record<string, unknown> | null;
+  confidence: number;
+}) {
+  const scan = await getPrisma().aiScan.create({
+    data: {
+      recordId: input.recordId,
+      entityTypeId: input.entityTypeId,
+      mode: input.mode,
+      imageUrl: input.imageUrl,
+      rawResult: toPrismaJson(input.rawResult),
+      appliedData: input.appliedData ? toPrismaJson(input.appliedData) : undefined,
+      confidence: input.confidence,
+    },
+  });
+  return scanFromDb(scan);
+}
+
+function scanFromDb(scan: DbAiScan): AiScanItem {
+  const rawResult = isPlainRecord(scan.rawResult) ? { ...scan.rawResult } : {};
+  const provider = normalizeProvider(rawResult.__provider);
+  delete rawResult.__provider;
+  return {
+    id: scan.id,
+    recordId: scan.recordId,
+    entityTypeId: scan.entityTypeId,
+    mode: normalizeMode(scan.mode),
+    imageUrl: scan.imageUrl,
+    rawResult,
+    appliedData: isPlainRecord(scan.appliedData) ? scan.appliedData : null,
+    confidence: scan.confidence ?? Number(rawResult.confidence ?? 0),
+    provider,
+    createdAt: toIsoString(scan.createdAt),
+  };
+}
+
+function normalizeMode(mode: string): AiRecognitionMode {
+  if (mode === "invoice" || mode === "table" || mode === "document" || mode === "card" || mode === "custom") return mode;
+  return "document";
+}
+
+function normalizeProvider(provider: unknown): AiScanItem["provider"] {
+  if (provider === "openai" || provider === "anthropic" || provider === "mock") return provider;
+  return getProvider();
+}
+
+function shouldUsePersistentStore() {
+  return Boolean(process.env.DATABASE_URL);
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function toIsoString(value: Date | string) {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function toPrismaJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
 function mockResult(mode: AiRecognitionMode, fields: FieldDefinition[]) {
