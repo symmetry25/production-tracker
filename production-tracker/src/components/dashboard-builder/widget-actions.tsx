@@ -2,13 +2,25 @@
 
 import { useState } from "react";
 
-export function WidgetActions({ dashboardId, widgetId }: { dashboardId: string; widgetId: string }) {
+export function WidgetActions({ dashboardId, widgetId, compact = false }: { dashboardId: string; widgetId: string; compact?: boolean }) {
   const [status, setStatus] = useState<"idle" | "deleting" | "deleted" | "error">("idle");
 
   async function deleteWidget() {
     setStatus("deleting");
     const response = await fetch(`/api/dashboards/${dashboardId}/widgets/${widgetId}`, { method: "DELETE" });
     setStatus(response.ok ? "deleted" : "error");
+  }
+
+  if (compact) {
+    return (
+      <div className="mt-2 flex h-7 items-center justify-between gap-2">
+        <button type="button" onClick={deleteWidget} disabled={status === "deleting" || status === "deleted"} className="h-7 border border-[#4a2b24] px-2 text-[10px] text-[#ff9c8c] hover:border-[#e24b4a] disabled:opacity-45">
+          {status === "deleting" ? "删除中" : status === "deleted" ? "已删除" : "删除"}
+        </button>
+        {status === "deleted" ? <span className="truncate text-[10px] text-[#83d6ae]">已删除</span> : null}
+        {status === "error" ? <span className="truncate text-[10px] text-[#ff9c8c]">删除失败</span> : null}
+      </div>
+    );
   }
 
   return (

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { DashboardWidgetContent, normalizeDashboardRows, type DashboardWidgetData } from "@/components/dashboard-builder/dashboard-widget-renderer";
 import { WidgetActions } from "@/components/dashboard-builder/widget-actions";
 import { aggregationOptions, chartNeedsGroupBy, chartTypes, getGroupFields, getNumericFields, type AggregationFn } from "@/components/dashboard-builder/widget-options";
 import type { EntityTypeItem } from "@/lib/custom-data-store";
@@ -53,7 +54,7 @@ const widgetLabels: Record<WidgetConfig["type"], string> = {
 
 const libraryTypes: WidgetConfig["type"][] = ["metric_card", "bar_chart", "line_chart", "pie_chart", "progress_bar", "funnel", "gauge", "table"];
 
-export function DashboardLayoutEditor({ dashboard, entities }: { dashboard: DashboardItem; entities: EntityTypeItem[] }) {
+export function DashboardLayoutEditor({ dashboard, entities, widgetData }: { dashboard: DashboardItem; entities: EntityTypeItem[]; widgetData: Record<string, DashboardWidgetData> }) {
   const router = useRouter();
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const savedLayouts = useMemo(() => createLayoutMap(dashboard.widgets), [dashboard.widgets]);
@@ -235,6 +236,7 @@ export function DashboardLayoutEditor({ dashboard, entities }: { dashboard: Dash
     setConfigDrafts((current) => ({ ...current, [selectedWidget.id]: nextDraft }));
     setSavedConfigDrafts((current) => ({ ...current, [selectedWidget.id]: nextDraft }));
     setConfigState("saved");
+    router.refresh();
   }
 
   function resetSelectedConfig() {
@@ -293,6 +295,8 @@ export function DashboardLayoutEditor({ dashboard, entities }: { dashboard: Dash
               const top = layout.y * (ROW_HEIGHT + GRID_GAP);
               const width = layout.w * cellWidth + (layout.w - 1) * GRID_GAP;
               const height = layout.h * ROW_HEIGHT + (layout.h - 1) * GRID_GAP;
+              const data = widgetData[widget.id];
+              const rows = normalizeDashboardRows(data?.rows ?? []);
 
               return (
                 <article
@@ -317,9 +321,11 @@ export function DashboardLayoutEditor({ dashboard, entities }: { dashboard: Dash
                     </div>
                     <span className="shrink-0 font-mono text-[10px] text-[#8f8a7e]">{layout.w}x{layout.h}</span>
                   </div>
-                  <div className="min-h-0 flex-1 p-3">
-                    <WidgetPreview type={draft.type} />
-                    <WidgetActions dashboardId={dashboard.id} widgetId={widget.id} />
+                  <div className="flex min-h-0 flex-1 flex-col p-3">
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden border border-[#2f2c25] bg-[#11110f]">
+                      <DashboardWidgetContent type={draft.type} rows={rows} total={data?.total ?? 0} />
+                    </div>
+                    <WidgetActions dashboardId={dashboard.id} widgetId={widget.id} compact />
                   </div>
                   <button
                     type="button"
@@ -395,62 +401,6 @@ export function DashboardLayoutEditor({ dashboard, entities }: { dashboard: Dash
         )}
       </aside>
     </section>
-  );
-}
-
-function WidgetPreview({ type }: { type: WidgetConfig["type"] }) {
-  if (type === "metric_card") {
-    return (
-      <div className="h-full min-h-[80px] border border-[#2f2c25] bg-[#11110f] p-3">
-        <p className="text-[11px] uppercase tracking-[0.12em] text-[#6e6e69]">Metric</p>
-        <p className="mt-3 font-mono text-2xl text-[#e8c678]">128.4w</p>
-      </div>
-    );
-  }
-
-  if (type === "pie_chart" || type === "gauge") {
-    return (
-      <div className="flex h-full min-h-[96px] items-center gap-3 border border-[#2f2c25] bg-[#11110f] p-3">
-        <div className="h-16 w-16 shrink-0 rounded-full border-[14px] border-[#d8b46a] border-r-[#4a9eff] border-b-[#1d9e75]" />
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="h-2 w-4/5 bg-[#2f2c25]" />
-          <div className="h-2 w-3/5 bg-[#2f2c25]" />
-          <div className="h-2 w-2/5 bg-[#2f2c25]" />
-        </div>
-      </div>
-    );
-  }
-
-  if (type === "progress_bar" || type === "funnel" || type === "table") {
-    return (
-      <div className="h-full min-h-[96px] space-y-2 border border-[#2f2c25] bg-[#11110f] p-3">
-        {[78, 64, 48, 36].map((width, index) => (
-          <div key={index} className="flex items-center gap-2">
-            <div className="h-2 bg-[#d8b46a]/80" style={{ width: `${width}%` }} />
-            <div className="h-2 flex-1 bg-[#2f2c25]" />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (type === "line_chart" || type === "timeline") {
-    return (
-      <div className="relative h-full min-h-[96px] overflow-hidden border border-[#2f2c25] bg-[#11110f] p-3">
-        <div className="absolute left-3 right-3 top-1/2 h-px bg-[#2f2c25]" />
-        <svg viewBox="0 0 240 90" className="h-full w-full" aria-hidden="true">
-          <polyline fill="none" stroke="#d8b46a" strokeWidth="4" points="4,70 46,52 88,58 130,28 172,38 232,16" />
-        </svg>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-full min-h-[96px] items-end gap-2 border border-[#2f2c25] bg-[#11110f] p-3">
-      {[46, 72, 38, 84, 58, 66].map((height, index) => (
-        <div key={index} className="flex-1 bg-[#d8b46a]/80" style={{ height: `${height}%` }} />
-      ))}
-    </div>
   );
 }
 
