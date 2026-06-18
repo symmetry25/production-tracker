@@ -1,9 +1,19 @@
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { getDashboardStats } from "@/lib/dashboard-data";
+import { getDashboardStats, type DashboardStats } from "@/lib/dashboard-data";
 
 export async function GET(request: Request) {
-  const session = await auth();
+  return getOverviewReport(request, { auth, getDashboardStats });
+}
+
+export async function getOverviewReport(
+  request: Request,
+  deps: {
+    auth: typeof auth;
+    getDashboardStats: (projectId: string) => Promise<DashboardStats>;
+  },
+) {
+  const session = await deps.auth();
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
@@ -17,7 +27,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const stats = await getDashboardStats(projectId);
+    const stats = await deps.getDashboardStats(projectId);
     return ok({
       counts: stats.counts,
       shotStatus: stats.shotStatus,

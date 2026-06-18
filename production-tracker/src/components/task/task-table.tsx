@@ -6,6 +6,7 @@ import { useMemo, useState, useTransition } from "react";
 import { DependencyType } from "@/generated/prisma/enums";
 import type { TaskStatus } from "@/generated/prisma/enums";
 
+import { downloadCsv } from "@/lib/csv";
 import { STATUS_COLORS } from "@/lib/status-colors";
 import type { TaskTableItem } from "@/lib/task-data";
 
@@ -129,6 +130,16 @@ export function TaskTable({ tasks }: { tasks: TaskTableItem[] }) {
         <SummaryCell label="Task Budget" value={`$${summary.totalBudget.toLocaleString()}`} />
         <SummaryCell label="Logged Cost" value={`$${summary.totalActual.toLocaleString()}`} tone={summary.totalActual > summary.totalBudget ? "danger" : "normal"} />
         <SummaryCell label="Risk Items" value={summary.blocked.toString()} tone={summary.blocked > 0 ? "danger" : "normal"} />
+      </div>
+
+      <div className="mb-3 flex justify-end">
+        <button
+          type="button"
+          onClick={() => downloadCsv("task-status-report.csv", buildTaskCsvRows(tasks))}
+          className="h-9 border border-[#34322b] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
+        >
+          Export CSV
+        </button>
       </div>
 
       <div className="overflow-hidden border border-[#34322b] bg-[#181713]">
@@ -434,4 +445,43 @@ function priorityLabel(priority: number) {
 
 function toDateInputValue(value: string | null): string {
   return value ? value.slice(0, 10) : "";
+}
+
+function buildTaskCsvRows(tasks: TaskTableItem[]) {
+  return [
+    [
+      "source_type",
+      "source",
+      "task",
+      "status",
+      "assignees",
+      "start_date",
+      "due_date",
+      "duration_days",
+      "time_logged_days",
+      "estimated_cost",
+      "calculated_cost",
+      "over_budget",
+      "predecessors",
+      "versions",
+      "notes",
+    ],
+    ...tasks.map((task) => [
+      task.context.kind,
+      task.context.label,
+      task.name,
+      STATUS_COLORS[task.status].label,
+      task.assignees.map((assignee) => assignee.name).join(" | "),
+      task.startDate?.slice(0, 10) ?? "",
+      task.dueDate?.slice(0, 10) ?? "",
+      task.duration ?? "",
+      task.timeLogged,
+      task.estimatedCost ?? "",
+      task.calculatedCost,
+      task.overBudget ? "yes" : "no",
+      task.predecessors.map((dependency) => `${dependency.contextLabel} / ${dependency.taskName}`).join(" | "),
+      task.versionCount,
+      task.noteCount,
+    ]),
+  ];
 }

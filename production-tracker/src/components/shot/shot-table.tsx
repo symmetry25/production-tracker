@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { TaskStatus } from "@/generated/prisma/enums";
 
+import { downloadCsv } from "@/lib/csv";
 import type { ShotTableItem } from "@/lib/shot-data";
 import { PIPELINE_COLORS, PIPELINE_STEPS, STATUS_COLORS } from "@/lib/status-colors";
 
@@ -98,6 +99,16 @@ export function ShotTable({ shots }: { shots: ShotTableItem[] }) {
   return (
     <div>
       {message ? <div className="mb-3 border border-[#3f3c33] bg-[#181713] px-3 py-2 text-sm text-[#d8b46a]">{message}</div> : null}
+
+      <div className="mb-3 flex justify-end">
+        <button
+          type="button"
+          onClick={() => downloadCsv("shot-status-report.csv", buildShotCsvRows(shots))}
+          className="h-9 border border-[#34322b] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
+        >
+          Export CSV
+        </button>
+      </div>
 
       <div className="overflow-hidden border border-[#34322b] bg-[#181713]">
         <div className="grid grid-cols-[92px_1.15fr_120px_84px_repeat(6,minmax(76px,1fr))] border-b border-[#2a2a28] bg-[#1e1e1c] text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]">
@@ -264,4 +275,20 @@ function groupShotsBySequence(shots: ShotTableItem[]) {
     groups[shot.sequenceCode].push(shot);
     return groups;
   }, {});
+}
+
+function buildShotCsvRows(shots: ShotTableItem[]) {
+  return [
+    ["sequence", "shot", "status", "cut_in", "cut_out", "cut_duration", "description", ...PIPELINE_STEPS.map((step) => `${step}_status`)],
+    ...shots.map((shot) => [
+      shot.sequenceCode,
+      shot.code,
+      STATUS_COLORS[shot.status].label,
+      shot.cutIn ?? "",
+      shot.cutOut ?? "",
+      shot.cutDuration ?? "",
+      shot.description ?? "",
+      ...PIPELINE_STEPS.map((step) => STATUS_COLORS[shot.pipeline[step]?.status ?? "WAITING_TO_START"].label),
+    ]),
+  ];
 }

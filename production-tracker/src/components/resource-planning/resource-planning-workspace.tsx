@@ -85,7 +85,7 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
             }
           />
           <div className="h-[320px] p-4">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
               <LineChart
                 data={activeData.capacity}
                 margin={{ top: 10, right: 18, left: -14, bottom: 0 }}
@@ -337,7 +337,7 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
           />
           <div className="p-4">
             <div className="h-44">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <BarChart data={inspectRows} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid stroke="#2a2a28" vertical={false} />
                   <XAxis dataKey="name" tick={{ fill: "#8f8a7e", fontSize: 10 }} axisLine={false} tickLine={false} interval={0} />
@@ -726,7 +726,7 @@ function CapacityDot(props: { cx?: number; cy?: number; payload?: CapacityWeek; 
 function OverUnderArea({ data }: { data: ResourcePlanningData }) {
   return (
     <div className="h-[286px] p-4">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
         <AreaChart data={data.capacity} margin={{ top: 10, right: 18, left: -18, bottom: 0 }}>
           <CartesianGrid stroke="#2a2a28" vertical={false} />
           <XAxis dataKey="label" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />

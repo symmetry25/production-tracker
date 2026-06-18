@@ -25,7 +25,7 @@ const taskStatuses = ["WAITING_TO_START", "READY_TO_START", "IN_PROGRESS", "PEND
 export function DonutChart({ data }: { data: ChartDatum[] }) {
   return (
     <ChartShell empty={data.length === 0}>
-      <ResponsiveContainer width="100%" height={240}>
+      <ResponsiveContainer width="100%" height={240} minWidth={1} minHeight={1}>
         <PieChart>
           <Pie data={data} dataKey="value" nameKey="name" innerRadius={58} outerRadius={92} paddingAngle={2}>
             {data.map((item) => (
@@ -43,7 +43,7 @@ export function DonutChart({ data }: { data: ChartDatum[] }) {
 export function StackedBarChart({ data }: { data: AssetStatusDatum[] }) {
   return (
     <ChartShell empty={data.length === 0}>
-      <ResponsiveContainer width="100%" height={260}>
+      <ResponsiveContainer width="100%" height={260} minWidth={1} minHeight={1}>
         <BarChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
           <CartesianGrid stroke="#2a2a28" vertical={false} />
           <XAxis dataKey="type" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -61,7 +61,7 @@ export function StackedBarChart({ data }: { data: AssetStatusDatum[] }) {
 export function StackedAreaChart({ data }: { data: TaskStatusTrendDatum[] }) {
   return (
     <ChartShell empty={data.length === 0}>
-      <ResponsiveContainer width="100%" height={260}>
+      <ResponsiveContainer width="100%" height={260} minWidth={1} minHeight={1}>
         <AreaChart data={data} margin={{ top: 10, right: 12, bottom: 0, left: -20 }}>
           <CartesianGrid stroke="#2a2a28" vertical={false} />
           <XAxis dataKey="department" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -79,7 +79,7 @@ export function StackedAreaChart({ data }: { data: TaskStatusTrendDatum[] }) {
 export function VelocityChart({ data }: { data: VelocityDatum[] }) {
   return (
     <ChartShell empty={data.length === 0}>
-      <ResponsiveContainer width="100%" height={220}>
+      <ResponsiveContainer width="100%" height={220} minWidth={1} minHeight={1}>
         <LineChart data={data} margin={{ top: 10, right: 12, bottom: 0, left: -20 }}>
           <CartesianGrid stroke="#2a2a28" vertical={false} />
           <XAxis dataKey="week" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />

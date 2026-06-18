@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { TaskStatus } from "@/generated/prisma/enums";
 
+import { downloadCsv } from "@/lib/csv";
 import type { AssetTableItem } from "@/lib/asset-data";
 import type { ShotTableItem } from "@/lib/shot-data";
 import { ASSET_TYPE_LABELS, PIPELINE_COLORS, PIPELINE_STEPS, STATUS_COLORS } from "@/lib/status-colors";
@@ -139,6 +140,17 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
   return (
     <div>
       {message ? <div className="mb-3 border border-[#3f3c33] bg-[#181713] px-3 py-2 text-sm text-[#d8b46a]">{message}</div> : null}
+
+      <div className="mb-3 flex justify-end">
+        <button
+          type="button"
+          onClick={() => downloadCsv("asset-status-report.csv", buildAssetCsvRows(assets))}
+          className="h-9 border border-[#34322b] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
+        >
+          Export CSV
+        </button>
+      </div>
+
       <div className="overflow-hidden border border-[#34322b] bg-[#181713]">
         <div className="grid grid-cols-[110px_1.15fr_120px_180px_repeat(6,minmax(76px,1fr))] border-b border-[#2a2a28] bg-[#1e1e1c] text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]">
           <HeaderCell>Preview</HeaderCell>
@@ -393,4 +405,18 @@ function groupAssetsByType(assets: AssetTableItem[]) {
     groups[asset.type].push(asset);
     return groups;
   }, {});
+}
+
+function buildAssetCsvRows(assets: AssetTableItem[]) {
+  return [
+    ["type", "asset", "status", "linked_shots", "description", ...PIPELINE_STEPS.map((step) => `${step}_status`)],
+    ...assets.map((asset) => [
+      ASSET_TYPE_LABELS[asset.type],
+      asset.name,
+      STATUS_COLORS[asset.status].label,
+      asset.linkedShots.map((shot) => shot.code).join(" | "),
+      asset.description ?? "",
+      ...PIPELINE_STEPS.map((step) => STATUS_COLORS[asset.pipeline[step]?.status ?? "WAITING_TO_START"].label),
+    ]),
+  ];
 }

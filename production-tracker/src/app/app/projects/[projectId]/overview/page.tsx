@@ -1,4 +1,5 @@
 import { DashboardOverview } from "@/components/dashboard/dashboard-overview";
+import { ReportExportButton } from "@/components/dashboard/report-export-button";
 import { getDashboardStats, type DashboardStats } from "@/lib/dashboard-data";
 import { getDictionary, getLocale } from "@/lib/i18n";
 
@@ -35,7 +36,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
             {stats.project.description ?? t.fallbackDescription}
           </p>
         </div>
-        <button className="h-10 border border-[#3f3c33] px-3 text-xs text-[#aaa599]">{t.report}</button>
+        <ReportExportButton stats={stats} label={t.report} />
       </div>
 
       <DashboardOverview stats={stats} />
