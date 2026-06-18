@@ -69,6 +69,9 @@ model User {
   assignments      Assignment[]
   uploadedVersions Version[]
   notes            Note[]
+  scores           UserScore[]
+  userGrade        UserGrade?
+  userSkills       UserSkill[]
 }
 
 model Project {
@@ -91,6 +94,8 @@ model Project {
   phases        Phase[]
   workOrders    WorkOrder[]
   calExceptions CalendarException[]
+  entityTypes   EntityType[]
+  dashboards    Dashboard[]
 }
 
 model Sequence {
@@ -266,4 +271,194 @@ model CalendarException {
   projectId     String?
   project       Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   inheritedFrom String?
+}
+
+model EntityType {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  icon        String?
+  color       String?
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  isTemplate  Boolean  @default(false)
+  industry    String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  fields  FieldDef[]
+  records EntityRecord[]
+}
+
+model FieldDef {
+  id           String     @id @default(cuid())
+  entityTypeId String
+  entityType   EntityType @relation(fields: [entityTypeId], references: [id], onDelete: Cascade)
+  name         String
+  key          String
+  type         String
+  required     Boolean    @default(false)
+  defaultValue Json?
+  options      Json?
+  config       Json?
+  order        Int        @default(0)
+  width        Int?
+  hidden       Boolean    @default(false)
+  readOnly     Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+
+  @@unique([entityTypeId, key])
+}
+
+model EntityRecord {
+  id           String     @id @default(cuid())
+  entityTypeId String
+  entityType   EntityType @relation(fields: [entityTypeId], references: [id], onDelete: Cascade)
+  data         Json
+  autoNumber   Int?
+  createdById  String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  files   RecordFile[]
+  notes   RecordNote[]
+  aiScans AiScan[]
+}
+
+model RecordFile {
+  id         String       @id @default(cuid())
+  recordId   String
+  record     EntityRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  filename   String
+  fileUrl    String
+  fileType   String
+  fileSize   Int
+  uploadedAt DateTime     @default(now())
+}
+
+model RecordNote {
+  id        String       @id @default(cuid())
+  recordId  String
+  record    EntityRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  content   String
+  authorId  String
+  createdAt DateTime     @default(now())
+}
+
+model AiScan {
+  id           String        @id @default(cuid())
+  recordId     String?
+  record       EntityRecord? @relation(fields: [recordId], references: [id], onDelete: SetNull)
+  entityTypeId String?
+  mode         String
+  imageUrl     String
+  rawResult    Json
+  appliedData  Json?
+  confidence   Float?
+  createdAt    DateTime      @default(now())
+}
+
+model Dashboard {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdById String
+  isShared    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widgets DashboardWidget[]
+}
+
+model DashboardWidget {
+  id          String    @id @default(cuid())
+  dashboardId String
+  dashboard   Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  config      Json
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+}
+
+model ScoreDimension {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  weight      Float    @default(1.0)
+  maxScore    Int      @default(100)
+  minScore    Int      @default(0)
+  category    String?
+  projectId   String?
+  createdAt   DateTime @default(now())
+
+  scores UserScore[]
+}
+
+model UserScore {
+  id          String         @id @default(cuid())
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dimensionId String
+  dimension   ScoreDimension @relation(fields: [dimensionId], references: [id], onDelete: Cascade)
+  score       Float
+  comment     String?
+  scoredById  String
+  scoredAt    DateTime       @default(now())
+  period      String
+
+  @@unique([userId, dimensionId, period])
+}
+
+model GradeLevel {
+  id         String   @id @default(cuid())
+  name       String
+  code       String
+  department String?
+  minScore   Float
+  maxScore   Float
+  salaryMin  Float?
+  salaryMax  Float?
+  color      String
+  benefits   String[]
+  createdAt  DateTime @default(now())
+
+  users UserGrade[]
+}
+
+model UserGrade {
+  id            String     @id @default(cuid())
+  userId        String     @unique
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gradeId       String
+  grade         GradeLevel @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  effectiveDate DateTime
+  expireDate    DateTime?
+  note          String?
+  setById       String
+  createdAt     DateTime   @default(now())
+}
+
+model Skill {
+  id        String   @id @default(cuid())
+  name      String
+  category  String
+  createdAt DateTime @default(now())
+
+  userSkills UserSkill[]
+}
+
+model UserSkill {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillId    String
+  skill      Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  level      Int
+  verifiedBy String?
+  verifiedAt DateTime?
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, skillId])
 }

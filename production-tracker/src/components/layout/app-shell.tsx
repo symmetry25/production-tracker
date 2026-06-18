@@ -26,6 +26,9 @@ export function AppShell({ session, locale, dictionary, children }: AppShellProp
     { key: "myTasks", href: "/app/my-tasks" },
     { key: "media", href: "/app/media" },
     { key: "data", href: "/app/custom-data" },
+    { key: "entities", href: "/app/entity-types" },
+    { key: "dashboards", href: "/app/dashboards" },
+    { key: "ai", href: "/app/ai/recognize" },
     { key: "projects", href: "/app/projects" },
     { key: "people", href: "/app/admin/users" },
     { key: "shots", href: isDemoMode ? `${demoProjectBase}/shots` : "/app/projects" },
@@ -42,6 +45,10 @@ export function AppShell({ session, locale, dictionary, children }: AppShellProp
     { key: "resource", href: "/app/resource-planning" },
     { key: "review", href: isDemoMode ? `${demoProjectBase}/media` : "/app" },
     { key: "customData", href: "/app/custom-data" },
+    { key: "entityTypes", href: "/app/entity-types" },
+    { key: "dashboards", href: "/app/dashboards" },
+    { key: "aiRecognition", href: "/app/ai/recognize" },
+    { key: "scorecard", href: "/app/users/demo-user-vfx/scorecard" },
     { key: "calendar", href: "/app" },
   ];
   const commandItems: CommandItem[] = [
@@ -49,8 +56,12 @@ export function AppShell({ session, locale, dictionary, children }: AppShellProp
     { title: t.topNav.myTasks, subtitle: "My assignments / 我的任务", href: "/app/my-tasks", keywords: ["task", "assignment", "我的任务", "待办"], shortcut: "g m" },
     { title: t.topNav.media, subtitle: "Global media review / 媒体审阅", href: "/app/media", keywords: ["media", "review", "version", "媒体", "版本"], shortcut: "g v" },
     { title: t.topNav.data, subtitle: "Universal entry and templates / 通用录入模板", href: "/app/custom-data", keywords: ["data", "schema", "excel", "ai", "template", "数据", "录入", "模板", "字段"], shortcut: "g d" },
+    { title: t.topNav.entities, subtitle: "Dynamic entity types / 动态实体字段", href: "/app/entity-types", keywords: ["entity", "schema", "field", "实体", "字段"], shortcut: "g e" },
+    { title: t.topNav.dashboards, subtitle: "Custom dashboards / 自定义可视化", href: "/app/dashboards", keywords: ["dashboard", "chart", "visualization", "仪表盘", "图表"], shortcut: "g b" },
+    { title: t.topNav.ai, subtitle: "AI document recognition / AI 单据识别", href: "/app/ai/recognize", keywords: ["ai", "ocr", "invoice", "识别", "发票", "手写"], shortcut: "g x" },
     { title: t.topNav.projects, subtitle: "Project grid / 项目网格", href: "/app/projects", keywords: ["project", "grid", "项目", "项目网格"], shortcut: "g p" },
     { title: t.topNav.people, subtitle: "Users and departments / 人员管理", href: "/app/admin/users", keywords: ["people", "users", "crew", "人员", "部门"], shortcut: "g u" },
+    { title: "人员评分卡", subtitle: "Grade, trust score, skill matrix / 等级信任评分技能矩阵", href: "/app/users/demo-user-vfx/scorecard", keywords: ["score", "grade", "skill", "评分", "等级", "技能"], shortcut: "g l" },
     { title: t.topNav.resources, subtitle: "Resource planning / 人天资源规划", href: "/app/resource-planning", keywords: ["resource", "planning", "capacity", "资源", "排期", "人天"], shortcut: "g r" },
     { title: t.sideNav.overview, subtitle: "Demo project overview / 项目总览", href: `${demoProjectBase}/overview`, keywords: ["overview", "dashboard", "总览", "看板"], shortcut: "g o" },
     { title: t.topNav.shots, subtitle: "Shot pipeline / 镜头流水线", href: `${demoProjectBase}/shots`, keywords: ["shot", "sequence", "镜头", "序列"], shortcut: "g s" },
@@ -75,6 +86,9 @@ export function AppShell({ session, locale, dictionary, children }: AppShellProp
           "g m": "/app/my-tasks",
           "g v": "/app/media",
           "g d": "/app/custom-data",
+          "g e": "/app/entity-types",
+          "g b": "/app/dashboards",
+          "g x": "/app/ai/recognize",
           "g p": "/app/projects",
           "g u": "/app/admin/users",
           "g r": "/app/resource-planning",
@@ -82,6 +96,7 @@ export function AppShell({ session, locale, dictionary, children }: AppShellProp
           "g s": `${demoProjectBase}/shots`,
           "g a": `${demoProjectBase}/assets`,
           "g t": `${demoProjectBase}/tasks`,
+          "g l": "/app/users/demo-user-vfx/scorecard",
         }}
       />
       <header className="flex h-14 items-center justify-between border-b border-[#34322b] bg-[#181713] px-6">
