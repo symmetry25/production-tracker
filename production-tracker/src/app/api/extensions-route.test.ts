@@ -17,7 +17,7 @@ import { resetScoringForTests } from "@/lib/scoring";
 import { POST as recognizeDocument } from "./ai/recognize/route";
 import { GET as listRecognizedScans } from "./ai/scans/route";
 import { PATCH as updateCalendarException } from "./calendar-exceptions/[exceptionId]/route";
-import { DELETE as deleteWidget } from "./dashboards/[dashboardId]/widgets/[widgetId]/route";
+import { DELETE as deleteWidget, PATCH as updateWidget } from "./dashboards/[dashboardId]/widgets/[widgetId]/route";
 import { POST as updateDashboardLayout } from "./dashboards/[dashboardId]/widgets/layout/route";
 import { POST as createWidget } from "./dashboards/[dashboardId]/widgets/route";
 import { POST as readWidgetData } from "./dashboards/widget-data/route";
@@ -606,6 +606,42 @@ describe("extension API routes", () => {
         expect.objectContaining({ id: "widget-vendors", config: expect.objectContaining({ layout: { x: 0, y: 3, w: 8, h: 5 } }) }),
       ]),
     );
+  });
+
+  it("updates dashboard widget configuration", async () => {
+    const response = await updateWidget(
+      new Request("http://app.test/api/dashboards/dashboard-producer-demo/widgets/widget-vendors", {
+        method: "PATCH",
+        body: JSON.stringify({
+          title: "供应商成本漏斗",
+          type: "funnel",
+          dataSource: {
+            entityTypeId: "retail-purchase-order",
+            groupBy: "supplier",
+            aggregation: { field: "total_amount", fn: "avg" },
+            sortDir: "desc",
+            limit: 5,
+          },
+        }),
+      }),
+      { params: Promise.resolve({ dashboardId: "dashboard-producer-demo", widgetId: "widget-vendors" }) },
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        id: "widget-vendors",
+        config: {
+          title: "供应商成本漏斗",
+          type: "funnel",
+          dataSource: {
+            groupBy: "supplier",
+            aggregation: { field: "total_amount", fn: "avg" },
+            limit: 5,
+          },
+        },
+      },
+      error: null,
+    });
   });
 
   it("updates a user score and returns the new scorecard", async () => {

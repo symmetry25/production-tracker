@@ -3,49 +3,31 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { aggregationOptions, chartNeedsGroupBy, chartTypes, getGroupFields, getNumericFields, type AggregationFn } from "@/components/dashboard-builder/widget-options";
 import type { EntityTypeItem } from "@/lib/custom-data-store";
 import type { WidgetType } from "@/lib/dashboard-builder";
-
-const chartTypes: { value: WidgetType; label: string; needsGroupBy: boolean }[] = [
-  { value: "bar_chart", label: "柱状图", needsGroupBy: true },
-  { value: "line_chart", label: "折线图", needsGroupBy: true },
-  { value: "pie_chart", label: "环形图", needsGroupBy: true },
-  { value: "progress_bar", label: "进度条", needsGroupBy: true },
-  { value: "funnel", label: "漏斗图", needsGroupBy: true },
-  { value: "table", label: "数据表", needsGroupBy: true },
-  { value: "metric_card", label: "指标卡", needsGroupBy: false },
-  { value: "gauge", label: "仪表盘", needsGroupBy: false },
-];
-
-const aggregationOptions = [
-  ["sum", "合计"],
-  ["avg", "平均"],
-  ["count", "计数"],
-  ["max", "最大"],
-  ["min", "最小"],
-] as const;
 
 export function WidgetAddPanel({ dashboardId, entities }: { dashboardId: string; entities: EntityTypeItem[] }) {
   const router = useRouter();
   const defaultEntity = entities[0];
-  const numericFields = useMemo(() => defaultEntity?.fields.filter((field) => ["number", "currency", "percentage", "score", "rating", "formula"].includes(field.type)) ?? [], [defaultEntity]);
+  const numericFields = useMemo(() => getNumericFields(defaultEntity?.fields ?? []), [defaultEntity]);
   const [entityId, setEntityId] = useState(defaultEntity?.id ?? "");
   const activeEntity = entities.find((entity) => entity.id === entityId) ?? defaultEntity;
-  const activeNumericFields = activeEntity?.fields.filter((field) => ["number", "currency", "percentage", "score", "rating", "formula"].includes(field.type)) ?? numericFields;
-  const groupFields = activeEntity?.fields.filter((field) => ["text", "select", "status", "user"].includes(field.type)) ?? [];
+  const activeNumericFields = activeEntity ? getNumericFields(activeEntity.fields) : numericFields;
+  const groupFields = activeEntity ? getGroupFields(activeEntity.fields) : [];
   const [title, setTitle] = useState("新增聚合图表");
   const [type, setType] = useState<WidgetType>("bar_chart");
   const [groupBy, setGroupBy] = useState(groupFields[0]?.key ?? "");
   const [field, setField] = useState(activeNumericFields[0]?.key ?? "");
-  const [aggregation, setAggregation] = useState<(typeof aggregationOptions)[number][0]>("sum");
+  const [aggregation, setAggregation] = useState<AggregationFn>("sum");
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
-  const selectedType = chartTypes.find((chartType) => chartType.value === type) ?? chartTypes[0];
+  const needsGroupBy = chartNeedsGroupBy(type);
 
   function changeEntity(nextEntityId: string) {
     const nextEntity = entities.find((entity) => entity.id === nextEntityId) ?? defaultEntity;
     setEntityId(nextEntityId);
-    setGroupBy(nextEntity?.fields.find((fieldItem) => ["text", "select", "status", "user"].includes(fieldItem.type))?.key ?? "");
-    setField(nextEntity?.fields.find((fieldItem) => ["number", "currency", "percentage", "score", "rating", "formula"].includes(fieldItem.type))?.key ?? "");
+    setGroupBy(getGroupFields(nextEntity?.fields ?? [])[0]?.key ?? "");
+    setField(getNumericFields(nextEntity?.fields ?? [])[0]?.key ?? "");
   }
 
   async function addWidget(event: React.FormEvent<HTMLFormElement>) {
@@ -53,7 +35,7 @@ export function WidgetAddPanel({ dashboardId, entities }: { dashboardId: string;
     setStatus("saving");
     const dataSource = {
       entityTypeId: entityId,
-      ...(selectedType.needsGroupBy && groupBy ? { groupBy } : {}),
+      ...(needsGroupBy && groupBy ? { groupBy } : {}),
       aggregation: { field, fn: aggregation },
       sortDir: "desc",
       limit: 8,
@@ -92,9 +74,9 @@ export function WidgetAddPanel({ dashboardId, entities }: { dashboardId: string;
         <Input label="标题" value={title} onChange={setTitle} />
         <Select label="图表" value={type} onChange={(value) => setType(value as WidgetType)} options={chartTypes.map((chartType) => [chartType.value, chartType.label])} />
         <Select label="实体" value={entityId} onChange={changeEntity} options={entities.map((entity) => [entity.id, entity.name])} />
-        <Select label="分组" value={groupBy} onChange={setGroupBy} options={groupFields.map((fieldItem) => [fieldItem.key, fieldItem.name])} disabled={!selectedType.needsGroupBy} />
+        <Select label="分组" value={groupBy} onChange={setGroupBy} options={groupFields.map((fieldItem) => [fieldItem.key, fieldItem.name])} disabled={!needsGroupBy} />
         <Select label="数值" value={field} onChange={setField} options={activeNumericFields.map((fieldItem) => [fieldItem.key, fieldItem.name])} />
-        <Select label="聚合" value={aggregation} onChange={(value) => setAggregation(value as typeof aggregation)} options={aggregationOptions.map(([value, label]) => [value, label])} />
+        <Select label="聚合" value={aggregation} onChange={(value) => setAggregation(value as AggregationFn)} options={aggregationOptions.map((option) => [option.value, option.label])} />
       </div>
       {status === "done" ? <p className="mt-3 text-xs text-[#83d6ae]">Widget 已添加。</p> : null}
       {status === "error" ? <p className="mt-3 text-xs text-[#ff9c8c]">添加失败，请检查字段映射。</p> : null}

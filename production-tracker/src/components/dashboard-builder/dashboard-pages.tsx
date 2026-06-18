@@ -54,7 +54,7 @@ export function DashboardEditor({ dashboard, entities }: { dashboard: DashboardI
     <div className="space-y-5">
       <PageHeader eyebrow="Edit dashboard" title={`${dashboard.name} 构建器`} description="左侧是 Widget 库，中间是可拖拽画布，右侧是布局与数据映射。保存后仪表盘页面会按同一套 12 列布局渲染。" />
       <WidgetAddPanel dashboardId={dashboard.id} entities={entities} />
-      <DashboardLayoutEditor key={`${dashboard.updatedAt}-${dashboard.widgets.length}`} dashboard={dashboard} />
+      <DashboardLayoutEditor key={`${dashboard.updatedAt}-${dashboard.widgets.length}`} dashboard={dashboard} entities={entities} />
     </div>
   );
 }
