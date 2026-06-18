@@ -35,11 +35,19 @@ const session = { user: { id: "demo-admin", name: "Admin User", role: "ADMIN" } 
 
 describe("extension API routes", () => {
   const originalDatabaseUrl = process.env.DATABASE_URL;
+  const originalOpenAiKey = process.env.OPENAI_API_KEY;
+  const originalAnthropicKey = process.env.ANTHROPIC_API_KEY;
+  const originalAiProvider = process.env.AI_PROVIDER;
+  const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
     vi.mocked(auth).mockResolvedValue(session as never);
     vi.mocked(getPrisma).mockReset();
     process.env.DATABASE_URL = "";
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.AI_PROVIDER;
+    globalThis.fetch = originalFetch;
     resetCustomDataStoreForTests();
     resetAiRecognitionForTests();
     resetDashboardsForTests();
@@ -48,6 +56,10 @@ describe("extension API routes", () => {
 
   afterEach(() => {
     process.env.DATABASE_URL = originalDatabaseUrl;
+    process.env.OPENAI_API_KEY = originalOpenAiKey;
+    process.env.ANTHROPIC_API_KEY = originalAnthropicKey;
+    process.env.AI_PROVIDER = originalAiProvider;
+    globalThis.fetch = originalFetch;
   });
 
   it("installs an industry template as a project entity type", async () => {
@@ -370,6 +382,73 @@ describe("extension API routes", () => {
         provider: "mock",
         result: {
           invoice_number: "INV-2026-0618",
+        },
+      },
+      error: null,
+    });
+  });
+
+  it("uses OpenAI recognition when an OpenAI API key is configured", async () => {
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    process.env.AI_PROVIDER = "openai";
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          output_text: JSON.stringify({ invoice_number: "INV-OPENAI-1", total: 12345, confidence: 0.94 }),
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const response = await recognizeDocument(
+      new Request("http://app.test/api/ai/recognize", {
+        method: "POST",
+        body: JSON.stringify({ mode: "invoice", imageBase64: "aGVsbG8=", imageType: "image/png" }),
+      }),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        provider: "openai",
+        result: {
+          invoice_number: "INV-OPENAI-1",
+          total: 12345,
+        },
+      },
+      error: null,
+    });
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "https://api.openai.com/v1/responses",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer test-openai-key" }),
+      }),
+    );
+  });
+
+  it("falls back to mock recognition when a configured provider fails", async () => {
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    process.env.AI_PROVIDER = "openai";
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: "model unavailable" } }), {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const response = await recognizeDocument(
+      new Request("http://app.test/api/ai/recognize", {
+        method: "POST",
+        body: JSON.stringify({ mode: "invoice", imageBase64: "aGVsbG8=", imageType: "image/png" }),
+      }),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        provider: "mock",
+        result: {
+          invoice_number: "INV-2026-0618",
+          provider_error: "model unavailable",
         },
       },
       error: null,

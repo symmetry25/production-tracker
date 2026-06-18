@@ -58,9 +58,31 @@ export async function recognizeDocument(input: {
   entityTypeId?: string | null;
   recordId?: string | null;
 }) {
-  const provider = getProvider();
-  const rawResult = mockResult(input.mode, input.fields ?? []);
+  const selectedProvider = getProvider();
+  const prompt = buildRecognitionPrompt(input.mode, input.fields);
+  let provider = selectedProvider;
+  let rawResult: Record<string, unknown>;
+  let providerError: string | null = null;
+
+  if (selectedProvider === "mock") {
+    rawResult = mockResult(input.mode, input.fields ?? []);
+  } else {
+    try {
+      rawResult = await recognizeWithProvider(selectedProvider, input, prompt);
+    } catch (error) {
+      provider = "mock";
+      providerError = error instanceof Error ? error.message : "AI provider request failed.";
+      rawResult = { ...mockResult(input.mode, input.fields ?? []), provider_error: providerError };
+    }
+  }
+
   const imageUrl = input.imageBase64 ? `inline:${input.imageType ?? "application/octet-stream"}` : "mock://sample-document";
+  const note =
+    provider === "mock"
+      ? providerError
+        ? `AI Provider 调用失败，已返回可测试的模拟识别结果：${providerError}`
+        : "未配置 AI API Key，当前返回可测试的模拟识别结果。"
+      : `${provider === "openai" ? "OpenAI" : "Anthropic"} 识别完成，结果已保存到扫描历史。`;
 
   if (shouldUsePersistentStore()) {
     const scan = await createAiScanAsync({
@@ -74,10 +96,10 @@ export async function recognizeDocument(input: {
     });
     return {
       scan,
-      prompt: buildRecognitionPrompt(input.mode, input.fields),
+      prompt,
       result: rawResult,
       provider,
-      note: provider === "mock" ? "未配置 AI API Key，当前返回可测试的模拟识别结果。" : "接口已按 AI Provider 形态返回，生产环境可在此接入真实模型调用。",
+      note,
     };
   }
 
@@ -97,10 +119,10 @@ export async function recognizeDocument(input: {
 
   return {
     scan,
-    prompt: buildRecognitionPrompt(input.mode, input.fields),
+    prompt,
     result: rawResult,
     provider,
-    note: provider === "mock" ? "未配置 AI API Key，当前返回可测试的模拟识别结果。" : "接口已按 AI Provider 形态返回，生产环境可在此接入真实模型调用。",
+    note,
   };
 }
 
@@ -260,9 +282,191 @@ function sampleValueForField(field: FieldDefinition) {
 }
 
 function getProvider(): AiScanItem["provider"] {
-  if (process.env.AI_PROVIDER === "openai" && process.env.OPENAI_API_KEY) return "openai";
+  if (process.env.AI_PROVIDER === "openai") return process.env.OPENAI_API_KEY ? "openai" : "mock";
+  if (process.env.AI_PROVIDER === "anthropic") return process.env.ANTHROPIC_API_KEY ? "anthropic" : "mock";
+  if (process.env.OPENAI_API_KEY) return "openai";
   if (process.env.ANTHROPIC_API_KEY) return "anthropic";
   return "mock";
+}
+
+async function recognizeWithProvider(
+  provider: Exclude<AiScanItem["provider"], "mock">,
+  input: {
+    imageBase64?: string;
+    imageType?: string;
+    mode: AiRecognitionMode;
+    fields?: FieldDefinition[];
+    entityTypeId?: string | null;
+    recordId?: string | null;
+  },
+  prompt: string,
+) {
+  const text = provider === "openai" ? await callOpenAi(input, prompt) : await callAnthropic(input, prompt);
+  const parsed = parseJsonResponse(text);
+  if (!isPlainRecord(parsed)) {
+    return { value: parsed, confidence: 0.75 };
+  }
+  return parsed;
+}
+
+async function callOpenAi(input: { imageBase64?: string; imageType?: string }, prompt: string) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured.");
+
+  const content: OpenAiContentBlock[] = [{ type: "input_text", text: prompt }];
+  if (input.imageBase64) {
+    if (input.imageType === "application/pdf") {
+      content.unshift({
+        type: "input_file",
+        filename: "document.pdf",
+        file_data: toDataUrl(input.imageType, input.imageBase64),
+      });
+    } else {
+      content.unshift({
+        type: "input_image",
+        image_url: toDataUrl(input.imageType ?? "image/jpeg", input.imageBase64),
+        detail: "auto",
+      });
+    }
+  }
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+      input: [{ role: "user", content }],
+      max_output_tokens: 2000,
+      store: false,
+    }),
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(readProviderError(body, "OpenAI recognition failed."));
+
+  const text = extractOpenAiText(body);
+  if (!text) throw new Error("OpenAI returned an empty recognition result.");
+  return text;
+}
+
+async function callAnthropic(input: { imageBase64?: string; imageType?: string }, prompt: string) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured.");
+
+  const content: AnthropicContentBlock[] = [];
+  if (input.imageBase64) {
+    if (input.imageType === "application/pdf") {
+      content.push({
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: input.imageBase64 },
+      });
+    } else {
+      content.push({
+        type: "image",
+        source: { type: "base64", media_type: normalizeAnthropicImageType(input.imageType), data: input.imageBase64 },
+      });
+    }
+  }
+  content.push({ type: "text", text: prompt });
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5",
+      max_tokens: 2000,
+      messages: [{ role: "user", content }],
+    }),
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(readProviderError(body, "Anthropic recognition failed."));
+
+  const text = extractAnthropicText(body);
+  if (!text) throw new Error("Anthropic returned an empty recognition result.");
+  return text;
+}
+
+type OpenAiContentBlock =
+  | { type: "input_text"; text: string }
+  | { type: "input_image"; image_url: string; detail: "auto" }
+  | { type: "input_file"; filename: string; file_data: string };
+
+type AnthropicContentBlock =
+  | { type: "text"; text: string }
+  | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
+  | { type: "document"; source: { type: "base64"; media_type: "application/pdf"; data: string } };
+
+function toDataUrl(mediaType: string, data: string) {
+  return data.startsWith("data:") ? data : `data:${mediaType};base64,${data}`;
+}
+
+function normalizeAnthropicImageType(type: string | undefined) {
+  if (type === "image/png" || type === "image/gif" || type === "image/webp") return type;
+  return "image/jpeg";
+}
+
+function extractOpenAiText(body: unknown) {
+  if (!isPlainRecord(body)) return "";
+  if (typeof body.output_text === "string") return body.output_text;
+
+  const output = Array.isArray(body.output) ? body.output : [];
+  return output
+    .flatMap((item) => (isPlainRecord(item) && Array.isArray(item.content) ? item.content : []))
+    .map((content) => {
+      if (!isPlainRecord(content)) return "";
+      if (typeof content.text === "string") return content.text;
+      if (typeof content.output_text === "string") return content.output_text;
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+function extractAnthropicText(body: unknown) {
+  if (!isPlainRecord(body) || !Array.isArray(body.content)) return "";
+  return body.content
+    .map((content) => (isPlainRecord(content) && content.type === "text" && typeof content.text === "string" ? content.text : ""))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function parseJsonResponse(text: string) {
+  const clean = text.replace(/```json|```/g, "").trim();
+  try {
+    return JSON.parse(clean) as unknown;
+  } catch {
+    const jsonSlice = extractJsonSlice(clean);
+    if (!jsonSlice) throw new Error("识别结果解析失败。");
+    return JSON.parse(jsonSlice) as unknown;
+  }
+}
+
+function extractJsonSlice(text: string) {
+  const objectStart = text.indexOf("{");
+  const objectEnd = text.lastIndexOf("}");
+  if (objectStart >= 0 && objectEnd > objectStart) return text.slice(objectStart, objectEnd + 1);
+
+  const arrayStart = text.indexOf("[");
+  const arrayEnd = text.lastIndexOf("]");
+  if (arrayStart >= 0 && arrayEnd > arrayStart) return text.slice(arrayStart, arrayEnd + 1);
+
+  return null;
+}
+
+function readProviderError(body: unknown, fallback: string) {
+  if (!isPlainRecord(body)) return fallback;
+  const error = body.error;
+  if (isPlainRecord(error) && typeof error.message === "string") return error.message;
+  if (typeof body.message === "string") return body.message;
+  return fallback;
 }
 
 function getState() {
