@@ -3,6 +3,7 @@
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { WidgetAddPanel } from "@/components/dashboard-builder/widget-add-panel";
+import { WidgetActions } from "@/components/dashboard-builder/widget-actions";
 import { PageHeader, Metric } from "@/components/extensions/entity-type-pages";
 import type { EntityTypeItem } from "@/lib/custom-data-store";
 import type { DashboardItem, WidgetConfig } from "@/lib/dashboard-builder";
@@ -67,6 +68,7 @@ export function DashboardEditor({ dashboard, entities }: { dashboard: DashboardI
                 <p className="text-sm font-semibold">{widget.config.title}</p>
                 <p className="mt-2 font-mono text-xs text-[#8f8a7e]">{widget.config.type} · {widget.config.dataSource.entityTypeId}</p>
                 <p className="mt-4 text-xs leading-5 text-[#aaa599]">layout x:{widget.config.layout.x} y:{widget.config.layout.y} w:{widget.config.layout.w} h:{widget.config.layout.h}</p>
+                <WidgetActions dashboardId={dashboard.id} widgetId={widget.id} />
               </div>
             ))}
           </div>

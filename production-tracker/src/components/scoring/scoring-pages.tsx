@@ -4,6 +4,7 @@ import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tool
 
 import { PageHeader, Metric } from "@/components/extensions/entity-type-pages";
 import { ScoreUpdatePanel } from "@/components/scoring/score-update-panel";
+import { SkillUpdatePanel } from "@/components/scoring/skill-update-panel";
 import type { getScoreLeaderboard, getUserScorecard, listSkills } from "@/lib/scoring";
 
 type Scorecard = NonNullable<ReturnType<typeof getUserScorecard>>;
@@ -77,6 +78,7 @@ export function SkillMatrixPageView({ scorecard, skills }: { scorecard: Scorecar
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Skill matrix" title={`${scorecard.user.name} 技能矩阵`} description="技能热力格用于判断人力预算和实际能力是否匹配。API 支持批量更新技能等级。" />
+      <SkillUpdatePanel userId={scorecard.user.id} skills={skills} />
       <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
         {skills.map((skill) => {
           const level = userSkillMap.get(skill.id) ?? 0;

@@ -9,11 +9,16 @@ import { resetDashboardsForTests } from "@/lib/dashboard-builder";
 import { resetScoringForTests } from "@/lib/scoring";
 
 import { POST as recognizeDocument } from "./ai/recognize/route";
+import { DELETE as deleteWidget } from "./dashboards/[dashboardId]/widgets/[widgetId]/route";
+import { POST as createWidget } from "./dashboards/[dashboardId]/widgets/route";
 import { POST as readWidgetData } from "./dashboards/widget-data/route";
+import { POST as addField } from "./entity-types/[id]/fields/route";
 import { POST as previewImport } from "./entity-types/[id]/import/preview/route";
 import { POST as createRecord } from "./entity-types/[id]/records/route";
+import { DELETE as deleteRecord, PATCH as updateRecord } from "./records/[recordId]/route";
 import { POST as updateUserScore } from "./scores/users/[userId]/route";
 import { POST as installTemplate } from "./templates/[templateId]/install/route";
+import { PATCH as updateUserSkills } from "./users/[userId]/skills/route";
 
 const session = { user: { id: "demo-admin", name: "Admin User", role: "ADMIN" } };
 
@@ -60,6 +65,64 @@ describe("extension API routes", () => {
           po_number: "PO-2000",
           total_amount: 4500,
         },
+      },
+      error: null,
+    });
+  });
+
+  it("adds fields and exposes the new schema member", async () => {
+    const response = await addField(
+      new Request("http://app.test/api/entity-types/retail-purchase-order/fields", {
+        method: "POST",
+        body: JSON.stringify({ name: "审计备注", key: "audit_note", type: "text", required: false, width: 180 }),
+      }),
+      { params: Promise.resolve({ id: "retail-purchase-order" }) },
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        name: "审计备注",
+        key: "audit_note",
+        type: "text",
+      },
+      error: null,
+    });
+  });
+
+  it("updates and deletes dynamic records through the record endpoint", async () => {
+    const createResponse = await createRecord(
+      new Request("http://app.test/api/entity-types/retail-purchase-order/records", {
+        method: "POST",
+        body: JSON.stringify({ data: { po_number: "PO-2002", supplier: "更新供应商", unit_cost: 200, quantity: 2, status: "pending" } }),
+      }),
+      { params: Promise.resolve({ id: "retail-purchase-order" }) },
+    );
+    const created = await createResponse.json();
+    const recordId = created.data.id;
+
+    const updateResponse = await updateRecord(
+      new Request(`http://app.test/api/records/${recordId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ data: { status: "approved" } }),
+      }),
+      { params: Promise.resolve({ recordId }) },
+    );
+
+    await expect(updateResponse.json()).resolves.toMatchObject({
+      data: {
+        id: recordId,
+        data: {
+          status: "approved",
+        },
+      },
+      error: null,
+    });
+
+    const deleteResponse = await deleteRecord(new Request(`http://app.test/api/records/${recordId}`, { method: "DELETE" }), { params: Promise.resolve({ recordId }) });
+
+    await expect(deleteResponse.json()).resolves.toMatchObject({
+      data: {
+        id: recordId,
       },
       error: null,
     });
@@ -132,6 +195,39 @@ describe("extension API routes", () => {
     expect(body.data.rows).toEqual(expect.arrayContaining([expect.objectContaining({ name: "测试器材", value: 500 })]));
   });
 
+  it("creates and deletes dashboard widgets", async () => {
+    const createResponse = await createWidget(
+      new Request("http://app.test/api/dashboards/dashboard-producer-demo/widgets", {
+        method: "POST",
+        body: JSON.stringify({
+          type: "bar_chart",
+          title: "供应商审计图",
+          dataSource: {
+            entityTypeId: "retail-purchase-order",
+            groupBy: "supplier",
+            aggregation: { field: "total_amount", fn: "sum" },
+            sortDir: "desc",
+          },
+        }),
+      }),
+      { params: Promise.resolve({ dashboardId: "dashboard-producer-demo" }) },
+    );
+    const created = await createResponse.json();
+    expect(created.error).toBeNull();
+    expect(created.data.config.title).toBe("供应商审计图");
+
+    const deleteResponse = await deleteWidget(new Request(`http://app.test/api/dashboards/dashboard-producer-demo/widgets/${created.data.id}`, { method: "DELETE" }), {
+      params: Promise.resolve({ dashboardId: "dashboard-producer-demo", widgetId: created.data.id }),
+    });
+
+    await expect(deleteResponse.json()).resolves.toMatchObject({
+      data: {
+        id: created.data.id,
+      },
+      error: null,
+    });
+  });
+
   it("updates a user score and returns the new scorecard", async () => {
     const response = await updateUserScore(
       new Request("http://app.test/api/scores/users/demo-user-vfx", {
@@ -147,6 +243,28 @@ describe("extension API routes", () => {
         dimensionId: "dim-tech",
         score: 96,
       },
+      error: null,
+    });
+  });
+
+  it("updates a user's skill level", async () => {
+    const response = await updateUserSkills(
+      new Request("http://app.test/api/users/demo-user-vfx/skills", {
+        method: "PATCH",
+        body: JSON.stringify({ skills: [{ skillId: "skill-nuke", level: 5, verifiedBy: "demo-user-producer" }] }),
+      }),
+      { params: Promise.resolve({ userId: "demo-user-vfx" }) },
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: [
+        {
+          userId: "demo-user-vfx",
+          skillId: "skill-nuke",
+          level: 5,
+          verifiedBy: "demo-user-producer",
+        },
+      ],
       error: null,
     });
   });

@@ -36,6 +36,18 @@ test.describe("production tracker smoke flow", () => {
     await expect(page.getByText("快速新增记录")).toBeVisible();
     await page.getByRole("button", { name: "保存记录" }).click();
     await expect(page.getByText("记录已保存，页面数据已刷新。")).toBeVisible();
+    await page.getByRole("button", { name: "标记状态" }).first().click();
+    await expect(page.getByText("记录已更新")).toBeVisible();
+    await page.getByRole("button", { name: "删除记录" }).first().click();
+    await expect(page.getByText("已删除")).toBeVisible();
+
+    await page.goto("/app/entity-types/retail-purchase-order/settings");
+    await expect(page.getByRole("heading", { name: "采购单 字段管理" })).toBeVisible();
+    await page.getByLabel("字段名").fill("审计备注");
+    await page.getByLabel("字段 Key").fill(`audit_note_${Date.now().toString().slice(-5)}`);
+    await page.getByRole("button", { name: "添加字段" }).click();
+    await expect(page.getByText("字段已添加")).toBeVisible();
+    await expect(page.getByText("审计备注").first()).toBeVisible();
 
     await page.goto("/app/entity-types/retail-purchase-order/import");
     await expect(page.getByRole("heading", { name: "采购单 导入向导" })).toBeVisible();
@@ -51,18 +63,27 @@ test.describe("production tracker smoke flow", () => {
     await expect(page.getByText("添加 Widget")).toBeVisible();
     await page.getByRole("button", { name: "添加" }).click();
     await expect(page.getByText("Widget 已添加。")).toBeVisible();
+    await page.getByRole("button", { name: "删除 Widget" }).first().click();
+    await expect(page.getByText("Widget 已删除")).toBeVisible();
 
     await page.goto("/app/ai/recognize");
     await expect(page.getByRole("heading", { name: "AI 单据识别工作台" })).toBeVisible();
     await expect(page.getByText("INV-2026-0618")).toBeVisible();
     await page.getByRole("button", { name: "开始识别" }).click();
     await expect(page.getByText("invoice_number")).toBeVisible();
+    await page.getByRole("button", { name: "应用为记录" }).click();
+    await expect(page.getByText("识别结果已写入采购单记录。")).toBeVisible();
 
     await page.goto("/app/users/demo-user-vfx/scorecard");
     await expect(page.getByRole("heading", { name: "Nora Li 评分卡" })).toBeVisible();
     await expect(page.getByText("团队排行榜")).toBeVisible();
     await page.getByRole("button", { name: "更新评分" }).click();
     await expect(page.getByText("已更新")).toBeVisible();
+
+    await page.goto("/app/users/demo-user-vfx/skills");
+    await expect(page.getByRole("heading", { name: "Nora Li 技能矩阵" })).toBeVisible();
+    await page.getByRole("button", { name: "更新技能" }).click();
+    await expect(page.getByText("技能已更新")).toBeVisible();
 
     await page.goto("/app/projects/demo-mkali-mission/overview");
     await expect(page.getByRole("heading", { name: /Mkali's Mission · MKALI/ })).toBeVisible();

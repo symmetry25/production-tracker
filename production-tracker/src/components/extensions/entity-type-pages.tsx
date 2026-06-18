@@ -1,7 +1,9 @@
 import Link from "next/link";
 
 import { CreateRecordPanel } from "@/components/extensions/create-record-panel";
+import { FieldAddPanel } from "@/components/extensions/field-add-panel";
 import { ImportActionsPanel } from "@/components/extensions/import-actions-panel";
+import { RecordActions } from "@/components/extensions/record-actions";
 import { TemplateInstallButton } from "@/components/extensions/template-install-button";
 import type { EntityTypeItem, ImportPreview } from "@/lib/custom-data-store";
 import type { FieldDefinition } from "@/lib/field-types";
@@ -85,6 +87,7 @@ export function EntityTypeDetail({ entity }: { entity: EntityTypeItem }) {
                 <th key={field.key} className="border-b border-r border-[#2a2a28] px-3 py-2 last:border-r-0">{field.name}</th>
               ))}
               <th className="border-b border-[#2a2a28] px-3 py-2">创建人</th>
+              <th className="border-b border-[#2a2a28] px-3 py-2">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -94,6 +97,7 @@ export function EntityTypeDetail({ entity }: { entity: EntityTypeItem }) {
                   <td key={field.key} className="border-r border-[#2a2a28] px-3 py-2 last:border-r-0">{formatCell(record.data[field.key], field)}</td>
                 ))}
                 <td className="px-3 py-2 text-[#8f8a7e]">{record.createdBy}</td>
+                <td className="px-3 py-2"><RecordActions recordId={record.id} fields={entity.fields} /></td>
               </tr>
             ))}
           </tbody>
@@ -107,6 +111,7 @@ export function EntitySettings({ entity }: { entity: EntityTypeItem }) {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Schema settings" title={`${entity.name} 字段管理`} description="字段顺序、字段类型、必填、只读、公式和表格宽度都会决定录入端与可视化端如何理解数据。" />
+      <FieldAddPanel entityId={entity.id} />
       <section className="border border-[#34322b] bg-[#181713]">
         <div className="grid grid-cols-[80px_1fr_160px_120px_1fr] border-b border-[#2a2a28] bg-[#1e1e1c] px-4 py-2 text-[11px] uppercase tracking-[0.12em] text-[#6e6e69]">
           <span>Order</span>
