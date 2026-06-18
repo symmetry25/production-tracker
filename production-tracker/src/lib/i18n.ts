@@ -16,6 +16,7 @@ export const dictionaries = {
         inbox: "收件箱",
         myTasks: "我的任务",
         media: "媒体",
+        data: "数据",
         projects: "项目",
         people: "人员",
         shots: "镜头",
@@ -31,6 +32,7 @@ export const dictionaries = {
         pipeline: "流水线状态",
         resource: "资源预算",
         review: "版本审阅",
+        customData: "通用录入",
         calendar: "日历例外",
       },
       projectTabs: {
@@ -106,6 +108,7 @@ export const dictionaries = {
         inbox: "Inbox",
         myTasks: "My Tasks",
         media: "Media",
+        data: "Data",
         projects: "Projects",
         people: "People",
         shots: "Shots",
@@ -121,6 +124,7 @@ export const dictionaries = {
         pipeline: "Pipeline status",
         resource: "Resource budget",
         review: "Version review",
+        customData: "Custom data",
         calendar: "Calendar exceptions",
       },
       projectTabs: {

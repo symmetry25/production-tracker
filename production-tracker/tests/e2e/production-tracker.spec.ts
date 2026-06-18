@@ -12,6 +12,12 @@ test.describe("production tracker smoke flow", () => {
     await page.goto("/app/projects");
     await expect(page.getByRole("link", { name: /Mkali's Mission/ })).toBeVisible();
 
+    await page.goto("/app/custom-data");
+    await expect(page.getByRole("heading", { name: "通用录入与行业模板" })).toBeVisible();
+    await expect(page.getByText("Industry Templates")).toBeVisible();
+    await expect(page.getByRole("button", { name: /采购单/ })).toBeVisible();
+    await expect(page.getByText("合计金额")).toBeVisible();
+
     await page.goto("/app/projects/demo-mkali-mission/overview");
     await expect(page.getByRole("heading", { name: /Mkali's Mission · MKALI/ })).toBeVisible();
     await expect(page.getByText("Shot Status")).toBeVisible();
