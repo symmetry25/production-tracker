@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { getUserSkills, updateUserSkills } from "@/lib/scoring";
+import { getUserSkills, updateUserSkillsAsync } from "@/lib/scoring";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
 
 const updateSkillsSchema = z.object({
@@ -22,5 +22,5 @@ export async function PATCH(request: Request, ctx: RouteParams<{ userId: string 
   const { userId } = await getRouteParams(ctx);
   const parsed = updateSkillsSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid skills payload.", 422);
-  return ok(updateUserSkills(userId, parsed.data.skills));
+  return ok(await updateUserSkillsAsync(userId, parsed.data.skills));
 }

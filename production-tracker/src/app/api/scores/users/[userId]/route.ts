@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { getUserScorecard, upsertUserScore } from "@/lib/scoring";
+import { getUserScorecard, upsertUserScoreAsync } from "@/lib/scoring";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
 
 const scoreSchema = z.object({
@@ -27,5 +27,5 @@ export async function POST(request: Request, ctx: RouteParams<{ userId: string }
   const { userId } = await getRouteParams(ctx);
   const parsed = scoreSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid score payload.", 422);
-  return ok(upsertUserScore(userId, { ...parsed.data, scoredById: session.user.id ?? "demo-admin" }));
+  return ok(await upsertUserScoreAsync(userId, { ...parsed.data, scoredById: session.user.id ?? "demo-admin" }));
 }

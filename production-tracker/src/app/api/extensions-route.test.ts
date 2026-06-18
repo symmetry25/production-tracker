@@ -424,6 +424,44 @@ describe("extension API routes", () => {
     });
   });
 
+  it("persists user score updates through Prisma when a database is configured", async () => {
+    process.env.DATABASE_URL = "postgresql://unit.test/db";
+    vi.mocked(getPrisma).mockReturnValue({
+      userScore: {
+        upsert: vi.fn().mockResolvedValue({
+          id: "score-db-1",
+          userId: "user-db-vfx",
+          dimensionId: "dim-db-tech",
+          score: 97,
+          comment: "数据库评分",
+          scoredById: "demo-admin",
+          scoredAt: new Date("2026-06-18T00:00:00.000Z"),
+          period: "2026-Q2",
+        }),
+      },
+    } as never);
+
+    const response = await updateUserScore(
+      new Request("http://app.test/api/scores/users/user-db-vfx", {
+        method: "POST",
+        body: JSON.stringify({ dimensionId: "dim-db-tech", score: 97, period: "2026-Q2", comment: "数据库评分" }),
+      }),
+      { params: Promise.resolve({ userId: "user-db-vfx" }) },
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        id: "score-db-1",
+        userId: "user-db-vfx",
+        dimensionId: "dim-db-tech",
+        score: 97,
+        comment: "数据库评分",
+      },
+      error: null,
+    });
+    expect(getPrisma).toHaveBeenCalled();
+  });
+
   it("updates a user's skill level", async () => {
     const response = await updateUserSkills(
       new Request("http://app.test/api/users/demo-user-vfx/skills", {
@@ -444,5 +482,44 @@ describe("extension API routes", () => {
       ],
       error: null,
     });
+  });
+
+  it("persists user skill updates through Prisma when a database is configured", async () => {
+    process.env.DATABASE_URL = "postgresql://unit.test/db";
+    vi.mocked(getPrisma).mockReturnValue({
+      userSkill: {
+        upsert: vi.fn().mockResolvedValue({
+          id: "user-skill-db-1",
+          userId: "user-db-vfx",
+          skillId: "skill-db-nuke",
+          level: 5,
+          verifiedBy: "demo-admin",
+          verifiedAt: new Date("2026-06-18T00:00:00.000Z"),
+          updatedAt: new Date("2026-06-18T00:00:00.000Z"),
+        }),
+      },
+    } as never);
+
+    const response = await updateUserSkills(
+      new Request("http://app.test/api/users/user-db-vfx/skills", {
+        method: "PATCH",
+        body: JSON.stringify({ skills: [{ skillId: "skill-db-nuke", level: 5, verifiedBy: "demo-admin" }] }),
+      }),
+      { params: Promise.resolve({ userId: "user-db-vfx" }) },
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: [
+        {
+          id: "user-skill-db-1",
+          userId: "user-db-vfx",
+          skillId: "skill-db-nuke",
+          level: 5,
+          verifiedBy: "demo-admin",
+        },
+      ],
+      error: null,
+    });
+    expect(getPrisma).toHaveBeenCalled();
   });
 });

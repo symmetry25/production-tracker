@@ -1,3 +1,5 @@
+import { getPrisma } from "@/lib/prisma";
+
 export type ScoreDimensionItem = {
   id: string;
   name: string;
@@ -150,6 +152,36 @@ export function upsertUserScore(userId: string, input: { dimensionId: string; sc
   return clone(score);
 }
 
+export async function upsertUserScoreAsync(userId: string, input: { dimensionId: string; score: number; comment?: string | null; period?: string; scoredById?: string }) {
+  if (!shouldUsePersistentStore()) return upsertUserScore(userId, input);
+
+  const period = input.period ?? periodDefault;
+  const score = await getPrisma().userScore.upsert({
+    where: {
+      userId_dimensionId_period: {
+        userId,
+        dimensionId: input.dimensionId,
+        period,
+      },
+    },
+    update: {
+      score: input.score,
+      comment: input.comment ?? null,
+      scoredById: input.scoredById ?? "demo-admin",
+      scoredAt: new Date(),
+    },
+    create: {
+      userId,
+      dimensionId: input.dimensionId,
+      period,
+      score: input.score,
+      comment: input.comment ?? null,
+      scoredById: input.scoredById ?? "demo-admin",
+    },
+  });
+  return scoreFromDb(score);
+}
+
 export function getUserScoreHistory(userId: string) {
   const state = getState();
   const periods = Array.from(new Set(state.scores.filter((score) => score.userId === userId).map((score) => score.period))).sort();
@@ -252,6 +284,35 @@ export function updateUserSkills(userId: string, updates: { skillId: string; lev
   return clone(updated);
 }
 
+export async function updateUserSkillsAsync(userId: string, updates: { skillId: string; level: number; verifiedBy?: string | null }[]) {
+  if (!shouldUsePersistentStore()) return updateUserSkills(userId, updates);
+
+  const now = new Date();
+  const updated = await Promise.all(updates.map(async (update) => {
+    const row = await getPrisma().userSkill.upsert({
+      where: {
+        userId_skillId: {
+          userId,
+          skillId: update.skillId,
+        },
+      },
+      update: {
+        level: update.level,
+        ...(update.verifiedBy !== undefined ? { verifiedBy: update.verifiedBy, verifiedAt: update.verifiedBy ? now : null } : {}),
+      },
+      create: {
+        userId,
+        skillId: update.skillId,
+        level: update.level,
+        verifiedBy: update.verifiedBy ?? null,
+        verifiedAt: update.verifiedBy ? now : null,
+      },
+    });
+    return userSkillFromDb(row);
+  }));
+  return updated;
+}
+
 export function resetScoringForTests() {
   globalForScoring.__productionTrackerScoringState = createState();
 }
@@ -262,6 +323,56 @@ function determineGrade(compositeScore: number, department: string) {
       .filter((grade) => (grade.department === null || grade.department === department) && grade.minScore <= compositeScore && grade.maxScore >= compositeScore)
       .sort((a, b) => b.minScore - a.minScore)[0] ?? null
   );
+}
+
+function shouldUsePersistentStore() {
+  return Boolean(process.env.DATABASE_URL);
+}
+
+function scoreFromDb(score: {
+  id: string;
+  userId: string;
+  dimensionId: string;
+  score: number;
+  comment: string | null;
+  scoredById: string;
+  scoredAt: Date | string;
+  period: string;
+}): UserScoreItem {
+  return {
+    id: score.id,
+    userId: score.userId,
+    dimensionId: score.dimensionId,
+    score: score.score,
+    comment: score.comment,
+    scoredById: score.scoredById,
+    scoredAt: score.scoredAt instanceof Date ? score.scoredAt.toISOString() : score.scoredAt,
+    period: score.period,
+  };
+}
+
+function userSkillFromDb(skill: {
+  id: string;
+  userId: string;
+  skillId: string;
+  level: number;
+  verifiedBy: string | null;
+  verifiedAt: Date | string | null;
+  updatedAt: Date | string;
+}): UserSkillItem {
+  return {
+    id: skill.id,
+    userId: skill.userId,
+    skillId: skill.skillId,
+    level: skill.level,
+    verifiedBy: skill.verifiedBy,
+    verifiedAt: skill.verifiedAt ? toIsoString(skill.verifiedAt) : null,
+    updatedAt: toIsoString(skill.updatedAt),
+  };
+}
+
+function toIsoString(value: Date | string) {
+  return value instanceof Date ? value.toISOString() : value;
 }
 
 function getState() {
