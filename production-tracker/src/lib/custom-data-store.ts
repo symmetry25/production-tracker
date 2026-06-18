@@ -1,8 +1,9 @@
 import type { CustomRecord, IndustryTemplate } from "@/lib/custom-data";
 import { getIndustryTemplates } from "@/lib/custom-data";
-import type { FieldDefinition } from "@/lib/field-types";
+import type { FieldDefinition, FieldType } from "@/lib/field-types";
 import { applyFormulaFields } from "@/lib/formula";
 import { autoMapHeaders, buildImportedRecords, parseDelimitedText, validateImportRows, type ImportValidationResult, type ParsedImport } from "@/lib/importer";
+import { getPrisma } from "@/lib/prisma";
 
 export type EntityTypeItem = IndustryTemplate & {
   slug: string;
@@ -61,6 +62,44 @@ type CreateEntityInput = {
   fields?: FieldDefinition[];
 };
 
+type DbEntityType = {
+  id: string;
+  slug: string;
+  industry: string | null;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  color: string | null;
+  projectId: string | null;
+  isTemplate: boolean;
+  createdBy: string;
+  createdAt: Date | string;
+  fields: DbFieldDef[];
+  records: DbEntityRecord[];
+};
+
+type DbFieldDef = {
+  id: string;
+  key: string;
+  name: string;
+  type: string;
+  required: boolean;
+  defaultValue: unknown;
+  options: unknown;
+  config: unknown;
+  order: number;
+  width: number | null;
+  hidden: boolean;
+  readOnly: boolean;
+};
+
+type DbEntityRecord = {
+  id: string;
+  data: unknown;
+  createdAt: Date | string;
+  createdById: string;
+};
+
 const createdAt = "2026-06-18T00:00:00.000Z";
 
 const globalForStore = globalThis as typeof globalThis & {
@@ -85,9 +124,33 @@ export function listEntityTypes(filters: { projectId?: string | null; industry?:
   });
 }
 
+export async function listEntityTypesAsync(filters: { projectId?: string | null; industry?: string | null } = {}) {
+  if (!shouldUsePersistentStore()) return listEntityTypes(filters);
+
+  const rows = await getPrisma().entityType.findMany({
+    where: {
+      ...(filters.projectId !== undefined ? { projectId: filters.projectId } : {}),
+      ...(filters.industry ? { industry: filters.industry } : {}),
+    },
+    include: entityTypeInclude,
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map(entityFromDb);
+}
+
 export function getEntityType(idOrSlug: string) {
   const state = getState();
   return state.entityTypes.get(idOrSlug) ?? Array.from(state.entityTypes.values()).find((item) => item.slug === idOrSlug) ?? null;
+}
+
+export async function getEntityTypeAsync(idOrSlug: string) {
+  if (!shouldUsePersistentStore()) return getEntityType(idOrSlug);
+
+  const entity = await getPrisma().entityType.findFirst({
+    where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+    include: entityTypeInclude,
+  });
+  return entity ? entityFromDb(entity) : null;
 }
 
 export function createEntityType(input: CreateEntityInput) {
@@ -115,6 +178,32 @@ export function createEntityType(input: CreateEntityInput) {
   return clone(entity);
 }
 
+export async function createEntityTypeAsync(input: CreateEntityInput) {
+  if (!shouldUsePersistentStore()) return createEntityType(input);
+
+  const existing = await getPrisma().entityType.findMany({ select: { slug: true } });
+  const slug = uniqueSlug(input.slug ?? slugify(input.name), existing.map((item) => item.slug));
+  const fields = normalizeFieldOrder(input.fields ?? defaultFields());
+  const entity = await getPrisma().entityType.create({
+    data: {
+      slug,
+      industry: input.industry ?? "generic",
+      name: input.name,
+      description: input.description ?? "自定义实体类型",
+      icon: input.icon ?? "database",
+      color: input.color ?? "#d8b46a",
+      projectId: input.projectId ?? null,
+      isTemplate: false,
+      createdBy: "demo-admin",
+      fields: {
+        create: fields.map(fieldToDbCreate),
+      },
+    },
+    include: entityTypeInclude,
+  });
+  return entityFromDb(entity);
+}
+
 export function installTemplate(templateId: string, input: { projectId?: string | null; customName?: string | null } = {}) {
   const template = getTemplate(templateId);
   if (!template) return null;
@@ -138,6 +227,40 @@ export function installTemplate(templateId: string, input: { projectId?: string 
   return clone(entity);
 }
 
+export async function installTemplateAsync(templateId: string, input: { projectId?: string | null; customName?: string | null } = {}) {
+  if (!shouldUsePersistentStore()) return installTemplate(templateId, input);
+
+  const template = getTemplate(templateId);
+  if (!template) return null;
+
+  const existing = await getPrisma().entityType.findMany({ select: { slug: true } });
+  const slug = uniqueSlug(slugify(input.customName || template.name), existing.map((item) => item.slug));
+  const entity = await getPrisma().entityType.create({
+    data: {
+      slug,
+      industry: template.industry,
+      name: input.customName || template.name,
+      description: template.description,
+      icon: template.icon,
+      color: template.color,
+      projectId: input.projectId ?? null,
+      isTemplate: false,
+      createdBy: "demo-admin",
+      fields: { create: normalizeFieldOrder(template.fields).map(fieldToDbCreate) },
+      records: {
+        create: template.records.map((record) => ({
+          id: record.id,
+          data: normalizeRecordData({ ...templateToEntity(template), slug, records: [] }, record.data, record.createdBy, record.id),
+          createdById: record.createdBy,
+          createdAt: record.createdAt,
+        })),
+      },
+    },
+    include: entityTypeInclude,
+  });
+  return entityFromDb(entity);
+}
+
 export function updateEntityType(id: string, input: Partial<Omit<CreateEntityInput, "fields">>) {
   const state = getState();
   const entity = state.entityTypes.get(id);
@@ -159,6 +282,28 @@ export function updateEntityType(id: string, input: Partial<Omit<CreateEntityInp
   return clone(next);
 }
 
+export async function updateEntityTypeAsync(id: string, input: Partial<Omit<CreateEntityInput, "fields">>) {
+  if (!shouldUsePersistentStore()) return updateEntityType(id, input);
+
+  const existing = await getEntityTypeAsync(id);
+  if (!existing) return null;
+  const nextSlug = input.slug ? uniqueSlug(slugify(input.slug), (await getPrisma().entityType.findMany({ where: { NOT: { id: existing.id } }, select: { slug: true } })).map((item) => item.slug)) : existing.slug;
+  const entity = await getPrisma().entityType.update({
+    where: { id: existing.id },
+    data: {
+      name: input.name ?? existing.name,
+      slug: nextSlug,
+      description: input.description ?? existing.description,
+      industry: input.industry ?? existing.industry,
+      icon: input.icon ?? existing.icon,
+      color: input.color ?? existing.color,
+      projectId: input.projectId === undefined ? existing.projectId : input.projectId,
+    },
+    include: entityTypeInclude,
+  });
+  return entityFromDb(entity);
+}
+
 export function deleteEntityType(id: string) {
   const state = getState();
   const entity = state.entityTypes.get(id);
@@ -169,6 +314,15 @@ export function deleteEntityType(id: string) {
     state.notes.delete(record.id);
   }
   return clone(entity);
+}
+
+export async function deleteEntityTypeAsync(id: string) {
+  if (!shouldUsePersistentStore()) return deleteEntityType(id);
+
+  const existing = await getEntityTypeAsync(id);
+  if (!existing) return null;
+  const entity = await getPrisma().entityType.delete({ where: { id: existing.id }, include: entityTypeInclude });
+  return entityFromDb(entity);
 }
 
 export function addField(entityTypeId: string, field: Omit<FieldDefinition, "id" | "order"> & Partial<Pick<FieldDefinition, "id" | "order">>) {
@@ -196,6 +350,32 @@ export function addField(entityTypeId: string, field: Omit<FieldDefinition, "id"
   return clone(nextField);
 }
 
+export async function addFieldAsync(entityTypeId: string, field: Omit<FieldDefinition, "id" | "order"> & Partial<Pick<FieldDefinition, "id" | "order">>) {
+  if (!shouldUsePersistentStore()) return addField(entityTypeId, field);
+
+  const entity = await getEntityTypeAsync(entityTypeId);
+  if (!entity) return null;
+  const nextField: FieldDefinition = {
+    id: field.id ?? `field-${slugify(field.key)}-${Date.now().toString(36)}`,
+    key: field.key,
+    name: field.name,
+    type: field.type,
+    required: field.required ?? false,
+    defaultValue: field.defaultValue,
+    options: field.options,
+    config: field.config,
+    order: field.order ?? entity.fields.length,
+    width: field.width,
+    hidden: field.hidden,
+    readOnly: field.readOnly,
+  };
+  const created = await getPrisma().fieldDef.create({
+    data: { ...fieldToDbCreate(nextField), entityTypeId: entity.id },
+  });
+  await recalculateEntityRecords(entity.id);
+  return fieldFromDb(created);
+}
+
 export function updateField(entityTypeId: string, fieldId: string, input: Partial<FieldDefinition>) {
   const entity = getState().entityTypes.get(entityTypeId);
   if (!entity) return null;
@@ -212,6 +392,21 @@ export function updateField(entityTypeId: string, fieldId: string, input: Partia
   entity.records = entity.records.map((record) => ({ ...record, data: normalizeRecordData(entity, record.data, record.createdBy, record.id) }));
   entity.updatedAt = new Date().toISOString();
   return clone(field);
+}
+
+export async function updateFieldAsync(entityTypeId: string, fieldId: string, input: Partial<FieldDefinition>) {
+  if (!shouldUsePersistentStore()) return updateField(entityTypeId, fieldId, input);
+
+  const entity = await getEntityTypeAsync(entityTypeId);
+  if (!entity) return null;
+  const field = entity.fields.find((item) => item.id === fieldId);
+  if (!field) return null;
+  const updated = await getPrisma().fieldDef.update({
+    where: { id: fieldId },
+    data: fieldToDbUpdate({ ...input, id: field.id, key: input.key ?? field.key }),
+  });
+  await recalculateEntityRecords(entity.id);
+  return fieldFromDb(updated);
 }
 
 export function deleteField(entityTypeId: string, fieldId: string) {
@@ -231,6 +426,22 @@ export function deleteField(entityTypeId: string, fieldId: string) {
   return clone(field);
 }
 
+export async function deleteFieldAsync(entityTypeId: string, fieldId: string) {
+  if (!shouldUsePersistentStore()) return deleteField(entityTypeId, fieldId);
+
+  const entity = await getEntityTypeAsync(entityTypeId);
+  const field = entity?.fields.find((item) => item.id === fieldId);
+  if (!entity || !field) return null;
+  const deleted = await getPrisma().fieldDef.delete({ where: { id: fieldId } });
+  const records = await getPrisma().entityRecord.findMany({ where: { entityTypeId: entity.id } });
+  await Promise.all(records.map((record) => {
+    const nextData = isPlainRecord(record.data) ? { ...record.data } : {};
+    delete nextData[field.key];
+    return getPrisma().entityRecord.update({ where: { id: record.id }, data: { data: nextData } });
+  }));
+  return fieldFromDb(deleted);
+}
+
 export function reorderFields(entityTypeId: string, fieldIds: string[]) {
   const entity = getState().entityTypes.get(entityTypeId);
   if (!entity) return null;
@@ -239,6 +450,16 @@ export function reorderFields(entityTypeId: string, fieldIds: string[]) {
   entity.fields = normalizeFieldOrder(entity.fields.map((field) => ({ ...field, order: order.get(field.id) ?? field.order })));
   entity.updatedAt = new Date().toISOString();
   return clone(entity.fields);
+}
+
+export async function reorderFieldsAsync(entityTypeId: string, fieldIds: string[]) {
+  if (!shouldUsePersistentStore()) return reorderFields(entityTypeId, fieldIds);
+
+  const entity = await getEntityTypeAsync(entityTypeId);
+  if (!entity) return null;
+  await Promise.all(fieldIds.map((fieldId, order) => getPrisma().fieldDef.update({ where: { id: fieldId }, data: { order } })));
+  const updated = await getEntityTypeAsync(entity.id);
+  return updated?.fields ?? null;
 }
 
 export function listRecords(entityTypeId: string, filters: { q?: string | null; sort?: string | null; dir?: "asc" | "desc" | null; page?: number | null } = {}) {
@@ -261,11 +482,48 @@ export function listRecords(entityTypeId: string, filters: { q?: string | null; 
   return clone({ records: records.slice((page - 1) * pageSize, page * pageSize), total: records.length, page, pageSize });
 }
 
+export async function listRecordsAsync(entityTypeId: string, filters: { q?: string | null; sort?: string | null; dir?: "asc" | "desc" | null; page?: number | null } = {}) {
+  if (!shouldUsePersistentStore()) return listRecords(entityTypeId, filters);
+
+  const entity = await getEntityTypeAsync(entityTypeId);
+  if (!entity) return null;
+  const query = filters.q?.trim().toLowerCase();
+  let records = entity.records;
+  if (query) {
+    records = records.filter((record) => Object.values(record.data).some((value) => String(value ?? "").toLowerCase().includes(query)));
+  }
+  if (filters.sort) {
+    const direction = filters.dir === "desc" ? -1 : 1;
+    records = [...records].sort((a, b) => String(a.data[filters.sort ?? ""] ?? "").localeCompare(String(b.data[filters.sort ?? ""] ?? "")) * direction);
+  }
+  const page = Math.max(1, filters.page ?? 1);
+  const pageSize = 100;
+  return clone({ records: records.slice((page - 1) * pageSize, page * pageSize), total: records.length, page, pageSize });
+}
+
 export function getRecord(recordId: string): RecordDetail | null {
   const entity = findEntityByRecord(recordId);
   const record = entity?.records.find((item) => item.id === recordId);
   if (!record) return null;
   return clone({ ...record, files: getState().files.get(recordId) ?? [], notes: getState().notes.get(recordId) ?? [] });
+}
+
+export async function getRecordAsync(recordId: string): Promise<RecordDetail | null> {
+  if (!shouldUsePersistentStore()) return getRecord(recordId);
+
+  const record = await getPrisma().entityRecord.findUnique({
+    where: { id: recordId },
+    include: { files: { orderBy: { uploadedAt: "desc" } }, notes: { orderBy: { createdAt: "desc" } } },
+  });
+  if (!record) return null;
+  return {
+    id: record.id,
+    data: isPlainRecord(record.data) ? record.data : {},
+    createdAt: toIsoString(record.createdAt),
+    createdBy: record.createdById,
+    files: record.files.map(fileFromDb),
+    notes: record.notes.map(noteFromDb),
+  };
 }
 
 export function createEntityRecord(entityTypeId: string, data: Record<string, unknown>, createdBy = "当前用户") {
@@ -286,6 +544,23 @@ export function createEntityRecord(entityTypeId: string, data: Record<string, un
   return clone(record);
 }
 
+export async function createEntityRecordAsync(entityTypeId: string, data: Record<string, unknown>, createdBy = "当前用户") {
+  if (!shouldUsePersistentStore()) return createEntityRecord(entityTypeId, data, createdBy);
+
+  const entity = await getEntityTypeAsync(entityTypeId);
+  if (!entity) return null;
+  const id = `record-${slugify(entity.slug)}-${Date.now().toString(36)}`;
+  const record = await getPrisma().entityRecord.create({
+    data: {
+      id,
+      entityTypeId: entity.id,
+      data: normalizeRecordData(entity, data, createdBy, id),
+      createdById: createdBy,
+    },
+  });
+  return recordFromDb(record);
+}
+
 export function updateEntityRecord(recordId: string, data: Record<string, unknown>) {
   const entity = findEntityByRecord(recordId);
   if (!entity) return null;
@@ -303,6 +578,20 @@ export function updateEntityRecord(recordId: string, data: Record<string, unknow
   return updated ? clone(updated) : null;
 }
 
+export async function updateEntityRecordAsync(recordId: string, data: Record<string, unknown>) {
+  if (!shouldUsePersistentStore()) return updateEntityRecord(recordId, data);
+
+  const existing = await getPrisma().entityRecord.findUnique({ where: { id: recordId }, include: { entityType: { include: entityTypeInclude } } });
+  if (!existing) return null;
+  const entity = entityFromDb(existing.entityType);
+  const currentData = isPlainRecord(existing.data) ? existing.data : {};
+  const updated = await getPrisma().entityRecord.update({
+    where: { id: recordId },
+    data: { data: normalizeRecordData(entity, { ...currentData, ...data }, existing.createdById, existing.id) },
+  });
+  return recordFromDb(updated);
+}
+
 export function deleteEntityRecord(recordId: string) {
   const state = getState();
   const entity = findEntityByRecord(recordId);
@@ -314,6 +603,13 @@ export function deleteEntityRecord(recordId: string) {
   state.notes.delete(recordId);
   entity.updatedAt = new Date().toISOString();
   return record ? clone(record) : null;
+}
+
+export async function deleteEntityRecordAsync(recordId: string) {
+  if (!shouldUsePersistentStore()) return deleteEntityRecord(recordId);
+
+  const record = await getPrisma().entityRecord.delete({ where: { id: recordId } });
+  return recordFromDb(record);
 }
 
 export function previewImport(entityTypeId: string, input: { sourceText: string; mapping?: Record<string, string> }): ImportPreview | null {
@@ -328,11 +624,38 @@ export function previewImport(entityTypeId: string, input: { sourceText: string;
   return { parsed, mapping, validation, importableRows };
 }
 
+export async function previewImportAsync(entityTypeId: string, input: { sourceText: string; mapping?: Record<string, string> }) {
+  if (!shouldUsePersistentStore()) return previewImport(entityTypeId, input);
+
+  const entity = await getEntityTypeAsync(entityTypeId);
+  if (!entity) return null;
+  return buildImportPreview(entity, input);
+}
+
 export function importRecords(entityTypeId: string, input: { sourceText: string; mapping?: Record<string, string>; createdBy?: string }) {
   const preview = previewImport(entityTypeId, input);
   if (!preview) return null;
 
   const inserted = preview.importableRows.map((row) => createEntityRecord(entityTypeId, row, input.createdBy ?? "导入向导")).filter(Boolean);
+  return clone({
+    total: preview.validation.totalRows,
+    inserted: inserted.length,
+    skipped: preview.validation.errorRows,
+    errors: preview.validation.errors,
+    records: inserted,
+  });
+}
+
+export async function importRecordsAsync(entityTypeId: string, input: { sourceText: string; mapping?: Record<string, string>; createdBy?: string }) {
+  if (!shouldUsePersistentStore()) return importRecords(entityTypeId, input);
+
+  const preview = await previewImportAsync(entityTypeId, input);
+  if (!preview) return null;
+  const inserted = [];
+  for (const row of preview.importableRows) {
+    const record = await createEntityRecordAsync(entityTypeId, row, input.createdBy ?? "导入向导");
+    if (record) inserted.push(record);
+  }
   return clone({
     total: preview.validation.totalRows,
     inserted: inserted.length,
@@ -357,12 +680,30 @@ export function addRecordFile(recordId: string, input: Omit<RecordFileItem, "id"
   return clone(file);
 }
 
+export async function addRecordFileAsync(recordId: string, input: Omit<RecordFileItem, "id" | "recordId" | "uploadedAt">) {
+  if (!shouldUsePersistentStore()) return addRecordFile(recordId, input);
+
+  const record = await getRecordAsync(recordId);
+  if (!record) return null;
+  const file = await getPrisma().recordFile.create({ data: { ...input, recordId } });
+  return fileFromDb(file);
+}
+
 export function deleteRecordFile(recordId: string, fileId: string) {
   const files = getState().files.get(recordId) ?? [];
   const file = files.find((item) => item.id === fileId);
   if (!file) return null;
   getState().files.set(recordId, files.filter((item) => item.id !== fileId));
   return clone(file);
+}
+
+export async function deleteRecordFileAsync(recordId: string, fileId: string) {
+  if (!shouldUsePersistentStore()) return deleteRecordFile(recordId, fileId);
+
+  const file = await getPrisma().recordFile.findFirst({ where: { id: fileId, recordId } });
+  if (!file) return null;
+  const deleted = await getPrisma().recordFile.delete({ where: { id: fileId } });
+  return fileFromDb(deleted);
 }
 
 export function addRecordNote(recordId: string, input: { content: string; authorId: string }) {
@@ -381,6 +722,15 @@ export function addRecordNote(recordId: string, input: { content: string; author
   return clone(note);
 }
 
+export async function addRecordNoteAsync(recordId: string, input: { content: string; authorId: string }) {
+  if (!shouldUsePersistentStore()) return addRecordNote(recordId, input);
+
+  const record = await getRecordAsync(recordId);
+  if (!record) return null;
+  const note = await getPrisma().recordNote.create({ data: { recordId, content: input.content, authorId: input.authorId } });
+  return noteFromDb(note);
+}
+
 export function deleteRecordNote(recordId: string, noteId: string) {
   const notes = getState().notes.get(recordId) ?? [];
   const note = notes.find((item) => item.id === noteId);
@@ -389,8 +739,188 @@ export function deleteRecordNote(recordId: string, noteId: string) {
   return clone(note);
 }
 
+export async function deleteRecordNoteAsync(recordId: string, noteId: string) {
+  if (!shouldUsePersistentStore()) return deleteRecordNote(recordId, noteId);
+
+  const note = await getPrisma().recordNote.findFirst({ where: { id: noteId, recordId } });
+  if (!note) return null;
+  const deleted = await getPrisma().recordNote.delete({ where: { id: noteId } });
+  return noteFromDb(deleted);
+}
+
 export function resetCustomDataStoreForTests() {
   globalForStore.__productionTrackerExtensionState = createState();
+}
+
+const entityTypeInclude = {
+  fields: { orderBy: { order: "asc" } },
+  records: { orderBy: { createdAt: "desc" } },
+} as const;
+
+function shouldUsePersistentStore() {
+  return Boolean(process.env.DATABASE_URL);
+}
+
+function entityFromDb(entity: DbEntityType): EntityTypeItem {
+  return {
+    id: entity.id,
+    slug: entity.slug,
+    industry: normalizeIndustry(entity.industry),
+    name: entity.name,
+    description: entity.description ?? "自定义实体类型",
+    icon: entity.icon ?? "database",
+    color: entity.color ?? "#d8b46a",
+    projectId: entity.projectId,
+    isTemplate: entity.isTemplate,
+    createdBy: entity.createdBy,
+    createdAt: toIsoString(entity.createdAt),
+    updatedAt: toIsoString(entity.createdAt),
+    fields: normalizeFieldOrder(entity.fields.map(fieldFromDb)),
+    records: entity.records.map(recordFromDb),
+  };
+}
+
+function buildImportPreview(entity: EntityTypeItem, input: { sourceText: string; mapping?: Record<string, string> }): ImportPreview {
+  const parsed = parseDelimitedText(input.sourceText);
+  const importableFields = entity.fields.filter((field) => !field.readOnly && !field.hidden);
+  const mapping = input.mapping ?? autoMapHeaders(parsed.headers, importableFields);
+  const validation = validateImportRows(parsed.rows, mapping, importableFields);
+  const importableRows = buildImportedRecords(parsed.rows, mapping, importableFields);
+  return { parsed, mapping, validation, importableRows };
+}
+
+function fieldFromDb(field: DbFieldDef): FieldDefinition {
+  return {
+    id: field.id,
+    key: field.key,
+    name: field.name,
+    type: normalizeFieldType(field.type),
+    required: field.required,
+    defaultValue: field.defaultValue ?? undefined,
+    options: Array.isArray(field.options) ? field.options as FieldDefinition["options"] : undefined,
+    config: isPlainRecord(field.config) ? field.config : undefined,
+    order: field.order,
+    width: field.width ?? undefined,
+    hidden: field.hidden,
+    readOnly: field.readOnly,
+  };
+}
+
+function recordFromDb(record: DbEntityRecord): CustomRecord {
+  return {
+    id: record.id,
+    data: isPlainRecord(record.data) ? record.data : {},
+    createdAt: toIsoString(record.createdAt),
+    createdBy: record.createdById,
+  };
+}
+
+function fieldToDbCreate(field: FieldDefinition) {
+  return {
+    id: field.id,
+    key: field.key,
+    name: field.name,
+    type: field.type,
+    required: field.required,
+    defaultValue: field.defaultValue ?? undefined,
+    options: field.options ?? undefined,
+    config: field.config ?? undefined,
+    order: field.order,
+    width: field.width,
+    hidden: field.hidden ?? false,
+    readOnly: field.readOnly ?? false,
+  };
+}
+
+function fieldToDbUpdate(field: Partial<FieldDefinition>) {
+  return {
+    ...(field.name !== undefined ? { name: field.name } : {}),
+    ...(field.key !== undefined ? { key: field.key } : {}),
+    ...(field.type !== undefined ? { type: field.type } : {}),
+    ...(field.required !== undefined ? { required: field.required } : {}),
+    ...(field.defaultValue !== undefined && field.defaultValue !== null ? { defaultValue: field.defaultValue } : {}),
+    ...(field.options !== undefined && field.options !== null ? { options: field.options } : {}),
+    ...(field.config !== undefined && field.config !== null ? { config: field.config } : {}),
+    ...(field.order !== undefined ? { order: field.order } : {}),
+    ...(field.width !== undefined ? { width: field.width } : {}),
+    ...(field.hidden !== undefined ? { hidden: field.hidden } : {}),
+    ...(field.readOnly !== undefined ? { readOnly: field.readOnly } : {}),
+  };
+}
+
+function fileFromDb(file: RecordFileItem | { id: string; recordId: string; filename: string; fileUrl: string; fileType: string; fileSize: number; uploadedAt: Date | string }): RecordFileItem {
+  return {
+    id: file.id,
+    recordId: file.recordId,
+    filename: file.filename,
+    fileUrl: file.fileUrl,
+    fileType: file.fileType,
+    fileSize: file.fileSize,
+    uploadedAt: toIsoString(file.uploadedAt),
+  };
+}
+
+function noteFromDb(note: RecordNoteItem | { id: string; recordId: string; content: string; authorId: string; createdAt: Date | string }): RecordNoteItem {
+  return {
+    id: note.id,
+    recordId: note.recordId,
+    content: note.content,
+    authorId: note.authorId,
+    createdAt: toIsoString(note.createdAt),
+  };
+}
+
+async function recalculateEntityRecords(entityTypeId: string) {
+  const entity = await getEntityTypeAsync(entityTypeId);
+  if (!entity) return;
+  await Promise.all(entity.records.map((record) => getPrisma().entityRecord.update({
+    where: { id: record.id },
+    data: { data: normalizeRecordData(entity, record.data, record.createdBy, record.id) },
+  })));
+}
+
+function normalizeIndustry(industry: string | null): EntityTypeItem["industry"] {
+  if (industry === "vfx" || industry === "retail" || industry === "manufacturing" || industry === "hr" || industry === "generic") return industry;
+  return "generic";
+}
+
+function normalizeFieldType(type: string): FieldType {
+  const allowed: FieldType[] = [
+    "text",
+    "textarea",
+    "number",
+    "currency",
+    "percentage",
+    "date",
+    "datetime",
+    "select",
+    "multiselect",
+    "user",
+    "status",
+    "rating",
+    "score",
+    "boolean",
+    "url",
+    "email",
+    "phone",
+    "file",
+    "image",
+    "relation",
+    "formula",
+    "auto_number",
+    "created_at",
+    "updated_at",
+    "created_by",
+  ];
+  return allowed.includes(type as FieldType) ? type as FieldType : "text";
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function toIsoString(value: Date | string) {
+  return value instanceof Date ? value.toISOString() : value;
 }
 
 function getState() {

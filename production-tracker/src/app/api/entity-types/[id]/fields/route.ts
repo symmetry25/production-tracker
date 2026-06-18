@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { addField, getEntityType } from "@/lib/custom-data-store";
+import { addFieldAsync, getEntityTypeAsync } from "@/lib/custom-data-store";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
 
 const fieldSchema = z.object({
@@ -25,7 +25,7 @@ export async function GET(_: Request, ctx: RouteParams<{ id: string }>) {
   if (!session?.user) return fail("Unauthorized", 401);
 
   const { id } = await getRouteParams(ctx);
-  const entity = getEntityType(id);
+  const entity = await getEntityTypeAsync(id);
   return entity ? ok(entity.fields) : fail("Entity type not found.", 404);
 }
 
@@ -37,6 +37,6 @@ export async function POST(request: Request, ctx: RouteParams<{ id: string }>) {
   const parsed = fieldSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid field payload.", 422);
 
-  const field = addField(id, parsed.data as never);
+  const field = await addFieldAsync(id, parsed.data as never);
   return field ? ok(field) : fail("Entity type not found.", 404);
 }

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { importRecords } from "@/lib/custom-data-store";
+import { importRecordsAsync } from "@/lib/custom-data-store";
 import { parseWorkbook } from "@/lib/excel";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
 
@@ -27,13 +27,13 @@ export async function POST(request: Request, ctx: RouteParams<{ id: string }>) {
     const sourceText = [parsedWorkbook.headers.join("\t"), ...parsedWorkbook.rows.map((row) => parsedWorkbook.headers.map((header) => row[header] ?? "").join("\t"))].join("\n");
     const mappingValue = form.get("mapping");
     const mapping = typeof mappingValue === "string" && mappingValue ? JSON.parse(mappingValue) : undefined;
-    const summary = importRecords(id, { sourceText, mapping, createdBy: session.user.name ?? "导入向导" });
+    const summary = await importRecordsAsync(id, { sourceText, mapping, createdBy: session.user.name ?? "导入向导" });
     return summary ? ok(summary) : fail("Entity type not found.", 404);
   }
 
   const parsed = importSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success || !parsed.data.sourceText) return fail(parsed.error?.issues[0]?.message ?? "sourceText is required.", 422);
 
-  const summary = importRecords(id, { ...parsed.data, sourceText: parsed.data.sourceText, createdBy: parsed.data.createdBy ?? session.user.name ?? "导入向导" });
+  const summary = await importRecordsAsync(id, { ...parsed.data, sourceText: parsed.data.sourceText, createdBy: parsed.data.createdBy ?? session.user.name ?? "导入向导" });
   return summary ? ok(summary) : fail("Entity type not found.", 404);
 }

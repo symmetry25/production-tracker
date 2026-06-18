@@ -1,4 +1,4 @@
-import { listEntityTypes, listRecords } from "@/lib/custom-data-store";
+import { listEntityTypes, listRecords, listRecordsAsync } from "@/lib/custom-data-store";
 
 export type WidgetType =
   | "metric_card"
@@ -178,7 +178,20 @@ export function getWidgetData(dataSource: WidgetConfig["dataSource"]) {
     return { rows: [], total: 0 };
   }
 
-  const rows = recordsResult.records.filter((record) => matchesFilters(record.data, dataSource.filters ?? []));
+  return aggregateWidgetRows(recordsResult.records, dataSource);
+}
+
+export async function getWidgetDataAsync(dataSource: WidgetConfig["dataSource"]) {
+  const recordsResult = await listRecordsAsync(dataSource.entityTypeId);
+  if (!recordsResult) {
+    return { rows: [], total: 0 };
+  }
+
+  return aggregateWidgetRows(recordsResult.records, dataSource);
+}
+
+function aggregateWidgetRows(records: { data: Record<string, unknown> }[], dataSource: WidgetConfig["dataSource"]) {
+  const rows = records.filter((record) => matchesFilters(record.data, dataSource.filters ?? []));
   const aggregation = dataSource.aggregation;
 
   if (dataSource.groupBy && aggregation) {

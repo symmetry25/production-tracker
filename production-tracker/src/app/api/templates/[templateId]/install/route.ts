@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { installTemplate } from "@/lib/custom-data-store";
+import { installTemplateAsync } from "@/lib/custom-data-store";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
 
 const installTemplateSchema = z.object({
@@ -19,6 +19,6 @@ export async function POST(request: Request, ctx: RouteParams<{ templateId: stri
   const parsed = installTemplateSchema.safeParse(body);
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid install payload.", 422);
 
-  const entity = installTemplate(templateId, parsed.data);
+  const entity = await installTemplateAsync(templateId, parsed.data);
   return entity ? ok(entity) : fail("Template not found.", 404);
 }

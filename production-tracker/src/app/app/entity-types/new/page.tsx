@@ -1,7 +1,7 @@
 import { EntityTypesIndex, PageHeader, TemplateInstallCard } from "@/components/extensions/entity-type-pages";
-import { listEntityTypes, listTemplates } from "@/lib/custom-data-store";
+import { listEntityTypesAsync, listTemplates } from "@/lib/custom-data-store";
 
-export default function NewEntityTypePage() {
+export default async function NewEntityTypePage() {
   const templates = listTemplates();
   return (
     <div className="space-y-5">
@@ -12,7 +12,7 @@ export default function NewEntityTypePage() {
           {templates.map((template) => <TemplateInstallCard key={template.id} id={template.id} name={template.name} description={template.description} />)}
         </div>
       </section>
-      <EntityTypesIndex entities={listEntityTypes()} />
+      <EntityTypesIndex entities={await listEntityTypesAsync()} />
     </div>
   );
 }

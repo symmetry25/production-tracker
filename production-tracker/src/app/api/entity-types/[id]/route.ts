@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { deleteEntityType, getEntityType, updateEntityType } from "@/lib/custom-data-store";
+import { deleteEntityTypeAsync, getEntityTypeAsync, updateEntityTypeAsync } from "@/lib/custom-data-store";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
 
 const patchEntityTypeSchema = z.object({
@@ -20,7 +20,7 @@ export async function GET(_: Request, ctx: RouteParams<{ id: string }>) {
   if (!session?.user) return fail("Unauthorized", 401);
 
   const { id } = await getRouteParams(ctx);
-  const entity = getEntityType(id);
+  const entity = await getEntityTypeAsync(id);
   return entity ? ok(entity) : fail("Entity type not found.", 404);
 }
 
@@ -32,7 +32,7 @@ export async function PATCH(request: Request, ctx: RouteParams<{ id: string }>) 
   const parsed = patchEntityTypeSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid entity type payload.", 422);
 
-  const entity = updateEntityType(id, parsed.data);
+  const entity = await updateEntityTypeAsync(id, parsed.data);
   return entity ? ok(entity) : fail("Entity type not found.", 404);
 }
 
@@ -41,6 +41,6 @@ export async function DELETE(_: Request, ctx: RouteParams<{ id: string }>) {
   if (!session?.user) return fail("Unauthorized", 401);
 
   const { id } = await getRouteParams(ctx);
-  const entity = deleteEntityType(id);
+  const entity = await deleteEntityTypeAsync(id);
   return entity ? ok(entity) : fail("Entity type not found.", 404);
 }

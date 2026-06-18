@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { reorderFields } from "@/lib/custom-data-store";
+import { reorderFieldsAsync } from "@/lib/custom-data-store";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
 
 const reorderSchema = z.object({
@@ -17,6 +17,6 @@ export async function POST(request: Request, ctx: RouteParams<{ id: string }>) {
   const parsed = reorderSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid reorder payload.", 422);
 
-  const fields = reorderFields(id, parsed.data.fieldIds);
+  const fields = await reorderFieldsAsync(id, parsed.data.fieldIds);
   return fields ? ok(fields) : fail("Entity type not found.", 404);
 }

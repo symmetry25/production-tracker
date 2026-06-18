@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { createEntityType, listEntityTypes } from "@/lib/custom-data-store";
+import { createEntityTypeAsync, listEntityTypesAsync } from "@/lib/custom-data-store";
 
 const createEntityTypeSchema = z.object({
   name: z.string().trim().min(1),
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   return ok(
-    listEntityTypes({
+    await listEntityTypesAsync({
       projectId: searchParams.has("projectId") ? searchParams.get("projectId") : undefined,
       industry: searchParams.get("industry"),
     }),
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid entity type payload.", 422);
 
   try {
-    return ok(createEntityType({ ...parsed.data, fields: parsed.data.fields as never }));
+    return ok(await createEntityTypeAsync({ ...parsed.data, fields: parsed.data.fields as never }));
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Unable to create entity type.", 422);
   }

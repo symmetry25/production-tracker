@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
+vi.mock("@/lib/prisma", () => ({ getPrisma: vi.fn() }));
 
 import { auth } from "@/auth";
+import { getPrisma } from "@/lib/prisma";
 import { resetAiRecognitionForTests } from "@/lib/ai-recognition";
 import { resetCustomDataStoreForTests } from "@/lib/custom-data-store";
 import { resetDashboardsForTests } from "@/lib/dashboard-builder";
@@ -15,6 +17,7 @@ import { POST as readWidgetData } from "./dashboards/widget-data/route";
 import { POST as addField } from "./entity-types/[id]/fields/route";
 import { POST as previewImport } from "./entity-types/[id]/import/preview/route";
 import { POST as createRecord } from "./entity-types/[id]/records/route";
+import { POST as createEntityType } from "./entity-types/route";
 import { DELETE as deleteRecord, PATCH as updateRecord } from "./records/[recordId]/route";
 import { POST as updateUserScore } from "./scores/users/[userId]/route";
 import { POST as installTemplate } from "./templates/[templateId]/install/route";
@@ -23,12 +26,20 @@ import { PATCH as updateUserSkills } from "./users/[userId]/skills/route";
 const session = { user: { id: "demo-admin", name: "Admin User", role: "ADMIN" } };
 
 describe("extension API routes", () => {
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+
   beforeEach(() => {
     vi.mocked(auth).mockResolvedValue(session as never);
+    vi.mocked(getPrisma).mockReset();
+    process.env.DATABASE_URL = "";
     resetCustomDataStoreForTests();
     resetAiRecognitionForTests();
     resetDashboardsForTests();
     resetScoringForTests();
+  });
+
+  afterEach(() => {
+    process.env.DATABASE_URL = originalDatabaseUrl;
   });
 
   it("installs an industry template as a project entity type", async () => {
@@ -48,6 +59,63 @@ describe("extension API routes", () => {
       },
       error: null,
     });
+  });
+
+  it("persists new entity types through Prisma when a database is configured", async () => {
+    process.env.DATABASE_URL = "postgresql://unit.test/db";
+    vi.mocked(getPrisma).mockReturnValue({
+      entityType: {
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn().mockResolvedValue({
+          id: "entity-db-1",
+          name: "数据库采购单",
+          slug: "db-purchase-order",
+          description: "数据库持久化测试",
+          icon: "database",
+          color: "#d8b46a",
+          projectId: null,
+          isTemplate: false,
+          industry: "generic",
+          createdBy: "demo-admin",
+          createdAt: new Date("2026-06-18T00:00:00.000Z"),
+          fields: [
+            {
+              id: "field-name",
+              key: "name",
+              name: "名称",
+              type: "text",
+              required: true,
+              defaultValue: null,
+              options: null,
+              config: null,
+              order: 0,
+              width: 180,
+              hidden: false,
+              readOnly: false,
+            },
+          ],
+          records: [],
+        }),
+      },
+    } as never);
+
+    const response = await createEntityType(
+      new Request("http://app.test/api/entity-types", {
+        method: "POST",
+        body: JSON.stringify({ name: "数据库采购单", slug: "db-purchase-order", description: "数据库持久化测试" }),
+      }),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        id: "entity-db-1",
+        name: "数据库采购单",
+        slug: "db-purchase-order",
+        fields: [{ key: "name", name: "名称" }],
+      },
+      error: null,
+    });
+    expect(getPrisma).toHaveBeenCalled();
   });
 
   it("creates records and applies formula fields", async () => {

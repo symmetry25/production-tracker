@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { getWidgetData } from "@/lib/dashboard-builder";
+import { getWidgetDataAsync } from "@/lib/dashboard-builder";
 
 const widgetDataSchema = z.object({
   entityTypeId: z.string().trim().min(1),
@@ -21,5 +21,5 @@ export async function POST(request: Request) {
   const parsed = widgetDataSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid widget data payload.", 422);
 
-  return ok(getWidgetData(parsed.data as never));
+  return ok(await getWidgetDataAsync(parsed.data as never));
 }

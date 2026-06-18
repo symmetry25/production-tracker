@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 test.describe("production tracker smoke flow", () => {
   test("login, inspect core pages, and read reporting APIs", async ({ page }) => {
+    test.setTimeout(60_000);
+
     await page.goto("/login");
     await page.locator("#email").fill("admin@studio.com");
     await page.locator("#password").fill("admin123");

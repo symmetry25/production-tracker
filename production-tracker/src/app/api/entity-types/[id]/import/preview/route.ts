@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { previewImport } from "@/lib/custom-data-store";
+import { previewImportAsync } from "@/lib/custom-data-store";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
 
 const importPreviewSchema = z.object({
@@ -18,6 +18,6 @@ export async function POST(request: Request, ctx: RouteParams<{ id: string }>) {
   const parsed = importPreviewSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid import preview payload.", 422);
 
-  const preview = previewImport(id, parsed.data);
+  const preview = await previewImportAsync(id, parsed.data);
   return preview ? ok(preview) : fail("Entity type not found.", 404);
 }
