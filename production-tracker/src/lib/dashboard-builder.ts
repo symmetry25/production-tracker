@@ -72,6 +72,7 @@ export type DashboardWidgetItem = {
 type DashboardState = {
   dashboards: Map<string, DashboardItem>;
   sequence: number;
+  demoVersion?: number;
 };
 
 type DbDashboard = {
@@ -97,6 +98,9 @@ type DbDashboardWidget = {
 const globalForDashboard = globalThis as typeof globalThis & {
   __productionTrackerDashboardState?: DashboardState;
 };
+
+const demoDashboardId = "dashboard-producer-demo";
+const demoDashboardVersion = 2;
 
 export function listDashboards(projectId?: string | null) {
   const dashboards = Array.from(getState().dashboards.values());
@@ -501,16 +505,22 @@ async function touchDashboard(dashboardId: string) {
 
 function getState() {
   globalForDashboard.__productionTrackerDashboardState ??= createState();
-  return globalForDashboard.__productionTrackerDashboardState;
+  const state = globalForDashboard.__productionTrackerDashboardState;
+  if (state.demoVersion !== demoDashboardVersion) upgradeDemoDashboard(state);
+  return state;
 }
 
 function createState(): DashboardState {
+  return { sequence: 200, demoVersion: demoDashboardVersion, dashboards: new Map([[demoDashboardId, createDemoDashboard()]]) };
+}
+
+function createDemoDashboard(): DashboardItem {
   const entities = listEntityTypes();
   const purchase = entities.find((entity) => entity.id === "retail-purchase-order") ?? entities[0];
   const inventory = entities.find((entity) => entity.id === "retail-inventory") ?? purchase;
   const now = "2026-06-18T00:00:00.000Z";
-  const dashboard: DashboardItem = {
-    id: "dashboard-producer-demo",
+  return {
+    id: demoDashboardId,
     name: "制片数据驾驶舱",
     description: "预算、供应商、库存和进度的通用可视化样板。",
     projectId: "demo-mkali-mission",
@@ -519,12 +529,32 @@ function createState(): DashboardState {
     createdAt: now,
     updatedAt: now,
     widgets: [
-      seedWidget("widget-spend", "dashboard-producer-demo", 0, "metric_card", "采购金额合计", purchase.id, { field: "total_amount", fn: "sum" }, undefined),
-      seedWidget("widget-vendors", "dashboard-producer-demo", 1, "bar_chart", "供应商支出排行", purchase.id, { field: "total_amount", fn: "sum" }, "supplier"),
-      seedWidget("widget-inventory", "dashboard-producer-demo", 2, "pie_chart", "库存分类金额", inventory.id, { field: "inventory_value", fn: "sum" }, "category"),
+      seedWidget("widget-spend", demoDashboardId, 0, "metric_card", "采购金额合计", purchase.id, { field: "total_amount", fn: "sum" }, undefined),
+      seedWidget("widget-vendors", demoDashboardId, 1, "bar_chart", "供应商支出排行", purchase.id, { field: "total_amount", fn: "sum" }, "supplier"),
+      seedWidget("widget-inventory", demoDashboardId, 2, "pie_chart", "库存分类金额", inventory.id, { field: "inventory_value", fn: "sum" }, "category"),
+      seedWidget("widget-spend-trend", demoDashboardId, 3, "line_chart", "供应商金额曲线", purchase.id, { field: "total_amount", fn: "sum" }, "supplier"),
+      seedWidget("widget-vendor-progress", demoDashboardId, 4, "progress_bar", "供应商预算进度", purchase.id, { field: "total_amount", fn: "sum" }, "supplier"),
+      seedWidget("widget-inventory-funnel", demoDashboardId, 5, "funnel", "库存金额漏斗", inventory.id, { field: "inventory_value", fn: "sum" }, "category"),
+      seedWidget("widget-spend-gauge", demoDashboardId, 6, "gauge", "最大供应商占比", purchase.id, { field: "total_amount", fn: "sum" }, "supplier"),
+      seedWidget("widget-vendor-table", demoDashboardId, 7, "table", "供应商支出明细", purchase.id, { field: "total_amount", fn: "sum" }, "supplier"),
     ],
   };
-  return { sequence: 200, dashboards: new Map([[dashboard.id, dashboard]]) };
+}
+
+function upgradeDemoDashboard(state: DashboardState) {
+  const nextDemo = createDemoDashboard();
+  const currentDemo = state.dashboards.get(demoDashboardId);
+  if (!currentDemo) {
+    state.dashboards.set(demoDashboardId, nextDemo);
+  } else {
+    const existingWidgetIds = new Set(currentDemo.widgets.map((widget) => widget.id));
+    const missingWidgets = nextDemo.widgets.filter((widget) => !existingWidgetIds.has(widget.id));
+    if (missingWidgets.length) {
+      currentDemo.widgets.push(...missingWidgets.map((widget, index) => ({ ...widget, order: currentDemo.widgets.length + index })));
+      currentDemo.updatedAt = nextDemo.updatedAt;
+    }
+  }
+  state.demoVersion = demoDashboardVersion;
 }
 
 function seedWidget(

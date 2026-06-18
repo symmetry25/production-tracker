@@ -40,6 +40,8 @@ const widgetLabels: Record<WidgetConfig["type"], string> = {
   text: "文本",
 };
 
+const libraryTypes: WidgetConfig["type"][] = ["metric_card", "bar_chart", "line_chart", "pie_chart", "progress_bar", "funnel", "gauge", "table"];
+
 export function DashboardLayoutEditor({ dashboard }: { dashboard: DashboardItem }) {
   const router = useRouter();
   const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -170,9 +172,9 @@ export function DashboardLayoutEditor({ dashboard }: { dashboard: DashboardItem 
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#d8b46a]">Widget Library</p>
         <p className="mt-2 text-xs leading-5 text-[#8f8a7e]">拖动画布上的标题栏调整位置，拖右下角控制点改变尺寸。</p>
         <div className="mt-4 space-y-2">
-          {Object.entries(widgetLabels).slice(0, 9).map(([type, label]) => (
+          {libraryTypes.map((type) => (
             <div key={type} className="flex items-center justify-between border border-[#2f2c25] bg-[#11110f] px-3 py-2 text-xs text-[#c9c3b5]">
-              <span>{label}</span>
+              <span>{widgetLabels[type]}</span>
               <span className="font-mono text-[10px] uppercase text-[#6e6e69]">{type.replace("_", " ")}</span>
             </div>
           ))}
@@ -305,7 +307,7 @@ function WidgetPreview({ widget }: { widget: DashboardWidgetItem }) {
     );
   }
 
-  if (widget.config.type === "pie_chart") {
+  if (widget.config.type === "pie_chart" || widget.config.type === "gauge") {
     return (
       <div className="flex h-full min-h-[96px] items-center gap-3 border border-[#2f2c25] bg-[#11110f] p-3">
         <div className="h-16 w-16 shrink-0 rounded-full border-[14px] border-[#d8b46a] border-r-[#4a9eff] border-b-[#1d9e75]" />
@@ -314,6 +316,30 @@ function WidgetPreview({ widget }: { widget: DashboardWidgetItem }) {
           <div className="h-2 w-3/5 bg-[#2f2c25]" />
           <div className="h-2 w-2/5 bg-[#2f2c25]" />
         </div>
+      </div>
+    );
+  }
+
+  if (widget.config.type === "progress_bar" || widget.config.type === "funnel" || widget.config.type === "table") {
+    return (
+      <div className="h-full min-h-[96px] space-y-2 border border-[#2f2c25] bg-[#11110f] p-3">
+        {[78, 64, 48, 36].map((width, index) => (
+          <div key={index} className="flex items-center gap-2">
+            <div className="h-2 bg-[#d8b46a]/80" style={{ width: `${width}%` }} />
+            <div className="h-2 flex-1 bg-[#2f2c25]" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (widget.config.type === "line_chart" || widget.config.type === "timeline") {
+    return (
+      <div className="relative h-full min-h-[96px] overflow-hidden border border-[#2f2c25] bg-[#11110f] p-3">
+        <div className="absolute left-3 right-3 top-1/2 h-px bg-[#2f2c25]" />
+        <svg viewBox="0 0 240 90" className="h-full w-full" aria-hidden="true">
+          <polyline fill="none" stroke="#d8b46a" strokeWidth="4" points="4,70 46,52 88,58 130,28 172,38 232,16" />
+        </svg>
       </div>
     );
   }
