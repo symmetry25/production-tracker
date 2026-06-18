@@ -6,9 +6,7 @@ import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
 import { getPrisma } from "@/lib/prisma";
 import { getTaskReviewVersions } from "@/lib/review-data";
-
-const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
-const allowedMimeTypes = new Set(["video/mp4", "video/quicktime", "image/jpeg", "image/png", "image/webp"]);
+import { validateUploadFile } from "@/lib/upload-validation";
 
 const versionMetadataSchema = z.object({
   description: z.string().trim().optional(),
@@ -57,12 +55,9 @@ export async function POST(request: Request, ctx: TaskRouteContext) {
     return fail("File is required.", 422);
   }
 
-  if (!allowedMimeTypes.has(file.type)) {
-    return fail("只支持 mp4、mov、jpg、png、webp。", 422);
-  }
-
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return fail("文件不能超过 500MB。", 422);
+  const fileValidation = validateUploadFile(file, "review-version");
+  if (!fileValidation.valid) {
+    return fail(fileValidation.message, 422);
   }
 
   const parsed = versionMetadataSchema.safeParse({

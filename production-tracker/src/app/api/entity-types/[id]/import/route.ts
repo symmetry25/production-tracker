@@ -5,6 +5,7 @@ import { fail, ok } from "@/lib/api-response";
 import { importRecordsAsync } from "@/lib/custom-data-store";
 import { parseWorkbook } from "@/lib/excel";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
+import { validateUploadFile } from "@/lib/upload-validation";
 
 const importSchema = z.object({
   sourceText: z.string().optional(),
@@ -23,6 +24,8 @@ export async function POST(request: Request, ctx: RouteParams<{ id: string }>) {
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) return fail("file is required.", 422);
+    const fileValidation = validateUploadFile(file, "workbook");
+    if (!fileValidation.valid) return fail(fileValidation.message, 422);
     const parsedWorkbook = parseWorkbook(await file.arrayBuffer());
     const sourceText = [parsedWorkbook.headers.join("\t"), ...parsedWorkbook.rows.map((row) => parsedWorkbook.headers.map((header) => row[header] ?? "").join("\t"))].join("\n");
     const mappingValue = form.get("mapping");

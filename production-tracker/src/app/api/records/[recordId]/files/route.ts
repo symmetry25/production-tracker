@@ -1,15 +1,18 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
 import { addRecordFileAsync, getRecordAsync } from "@/lib/custom-data-store";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
+import { isAllowedRecordAttachmentMimeType, validateUploadFile } from "@/lib/upload-validation";
 
 const fileSchema = z.object({
   filename: z.string().trim().min(1),
   fileUrl: z.string().trim().min(1),
-  fileType: z.string().trim().min(1),
-  fileSize: z.number().int().min(0),
+  fileType: z.string().trim().refine(isAllowedRecordAttachmentMimeType, "只支持视频、图片、PDF、Word、Excel、CSV 附件。"),
+  fileSize: z.number().int().min(0).max(500 * 1024 * 1024, "文件不能超过 500MB。"),
 });
 
 export async function GET(_: Request, ctx: RouteParams<{ recordId: string }>) {
@@ -26,9 +29,44 @@ export async function POST(request: Request, ctx: RouteParams<{ recordId: string
   if (!session?.user) return fail("Unauthorized", 401);
 
   const { recordId } = await getRouteParams(ctx);
+  const contentType = request.headers.get("content-type") ?? "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const form = await request.formData().catch(() => null);
+    if (!form) return fail("Invalid multipart payload.", 422);
+
+    const file = form.get("file");
+    if (!(file instanceof File)) return fail("File is required.", 422);
+
+    const fileValidation = validateUploadFile(file, "record-attachment");
+    if (!fileValidation.valid) return fail(fileValidation.message, 422);
+
+    const safeName = safeFilename(file.name || "attachment");
+    const uploadDir = path.join(process.cwd(), "public", "uploads", "records", recordId);
+    const publicUrl = `/uploads/records/${recordId}/${Date.now()}-${safeName}`;
+
+    await mkdir(uploadDir, { recursive: true });
+    await writeFile(path.join(uploadDir, path.basename(publicUrl)), Buffer.from(await file.arrayBuffer()));
+
+    const uploaded = await addRecordFileAsync(recordId, {
+      filename: safeName,
+      fileUrl: publicUrl,
+      fileType: file.type,
+      fileSize: file.size,
+    });
+
+    return uploaded ? ok(uploaded) : fail("Record not found.", 404);
+  }
+
   const parsed = fileSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid file payload.", 422);
 
   const file = await addRecordFileAsync(recordId, parsed.data);
   return file ? ok(file) : fail("Record not found.", 404);
+}
+
+function safeFilename(filename: string) {
+  const extension = path.extname(filename);
+  const baseName = path.basename(filename, extension).replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "attachment";
+  return `${baseName}${extension.toLowerCase()}`;
 }

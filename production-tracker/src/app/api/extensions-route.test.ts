@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({ getPrisma: vi.fn() }));
+vi.mock("node:fs/promises", () => ({
+  mkdir: vi.fn().mockResolvedValue(undefined),
+  writeFile: vi.fn().mockResolvedValue(undefined),
+}));
 
 import { auth } from "@/auth";
 import { getPrisma } from "@/lib/prisma";
@@ -21,6 +25,7 @@ import { POST as addField } from "./entity-types/[id]/fields/route";
 import { POST as previewImport } from "./entity-types/[id]/import/preview/route";
 import { POST as createRecord } from "./entity-types/[id]/records/route";
 import { POST as createEntityType } from "./entity-types/route";
+import { POST as attachRecordFile } from "./records/[recordId]/files/route";
 import { DELETE as deleteRecord, PATCH as updateRecord } from "./records/[recordId]/route";
 import { GET as readUserScorecard, POST as updateUserScore } from "./scores/users/[userId]/route";
 import { POST as installTemplate } from "./templates/[templateId]/install/route";
@@ -257,6 +262,99 @@ describe("extension API routes", () => {
       },
       error: null,
     });
+  });
+
+  it("rejects unsupported record attachment types", async () => {
+    const createResponse = await createRecord(
+      new Request("http://app.test/api/entity-types/retail-purchase-order/records", {
+        method: "POST",
+        body: JSON.stringify({ data: { po_number: "PO-FILE-1", supplier: "附件供应商", unit_cost: 200, quantity: 1 } }),
+      }),
+      { params: Promise.resolve({ id: "retail-purchase-order" }) },
+    );
+    const created = await createResponse.json();
+
+    const response = await attachRecordFile(
+      new Request(`http://app.test/api/records/${created.data.id}/files`, {
+        method: "POST",
+        body: JSON.stringify({
+          filename: "malware.exe",
+          fileUrl: "/uploads/records/malware.exe",
+          fileType: "application/x-msdownload",
+          fileSize: 100,
+        }),
+      }),
+      { params: Promise.resolve({ recordId: created.data.id }) },
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: null,
+      error: "只支持视频、图片、PDF、Word、Excel、CSV 附件。",
+    });
+    expect(response.status).toBe(422);
+  });
+
+  it("rejects record attachments above 500MB", async () => {
+    const createResponse = await createRecord(
+      new Request("http://app.test/api/entity-types/retail-purchase-order/records", {
+        method: "POST",
+        body: JSON.stringify({ data: { po_number: "PO-FILE-2", supplier: "附件供应商", unit_cost: 200, quantity: 1 } }),
+      }),
+      { params: Promise.resolve({ id: "retail-purchase-order" }) },
+    );
+    const created = await createResponse.json();
+
+    const response = await attachRecordFile(
+      new Request(`http://app.test/api/records/${created.data.id}/files`, {
+        method: "POST",
+        body: JSON.stringify({
+          filename: "oversize.pdf",
+          fileUrl: "/uploads/records/oversize.pdf",
+          fileType: "application/pdf",
+          fileSize: 500 * 1024 * 1024 + 1,
+        }),
+      }),
+      { params: Promise.resolve({ recordId: created.data.id }) },
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: null,
+      error: "文件不能超过 500MB。",
+    });
+    expect(response.status).toBe(422);
+  });
+
+  it("uploads a multipart file as a record attachment", async () => {
+    const createResponse = await createRecord(
+      new Request("http://app.test/api/entity-types/retail-purchase-order/records", {
+        method: "POST",
+        body: JSON.stringify({ data: { po_number: "PO-FILE-3", supplier: "附件供应商", unit_cost: 200, quantity: 1 } }),
+      }),
+      { params: Promise.resolve({ id: "retail-purchase-order" }) },
+    );
+    const created = await createResponse.json();
+    const formData = new FormData();
+    formData.set("file", new File(["invoice"], "Invoice Final.pdf", { type: "application/pdf" }));
+
+    const response = await attachRecordFile(
+      new Request(`http://app.test/api/records/${created.data.id}/files`, {
+        method: "POST",
+        body: formData,
+      }),
+      { params: Promise.resolve({ recordId: created.data.id }) },
+    );
+
+    const body = await response.json();
+    expect(body).toMatchObject({
+      data: {
+        recordId: created.data.id,
+        filename: "Invoice_Final.pdf",
+        fileType: "application/pdf",
+        fileSize: 7,
+      },
+      error: null,
+    });
+    expect(body.data.fileUrl).toContain(`/uploads/records/${created.data.id}/`);
   });
 
   it("returns mock AI recognition result when provider keys are not configured", async () => {
