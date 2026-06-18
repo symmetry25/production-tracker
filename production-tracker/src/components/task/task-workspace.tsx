@@ -66,7 +66,7 @@ function ScheduleSuggestionPanel({ summary }: { summary: ScheduleSuggestionSumma
     <section className="mb-4 border border-[#34322b] bg-[#161612]">
       <div className="grid gap-4 p-4 xl:grid-cols-[240px_minmax(0,1fr)_260px]">
         <div className="border border-[#2f2d27] bg-[#11110f] p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">AI Schedule</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">Schedule intelligence</p>
           <div className="mt-4 flex items-end gap-2">
             <span className={["font-mono text-5xl leading-none", summary.healthScore < 70 ? "text-[#ff9a8f]" : "text-[#9cccae]"].join(" ")}>{summary.healthScore}</span>
             <span className="pb-1 text-xs uppercase tracking-[0.18em] text-[#7f7a70]">health</span>

@@ -1,7 +1,7 @@
 import { CreateTaskForm } from "@/components/task/create-task-form";
 import { TaskWorkspace } from "@/components/task/task-workspace";
 import { getDictionary, getLocale } from "@/lib/i18n";
-import { buildScheduleSuggestionsWithAi, type ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
+import { buildScheduleSuggestions, type ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
 import { getTaskFormOptions, getTaskTableItems, type TaskFormOptions, type TaskTableItem } from "@/lib/task-data";
 
 export default async function ProjectTasksPage({ params }: { params: Promise<{ projectId: string }> }) {
@@ -15,7 +15,7 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ p
 
   try {
     [tasks, options] = await Promise.all([getTaskTableItems({ projectId }), getTaskFormOptions(projectId)]);
-    scheduleSuggestions = await buildScheduleSuggestionsWithAi({ projectId, tasks });
+    scheduleSuggestions = buildScheduleSuggestions({ projectId, tasks });
   } catch (caught) {
     error = caught instanceof Error ? caught.message : "任务数据暂时无法读取。";
   }
