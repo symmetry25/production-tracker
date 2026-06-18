@@ -18,6 +18,7 @@ import { POST as recognizeDocument } from "./ai/recognize/route";
 import { GET as listRecognizedScans } from "./ai/scans/route";
 import { PATCH as updateCalendarException } from "./calendar-exceptions/[exceptionId]/route";
 import { DELETE as deleteWidget } from "./dashboards/[dashboardId]/widgets/[widgetId]/route";
+import { POST as updateDashboardLayout } from "./dashboards/[dashboardId]/widgets/layout/route";
 import { POST as createWidget } from "./dashboards/[dashboardId]/widgets/route";
 import { POST as readWidgetData } from "./dashboards/widget-data/route";
 import { POST as createDashboard } from "./dashboards/route";
@@ -581,6 +582,30 @@ describe("extension API routes", () => {
       },
       error: null,
     });
+  });
+
+  it("updates dashboard widget layouts", async () => {
+    const response = await updateDashboardLayout(
+      new Request("http://app.test/api/dashboards/dashboard-producer-demo/widgets/layout", {
+        method: "POST",
+        body: JSON.stringify({
+          layouts: [
+            { widgetId: "widget-spend", layout: { x: 0, y: 0, w: 12, h: 3 } },
+            { widgetId: "widget-vendors", layout: { x: 0, y: 3, w: 8, h: 5 } },
+          ],
+        }),
+      }),
+      { params: Promise.resolve({ dashboardId: "dashboard-producer-demo" }) },
+    );
+
+    const body = await response.json();
+    expect(body.error).toBeNull();
+    expect(body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "widget-spend", config: expect.objectContaining({ layout: { x: 0, y: 0, w: 12, h: 3 } }) }),
+        expect.objectContaining({ id: "widget-vendors", config: expect.objectContaining({ layout: { x: 0, y: 3, w: 8, h: 5 } }) }),
+      ]),
+    );
   });
 
   it("updates a user score and returns the new scorecard", async () => {

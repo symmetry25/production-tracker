@@ -2,8 +2,8 @@
 
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
+import { DashboardLayoutEditor } from "@/components/dashboard-builder/dashboard-layout-editor";
 import { WidgetAddPanel } from "@/components/dashboard-builder/widget-add-panel";
-import { WidgetActions } from "@/components/dashboard-builder/widget-actions";
 import { PageHeader, Metric } from "@/components/extensions/entity-type-pages";
 import type { EntityTypeItem } from "@/lib/custom-data-store";
 import type { DashboardItem, WidgetConfig } from "@/lib/dashboard-builder";
@@ -40,7 +40,7 @@ export function DashboardView({ dashboard, widgetData }: { dashboard: DashboardI
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Dashboard view" title={dashboard.name} description={dashboard.description} action={<a href={`/app/dashboards/${dashboard.id}/edit`} className="h-9 border border-[#3f3c33] px-4 py-2 text-xs text-[#c9c3b5] hover:border-[#d8b46a]">编辑构建器</a>} />
-      <div className="grid auto-rows-[270px] gap-4 xl:grid-cols-12">
+      <div className="grid auto-rows-[72px] grid-cols-12 gap-3">
         {dashboard.widgets.map((widget) => (
           <WidgetCard key={widget.id} config={widget.config} data={widgetData[widget.id]} />
         ))}
@@ -52,71 +52,49 @@ export function DashboardView({ dashboard, widgetData }: { dashboard: DashboardI
 export function DashboardEditor({ dashboard, entities }: { dashboard: DashboardItem; entities: EntityTypeItem[] }) {
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow="Edit dashboard" title={`${dashboard.name} 构建器`} description="左侧是 Widget 库，中间是画布，右侧是数据映射。当前版本提供可视化配置预览；API 已支持添加、更新、删除 Widget 和批量布局保存。" />
+      <PageHeader eyebrow="Edit dashboard" title={`${dashboard.name} 构建器`} description="左侧是 Widget 库，中间是可拖拽画布，右侧是布局与数据映射。保存后仪表盘页面会按同一套 12 列布局渲染。" />
       <WidgetAddPanel dashboardId={dashboard.id} entities={entities} />
-      <div className="grid min-h-[620px] grid-cols-[240px_minmax(0,1fr)_320px] border border-[#34322b] bg-[#181713]">
-        <aside className="border-r border-[#34322b] p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#d8b46a]">Widget Library</p>
-          <div className="mt-4 space-y-2">
-            {["指标卡", "柱状图", "环形图", "表格", "进度条", "漏斗图", "仪表盘"].map((item) => <div key={item} className="border border-[#2f2c25] bg-[#11110f] px-3 py-2 text-sm text-[#c9c3b5]">{item}</div>)}
-          </div>
-        </aside>
-        <main className="p-4">
-          <div className="grid auto-rows-[180px] grid-cols-12 gap-3">
-            {dashboard.widgets.map((widget) => (
-              <div key={widget.id} className="col-span-6 border border-[#34322b] bg-[#11110f] p-3">
-                <p className="text-sm font-semibold">{widget.config.title}</p>
-                <p className="mt-2 font-mono text-xs text-[#8f8a7e]">{widget.config.type} · {widget.config.dataSource.entityTypeId}</p>
-                <p className="mt-4 text-xs leading-5 text-[#aaa599]">layout x:{widget.config.layout.x} y:{widget.config.layout.y} w:{widget.config.layout.w} h:{widget.config.layout.h}</p>
-                <WidgetActions dashboardId={dashboard.id} widgetId={widget.id} />
-              </div>
-            ))}
-          </div>
-        </main>
-        <aside className="border-l border-[#34322b] p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#d8b46a]">Config Panel</p>
-          <div className="mt-4 space-y-3 text-sm text-[#c9c3b5]">
-            <p>选择 Widget 后可配置数据源、分组字段、聚合函数、过滤条件、颜色方案和自动刷新。</p>
-            <p className="font-mono text-xs text-[#8f8a7e]">POST /api/dashboards/{dashboard.id}/widgets</p>
-          </div>
-        </aside>
-      </div>
+      <DashboardLayoutEditor key={`${dashboard.updatedAt}-${dashboard.widgets.length}`} dashboard={dashboard} />
     </div>
   );
 }
 
 function WidgetCard({ config, data }: { config: WidgetConfig; data?: { rows: unknown[]; total: number } }) {
   const rows = (data?.rows ?? []) as { name?: string; value?: number }[];
-  const className = config.type === "metric_card" ? "xl:col-span-4" : "xl:col-span-6";
+  const layout = clampLayout(config.layout);
 
   return (
-    <section className={`${className} border border-[#34322b] bg-[#181713]`}>
-      <div className="border-b border-[#2a2a28] px-4 py-3">
+    <section className="flex min-h-0 flex-col overflow-hidden border border-[#34322b] bg-[#181713]" style={{ gridColumn: `${layout.x + 1} / span ${layout.w}`, gridRow: `${layout.y + 1} / span ${layout.h}` }}>
+      <div className="shrink-0 border-b border-[#2a2a28] px-4 py-3">
         <p className="text-sm font-semibold">{config.title}</p>
       </div>
       {config.type === "metric_card" ? (
-        <div className="p-5">
+        <div className="min-h-0 flex-1 p-5">
           <p className="font-mono text-4xl text-[#e8c678]">{Number(rows[0]?.value ?? 0).toLocaleString("zh-CN")}</p>
           <p className="mt-3 text-xs text-[#8f8a7e]">records {data?.total ?? 0}</p>
         </div>
       ) : config.type === "pie_chart" ? (
-        <ResponsiveContainer width="100%" height={210} minWidth={1} minHeight={1}>
-          <PieChart>
-            <Pie data={rows} dataKey="value" nameKey="name" innerRadius={48} outerRadius={78}>
-              {rows.map((row, index) => <Cell key={row.name ?? index} fill={palette[index % palette.length]} />)}
-            </Pie>
-            <Tooltip contentStyle={tooltipStyle} />
-          </PieChart>
-        </ResponsiveContainer>
+        <div className="min-h-0 flex-1">
+          <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+            <PieChart>
+              <Pie data={rows} dataKey="value" nameKey="name" innerRadius={48} outerRadius={78}>
+                {rows.map((row, index) => <Cell key={row.name ?? index} fill={palette[index % palette.length]} />)}
+              </Pie>
+              <Tooltip contentStyle={tooltipStyle} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
       ) : (
-        <ResponsiveContainer width="100%" height={210} minWidth={1} minHeight={1}>
-          <BarChart data={rows} margin={{ top: 18, right: 14, bottom: 0, left: -12 }}>
-            <XAxis dataKey="name" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={tooltipStyle} />
-            <Bar dataKey="value" fill="#d8b46a" />
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="min-h-0 flex-1">
+          <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+            <BarChart data={rows} margin={{ top: 18, right: 14, bottom: 0, left: -12 }}>
+              <XAxis dataKey="name" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={tooltipStyle} />
+              <Bar dataKey="value" fill="#d8b46a" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       )}
     </section>
   );
@@ -128,3 +106,13 @@ const tooltipStyle = {
   color: "#f4f1e8",
   fontSize: 12,
 };
+
+function clampLayout(layout: WidgetConfig["layout"]) {
+  const width = Math.min(12, Math.max(2, Math.round(layout.w || 6)));
+  return {
+    x: Math.min(12 - width, Math.max(0, Math.round(layout.x || 0))),
+    y: Math.max(0, Math.round(layout.y || 0)),
+    w: width,
+    h: Math.min(12, Math.max(2, Math.round(layout.h || 4))),
+  };
+}
