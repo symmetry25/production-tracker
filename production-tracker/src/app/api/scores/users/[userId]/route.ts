@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { getUserScorecard, upsertUserScoreAsync } from "@/lib/scoring";
+import { getUserScorecardAsync, upsertUserScoreAsync } from "@/lib/scoring";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
 
 const scoreSchema = z.object({
@@ -17,7 +17,7 @@ export async function GET(request: Request, ctx: RouteParams<{ userId: string }>
   if (!session?.user) return fail("Unauthorized", 401);
   const { userId } = await getRouteParams(ctx);
   const { searchParams } = new URL(request.url);
-  const scorecard = getUserScorecard(userId, searchParams.get("period") ?? undefined);
+  const scorecard = await getUserScorecardAsync(userId, searchParams.get("period") ?? undefined);
   return scorecard ? ok(scorecard) : fail("User not found.", 404);
 }
 

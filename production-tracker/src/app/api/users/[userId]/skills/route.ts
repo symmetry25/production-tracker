@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { getUserSkills, updateUserSkillsAsync } from "@/lib/scoring";
+import { getUserSkillsAsync, updateUserSkillsAsync } from "@/lib/scoring";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
 
 const updateSkillsSchema = z.object({
@@ -13,7 +13,7 @@ export async function GET(_: Request, ctx: RouteParams<{ userId: string }>) {
   const session = await auth();
   if (!session?.user) return fail("Unauthorized", 401);
   const { userId } = await getRouteParams(ctx);
-  return ok(getUserSkills(userId));
+  return ok(await getUserSkillsAsync(userId));
 }
 
 export async function PATCH(request: Request, ctx: RouteParams<{ userId: string }>) {

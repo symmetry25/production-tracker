@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { createGrade, listGrades } from "@/lib/scoring";
+import { createGradeAsync, listGradesAsync } from "@/lib/scoring";
 
 const gradeSchema = z.object({
   name: z.string().trim().min(1),
@@ -19,7 +19,7 @@ const gradeSchema = z.object({
 export async function GET() {
   const session = await auth();
   if (!session?.user) return fail("Unauthorized", 401);
-  return ok(listGrades());
+  return ok(await listGradesAsync());
 }
 
 export async function POST(request: Request) {
@@ -27,5 +27,5 @@ export async function POST(request: Request) {
   if (!session?.user) return fail("Unauthorized", 401);
   const parsed = gradeSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid grade payload.", 422);
-  return ok(createGrade({ ...parsed.data, department: parsed.data.department ?? null, salaryMin: parsed.data.salaryMin ?? null, salaryMax: parsed.data.salaryMax ?? null }));
+  return ok(await createGradeAsync({ ...parsed.data, department: parsed.data.department ?? null, salaryMin: parsed.data.salaryMin ?? null, salaryMax: parsed.data.salaryMax ?? null }));
 }

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { createScoreDimension, listScoreDimensions } from "@/lib/scoring";
+import { createScoreDimensionAsync, listScoreDimensionsAsync } from "@/lib/scoring";
 
 const dimensionSchema = z.object({
   name: z.string().trim().min(1),
@@ -17,7 +17,7 @@ const dimensionSchema = z.object({
 export async function GET() {
   const session = await auth();
   if (!session?.user) return fail("Unauthorized", 401);
-  return ok(listScoreDimensions());
+  return ok(await listScoreDimensionsAsync());
 }
 
 export async function POST(request: Request) {
@@ -25,5 +25,5 @@ export async function POST(request: Request) {
   if (!session?.user) return fail("Unauthorized", 401);
   const parsed = dimensionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid dimension payload.", 422);
-  return ok(createScoreDimension(parsed.data));
+  return ok(await createScoreDimensionAsync(parsed.data));
 }

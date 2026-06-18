@@ -22,8 +22,6 @@ export type UserScoreItem = {
   period: string;
 };
 
-type UserScorecard = NonNullable<ReturnType<typeof getUserScorecard>>;
-
 export type GradeLevelItem = {
   id: string;
   name: string;
@@ -53,11 +51,31 @@ export type UserSkillItem = {
   updatedAt: string;
 };
 
+export type UserSkillWithSkill = UserSkillItem & { skill: SkillItem | null };
+
 export type ScoreUser = {
   id: string;
   name: string;
   department: string;
   role: string;
+};
+
+type UserScorecard = {
+  user: ScoreUser;
+  period: string;
+  compositeScore: number;
+  grade: GradeLevelItem | null;
+  rows: {
+    dimension: ScoreDimensionItem;
+    score: number;
+    previousScore: number | null;
+    change: number | null;
+    comment: string | null;
+    scoredById: string | null;
+    scoredAt: string | null;
+  }[];
+  skills: UserSkillWithSkill[];
+  history: { period: string; compositeScore: number }[];
 };
 
 type ScoringState = {
@@ -87,10 +105,34 @@ export function listScoreDimensions() {
   return clone(getState().dimensions);
 }
 
+export async function listScoreDimensionsAsync() {
+  if (!shouldUsePersistentStore()) return listScoreDimensions();
+
+  const dimensions = await getPrisma().scoreDimension.findMany({ orderBy: { category: "asc" } });
+  return dimensions.map(dimensionFromDb);
+}
+
 export function createScoreDimension(input: Pick<ScoreDimensionItem, "name" | "description" | "weight" | "maxScore" | "minScore" | "category"> & Partial<Pick<ScoreDimensionItem, "projectId">>) {
   const dimension: ScoreDimensionItem = { ...input, id: `dimension-${nextSequence()}`, projectId: input.projectId ?? null };
   getState().dimensions.push(dimension);
   return clone(dimension);
+}
+
+export async function createScoreDimensionAsync(input: Pick<ScoreDimensionItem, "name" | "description" | "weight" | "maxScore" | "minScore" | "category"> & Partial<Pick<ScoreDimensionItem, "projectId">>) {
+  if (!shouldUsePersistentStore()) return createScoreDimension(input);
+
+  const dimension = await getPrisma().scoreDimension.create({
+    data: {
+      name: input.name,
+      description: input.description,
+      weight: input.weight,
+      maxScore: input.maxScore,
+      minScore: input.minScore,
+      category: input.category,
+      projectId: input.projectId ?? null,
+    },
+  });
+  return dimensionFromDb(dimension);
 }
 
 export function updateScoreDimension(id: string, input: Partial<ScoreDimensionItem>) {
@@ -101,29 +143,67 @@ export function updateScoreDimension(id: string, input: Partial<ScoreDimensionIt
   return clone(dimension);
 }
 
+export async function updateScoreDimensionAsync(id: string, input: Partial<ScoreDimensionItem>) {
+  if (!shouldUsePersistentStore()) return updateScoreDimension(id, input);
+
+  const existing = await getPrisma().scoreDimension.findUnique({ where: { id } });
+  if (!existing) return null;
+  const dimension = await getPrisma().scoreDimension.update({
+    where: { id },
+    data: {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.weight !== undefined ? { weight: input.weight } : {}),
+      ...(input.maxScore !== undefined ? { maxScore: input.maxScore } : {}),
+      ...(input.minScore !== undefined ? { minScore: input.minScore } : {}),
+      ...(input.category !== undefined ? { category: input.category } : {}),
+      ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
+    },
+  });
+  return dimensionFromDb(dimension);
+}
+
 export function getUserScorecard(userId: string, period = periodDefault) {
   const state = getState();
   const user = state.users.find((item) => item.id === userId);
   if (!user) return null;
 
-  const rows = state.dimensions.map((dimension) => {
-    const current = state.scores.find((score) => score.userId === userId && score.dimensionId === dimension.id && score.period === period);
-    const previous = state.scores.find((score) => score.userId === userId && score.dimensionId === dimension.id && score.period !== period);
-    return {
-      dimension,
-      score: current?.score ?? 0,
-      previousScore: previous?.score ?? null,
-      change: previous ? (current?.score ?? 0) - previous.score : null,
-      comment: current?.comment ?? null,
-      scoredById: current?.scoredById ?? null,
-      scoredAt: current?.scoredAt ?? null,
-    };
-  });
-  const compositeScore = calculateCompositeScore(rows.map((row) => ({ score: row.score, weight: row.dimension.weight, maxScore: row.dimension.maxScore })));
-  const grade = determineGrade(compositeScore, user.department);
-  const skills = getUserSkills(userId);
+  return clone(buildScorecard({
+    user,
+    dimensions: state.dimensions,
+    scores: state.scores.filter((score) => score.userId === userId),
+    grades: state.grades,
+    skills: getUserSkills(userId),
+    period,
+  }));
+}
 
-  return clone({ user, period, compositeScore, grade, rows, skills, history: getUserScoreHistory(userId) });
+export async function getUserScorecardAsync(userId: string, period = periodDefault): Promise<UserScorecard | null> {
+  if (!shouldUsePersistentStore()) return getUserScorecard(userId, period);
+
+  const [user, dimensions, scores, grades, skills] = await Promise.all([
+    getPrisma().user.findUnique({ where: { id: userId }, select: { id: true, name: true, department: true, role: true } }),
+    getPrisma().scoreDimension.findMany({ orderBy: { category: "asc" } }),
+    getPrisma().userScore.findMany({ where: { userId }, orderBy: { scoredAt: "desc" } }),
+    getPrisma().gradeLevel.findMany({ orderBy: { minScore: "desc" } }),
+    getPrisma().userSkill.findMany({ where: { userId }, include: { skill: true } }),
+  ]);
+
+  if (!user || dimensions.length === 0) return getUserScorecard(userId, period);
+
+  return buildScorecard({
+    user: {
+      id: user.id,
+      name: user.name,
+      department: user.department ?? "未分组",
+      role: String(user.role),
+    },
+    dimensions: dimensions.map(dimensionFromDb),
+    scores: scores.map(scoreFromDb),
+    grades: grades.map(gradeFromDb),
+    skills: skills.map(userSkillWithSkillFromDb),
+    period,
+  });
 }
 
 export function upsertUserScore(userId: string, input: { dimensionId: string; score: number; comment?: string | null; period?: string; scoredById?: string }) {
@@ -184,14 +264,18 @@ export async function upsertUserScoreAsync(userId: string, input: { dimensionId:
 
 export function getUserScoreHistory(userId: string) {
   const state = getState();
-  const periods = Array.from(new Set(state.scores.filter((score) => score.userId === userId).map((score) => score.period))).sort();
-  return periods.map((period) => {
-    const rows = state.dimensions.map((dimension) => {
-      const score = state.scores.find((item) => item.userId === userId && item.dimensionId === dimension.id && item.period === period);
-      return { score: score?.score ?? 0, weight: dimension.weight, maxScore: dimension.maxScore };
-    });
-    return { period, compositeScore: calculateCompositeScore(rows) };
-  });
+  return buildScoreHistory(state.dimensions, state.scores.filter((score) => score.userId === userId));
+}
+
+export async function getUserScoreHistoryAsync(userId: string) {
+  if (!shouldUsePersistentStore()) return getUserScoreHistory(userId);
+
+  const [dimensions, scores] = await Promise.all([
+    getPrisma().scoreDimension.findMany(),
+    getPrisma().userScore.findMany({ where: { userId } }),
+  ]);
+  if (dimensions.length === 0) return getUserScoreHistory(userId);
+  return buildScoreHistory(dimensions.map(dimensionFromDb), scores.map(scoreFromDb));
 }
 
 export function getScoreSummary(filters: { department?: string | null; period?: string | null } = {}) {
@@ -210,18 +294,61 @@ export function getScoreSummary(filters: { department?: string | null; period?: 
     .sort((a, b) => b.compositeScore - a.compositeScore);
 }
 
+export async function getScoreSummaryAsync(filters: { department?: string | null; period?: string | null } = {}) {
+  if (!shouldUsePersistentStore()) return getScoreSummary(filters);
+
+  const period = filters.period ?? periodDefault;
+  const users = await getPrisma().user.findMany({
+    where: filters.department ? { department: filters.department } : undefined,
+    select: { id: true, name: true, department: true, role: true },
+    orderBy: { name: "asc" },
+  });
+  const scorecards = await Promise.all(users.map((user) => getUserScorecardAsync(user.id, period)));
+  return scorecards
+    .filter((scorecard): scorecard is UserScorecard => Boolean(scorecard))
+    .map((scorecard) => ({
+      user: scorecard.user,
+      period,
+      compositeScore: scorecard.compositeScore,
+      grade: scorecard.grade,
+      skillCount: scorecard.skills.length,
+    }))
+    .sort((a, b) => b.compositeScore - a.compositeScore);
+}
+
 export function getScoreLeaderboard(filters: { department?: string | null; period?: string | null } = {}) {
   return getScoreSummary(filters).map((row, index) => ({ rank: index + 1, ...row }));
+}
+
+export async function getScoreLeaderboardAsync(filters: { department?: string | null; period?: string | null } = {}) {
+  const summary = await getScoreSummaryAsync(filters);
+  return summary.map((row, index) => ({ rank: index + 1, ...row }));
 }
 
 export function listGrades() {
   return clone(getState().grades);
 }
 
+export async function listGradesAsync() {
+  if (!shouldUsePersistentStore()) return listGrades();
+
+  const grades = await getPrisma().gradeLevel.findMany({ orderBy: { minScore: "desc" } });
+  return grades.map(gradeFromDb);
+}
+
 export function createGrade(input: Omit<GradeLevelItem, "id">) {
   const grade: GradeLevelItem = { ...input, id: `grade-${nextSequence()}` };
   getState().grades.push(grade);
   return clone(grade);
+}
+
+export async function createGradeAsync(input: Omit<GradeLevelItem, "id">) {
+  if (!shouldUsePersistentStore()) return createGrade(input);
+
+  const grade = await getPrisma().gradeLevel.create({
+    data: input,
+  });
+  return gradeFromDb(grade);
 }
 
 export function updateGrade(id: string, input: Partial<GradeLevelItem>) {
@@ -231,6 +358,28 @@ export function updateGrade(id: string, input: Partial<GradeLevelItem>) {
   return clone(grade);
 }
 
+export async function updateGradeAsync(id: string, input: Partial<GradeLevelItem>) {
+  if (!shouldUsePersistentStore()) return updateGrade(id, input);
+
+  const existing = await getPrisma().gradeLevel.findUnique({ where: { id } });
+  if (!existing) return null;
+  const grade = await getPrisma().gradeLevel.update({
+    where: { id },
+    data: {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.code !== undefined ? { code: input.code } : {}),
+      ...(input.department !== undefined ? { department: input.department } : {}),
+      ...(input.minScore !== undefined ? { minScore: input.minScore } : {}),
+      ...(input.maxScore !== undefined ? { maxScore: input.maxScore } : {}),
+      ...(input.salaryMin !== undefined ? { salaryMin: input.salaryMin } : {}),
+      ...(input.salaryMax !== undefined ? { salaryMax: input.salaryMax } : {}),
+      ...(input.color !== undefined ? { color: input.color } : {}),
+      ...(input.benefits !== undefined ? { benefits: input.benefits } : {}),
+    },
+  });
+  return gradeFromDb(grade);
+}
+
 export function setUserGrade(userId: string, gradeId: string) {
   const grade = getState().grades.find((item) => item.id === gradeId);
   const scorecard = getUserScorecard(userId);
@@ -238,8 +387,51 @@ export function setUserGrade(userId: string, gradeId: string) {
   return clone({ user: scorecard.user, grade, effectiveDate: new Date().toISOString(), setById: "demo-admin" });
 }
 
+export async function setUserGradeAsync(userId: string, gradeId: string, setById = "demo-admin") {
+  if (!shouldUsePersistentStore()) return setUserGrade(userId, gradeId);
+
+  const [user, grade] = await Promise.all([
+    getPrisma().user.findUnique({ where: { id: userId }, select: { id: true, name: true, department: true, role: true } }),
+    getPrisma().gradeLevel.findUnique({ where: { id: gradeId } }),
+  ]);
+  if (!user || !grade) return null;
+
+  await getPrisma().userGrade.upsert({
+    where: { userId },
+    update: {
+      gradeId,
+      effectiveDate: new Date(),
+      setById,
+    },
+    create: {
+      userId,
+      gradeId,
+      effectiveDate: new Date(),
+      setById,
+    },
+  });
+  return {
+    user: {
+      id: user.id,
+      name: user.name,
+      department: user.department ?? "未分组",
+      role: String(user.role),
+    },
+    grade: gradeFromDb(grade),
+    effectiveDate: new Date().toISOString(),
+    setById,
+  };
+}
+
 export function listSkills() {
   return clone(getState().skills);
+}
+
+export async function listSkillsAsync() {
+  if (!shouldUsePersistentStore()) return listSkills();
+
+  const skills = await getPrisma().skill.findMany({ orderBy: [{ category: "asc" }, { name: "asc" }] });
+  return skills.map(skillFromDb);
 }
 
 export function createSkill(input: Pick<SkillItem, "name" | "category">) {
@@ -248,12 +440,26 @@ export function createSkill(input: Pick<SkillItem, "name" | "category">) {
   return clone(skill);
 }
 
+export async function createSkillAsync(input: Pick<SkillItem, "name" | "category">) {
+  if (!shouldUsePersistentStore()) return createSkill(input);
+
+  const skill = await getPrisma().skill.create({ data: input });
+  return skillFromDb(skill);
+}
+
 export function getUserSkills(userId: string) {
   const state = getState();
   return state.userSkills
     .filter((item) => item.userId === userId)
     .map((item) => ({ ...item, skill: state.skills.find((skill) => skill.id === item.skillId) ?? null }))
     .sort((a, b) => String(a.skill?.category).localeCompare(String(b.skill?.category)) || String(a.skill?.name).localeCompare(String(b.skill?.name)));
+}
+
+export async function getUserSkillsAsync(userId: string) {
+  if (!shouldUsePersistentStore()) return getUserSkills(userId);
+
+  const skills = await getPrisma().userSkill.findMany({ where: { userId }, include: { skill: true } });
+  return skills.map(userSkillWithSkillFromDb);
 }
 
 export function updateUserSkills(userId: string, updates: { skillId: string; level: number; verifiedBy?: string | null }[]) {
@@ -317,16 +523,112 @@ export function resetScoringForTests() {
   globalForScoring.__productionTrackerScoringState = createState();
 }
 
-function determineGrade(compositeScore: number, department: string) {
+function shouldUsePersistentStore() {
+  return Boolean(process.env.DATABASE_URL);
+}
+
+function buildScorecard(input: {
+  user: ScoreUser;
+  dimensions: ScoreDimensionItem[];
+  scores: UserScoreItem[];
+  grades: GradeLevelItem[];
+  skills: UserSkillWithSkill[];
+  period: string;
+}): UserScorecard {
+  const rows = input.dimensions.map((dimension) => {
+    const current = input.scores.find((score) => score.userId === input.user.id && score.dimensionId === dimension.id && score.period === input.period);
+    const previous = input.scores.find((score) => score.userId === input.user.id && score.dimensionId === dimension.id && score.period !== input.period);
+    return {
+      dimension,
+      score: current?.score ?? 0,
+      previousScore: previous?.score ?? null,
+      change: previous ? (current?.score ?? 0) - previous.score : null,
+      comment: current?.comment ?? null,
+      scoredById: current?.scoredById ?? null,
+      scoredAt: current?.scoredAt ?? null,
+    };
+  });
+  const compositeScore = calculateCompositeScore(rows.map((row) => ({ score: row.score, weight: row.dimension.weight, maxScore: row.dimension.maxScore })));
+  return {
+    user: input.user,
+    period: input.period,
+    compositeScore,
+    grade: determineGradeFromList(compositeScore, input.user.department, input.grades),
+    rows,
+    skills: input.skills,
+    history: buildScoreHistory(input.dimensions, input.scores),
+  };
+}
+
+function buildScoreHistory(dimensions: ScoreDimensionItem[], scores: UserScoreItem[]) {
+  const periods = Array.from(new Set(scores.map((score) => score.period))).sort();
+  return periods.map((period) => {
+    const rows = dimensions.map((dimension) => {
+      const score = scores.find((item) => item.dimensionId === dimension.id && item.period === period);
+      return { score: score?.score ?? 0, weight: dimension.weight, maxScore: dimension.maxScore };
+    });
+    return { period, compositeScore: calculateCompositeScore(rows) };
+  });
+}
+
+function determineGradeFromList(compositeScore: number, department: string, grades: GradeLevelItem[]) {
   return (
-    getState().grades
+    grades
       .filter((grade) => (grade.department === null || grade.department === department) && grade.minScore <= compositeScore && grade.maxScore >= compositeScore)
       .sort((a, b) => b.minScore - a.minScore)[0] ?? null
   );
 }
 
-function shouldUsePersistentStore() {
-  return Boolean(process.env.DATABASE_URL);
+function dimensionFromDb(dimension: {
+  id: string;
+  name: string;
+  description: string | null;
+  weight: number;
+  maxScore: number;
+  minScore: number;
+  category: string | null;
+  projectId: string | null;
+}): ScoreDimensionItem {
+  return {
+    id: dimension.id,
+    name: dimension.name,
+    description: dimension.description ?? "",
+    weight: dimension.weight,
+    maxScore: dimension.maxScore,
+    minScore: dimension.minScore,
+    category: dimension.category ?? "通用",
+    projectId: dimension.projectId,
+  };
+}
+
+function gradeFromDb(grade: {
+  id: string;
+  name: string;
+  code: string;
+  department: string | null;
+  minScore: number;
+  maxScore: number;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  color: string;
+  benefits: string[];
+}): GradeLevelItem {
+  return {
+    id: grade.id,
+    name: grade.name,
+    code: normalizeGradeCode(grade.code),
+    department: grade.department,
+    minScore: grade.minScore,
+    maxScore: grade.maxScore,
+    salaryMin: grade.salaryMin,
+    salaryMax: grade.salaryMax,
+    color: grade.color,
+    benefits: grade.benefits,
+  };
+}
+
+function skillFromDb(skill: { id: string; name: string; category: string }): SkillItem {
+  return { id: skill.id, name: skill.name, category: skill.category };
 }
 
 function scoreFromDb(score: {
@@ -349,6 +651,27 @@ function scoreFromDb(score: {
     scoredAt: score.scoredAt instanceof Date ? score.scoredAt.toISOString() : score.scoredAt,
     period: score.period,
   };
+}
+
+function userSkillWithSkillFromDb(skill: {
+  id: string;
+  userId: string;
+  skillId: string;
+  level: number;
+  verifiedBy: string | null;
+  verifiedAt: Date | string | null;
+  updatedAt: Date | string;
+  skill?: { id: string; name: string; category: string } | null;
+}): UserSkillWithSkill {
+  return {
+    ...userSkillFromDb(skill),
+    skill: skill.skill ? skillFromDb(skill.skill) : null,
+  };
+}
+
+function normalizeGradeCode(code: string): GradeLevelItem["code"] {
+  if (code === "A" || code === "B" || code === "C" || code === "D" || code === "E" || code === "F" || code === "G") return code;
+  return "C";
 }
 
 function userSkillFromDb(skill: {

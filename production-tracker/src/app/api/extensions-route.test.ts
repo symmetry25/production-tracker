@@ -21,7 +21,7 @@ import { POST as previewImport } from "./entity-types/[id]/import/preview/route"
 import { POST as createRecord } from "./entity-types/[id]/records/route";
 import { POST as createEntityType } from "./entity-types/route";
 import { DELETE as deleteRecord, PATCH as updateRecord } from "./records/[recordId]/route";
-import { POST as updateUserScore } from "./scores/users/[userId]/route";
+import { GET as readUserScorecard, POST as updateUserScore } from "./scores/users/[userId]/route";
 import { POST as installTemplate } from "./templates/[templateId]/install/route";
 import { PATCH as updateUserSkills } from "./users/[userId]/skills/route";
 
@@ -459,6 +459,71 @@ describe("extension API routes", () => {
       },
       error: null,
     });
+    expect(getPrisma).toHaveBeenCalled();
+  });
+
+  it("reads user scorecards from Prisma when a database is configured", async () => {
+    process.env.DATABASE_URL = "postgresql://unit.test/db";
+    vi.mocked(getPrisma).mockReturnValue({
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "user-db-vfx",
+          name: "Nora DB",
+          department: "VFX",
+          role: "REVIEWER",
+        }),
+      },
+      scoreDimension: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: "dim-db-tech", name: "技术能力", description: "Tech", weight: 1, maxScore: 100, minScore: 0, category: "技术", projectId: null },
+          { id: "dim-db-delivery", name: "交付效率", description: "Delivery", weight: 1, maxScore: 100, minScore: 0, category: "KPI", projectId: null },
+        ]),
+      },
+      userScore: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: "score-q2-tech", userId: "user-db-vfx", dimensionId: "dim-db-tech", score: 95, comment: "稳定", scoredById: "demo-admin", scoredAt: new Date("2026-06-18T00:00:00.000Z"), period: "2026-Q2" },
+          { id: "score-q2-delivery", userId: "user-db-vfx", dimensionId: "dim-db-delivery", score: 85, comment: null, scoredById: "demo-admin", scoredAt: new Date("2026-06-18T00:00:00.000Z"), period: "2026-Q2" },
+          { id: "score-q1-tech", userId: "user-db-vfx", dimensionId: "dim-db-tech", score: 80, comment: null, scoredById: "demo-admin", scoredAt: new Date("2026-03-18T00:00:00.000Z"), period: "2026-Q1" },
+        ]),
+      },
+      gradeLevel: {
+        findMany: vi.fn().mockResolvedValue([
+          { id: "grade-a", name: "A 核心专家", code: "A", department: null, minScore: 90, maxScore: 100, salaryMin: 6000, salaryMax: 9000, color: "#1d9e75", benefits: ["关键岗位"] },
+          { id: "grade-b", name: "B 高级可靠", code: "B", department: null, minScore: 80, maxScore: 89, salaryMin: 4200, salaryMax: 6500, color: "#4a9eff", benefits: [] },
+        ]),
+      },
+      userSkill: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "user-skill-db-1",
+            userId: "user-db-vfx",
+            skillId: "skill-db-nuke",
+            level: 5,
+            verifiedBy: "demo-admin",
+            verifiedAt: new Date("2026-06-18T00:00:00.000Z"),
+            updatedAt: new Date("2026-06-18T00:00:00.000Z"),
+            skill: { id: "skill-db-nuke", name: "Nuke", category: "VFX" },
+          },
+        ]),
+      },
+    } as never);
+
+    const response = await readUserScorecard(
+      new Request("http://app.test/api/scores/users/user-db-vfx?period=2026-Q2"),
+      { params: Promise.resolve({ userId: "user-db-vfx" }) },
+    );
+
+    const body = await response.json();
+    expect(body).toMatchObject({
+      data: {
+        user: { id: "user-db-vfx", name: "Nora DB" },
+        compositeScore: 90,
+        grade: { code: "A" },
+        skills: [{ skillId: "skill-db-nuke", level: 5, skill: { name: "Nuke" } }],
+      },
+      error: null,
+    });
+    expect(body.data.rows).toEqual(expect.arrayContaining([{ dimension: expect.objectContaining({ id: "dim-db-tech" }), score: 95, previousScore: 80, change: 15, comment: "稳定", scoredById: "demo-admin", scoredAt: "2026-06-18T00:00:00.000Z" }]));
     expect(getPrisma).toHaveBeenCalled();
   });
 
