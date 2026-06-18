@@ -2,8 +2,8 @@
 
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import type { TaskStatus } from "@/generated/prisma/enums";
+import { useMemo, useState, useTransition } from "react";
+import { AssetType, TaskStatus } from "@/generated/prisma/enums";
 
 import { downloadCsv } from "@/lib/csv";
 import type { AssetTableItem } from "@/lib/asset-data";
@@ -18,8 +18,18 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [linkAsset, setLinkAsset] = useState<AssetTableItem | null>(null);
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"ALL" | AssetType>("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
+  const [riskFilter, setRiskFilter] = useState<"ALL" | "NEEDS_REVIEW" | "BLOCKED" | "NO_SHOTS">("ALL");
   const [, startTransition] = useTransition();
-  const groups = groupAssetsByType(assets);
+  const summary = useMemo(() => getAssetSummary(assets), [assets]);
+  const filteredAssets = useMemo(
+    () => filterAssets(assets, { query, typeFilter, statusFilter, riskFilter }),
+    [assets, query, riskFilter, statusFilter, typeFilter],
+  );
+  const groups = groupAssetsByType(filteredAssets);
+  const activeFilterCount = [query.trim(), typeFilter !== "ALL", statusFilter !== "ALL", riskFilter !== "ALL"].filter(Boolean).length;
 
   async function updateTaskStatus(taskId: string, currentStatus: TaskStatus) {
     const nextStatus = statusCycle[(statusCycle.indexOf(currentStatus) + 1) % statusCycle.length];
@@ -141,18 +151,78 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
     <div>
       {message ? <div className="mb-3 border border-[#3f3c33] bg-[#181713] px-3 py-2 text-sm text-[#d8b46a]">{message}</div> : null}
 
-      <div className="mb-3 flex justify-end">
-        <button
-          type="button"
-          onClick={() => downloadCsv("asset-status-report.csv", buildAssetCsvRows(assets))}
-          className="h-9 border border-[#34322b] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
-        >
-          Export CSV
-        </button>
+      <div className="mb-3 grid gap-3 xl:grid-cols-[1fr_340px]">
+        <section className="border border-[#34322b] bg-[#181713]">
+          <div className="grid grid-cols-4 border-b border-[#2a2a28]">
+            <SummaryCell label="Assets" value={summary.total} />
+            <SummaryCell label="Final / Approved" value={summary.done} tone="good" />
+            <SummaryCell label="Review queue" value={summary.review} tone="warn" />
+            <SummaryCell label="Blocked" value={summary.blocked} tone="bad" />
+          </div>
+          <div className="grid gap-2 p-3 lg:grid-cols-[minmax(220px,1fr)_150px_170px_170px_auto]">
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="搜索资产、描述、镜头号"
+              className="h-9 border border-[#34322b] bg-[#11110f] px-3 text-sm text-[#f4f1e8] outline-none placeholder:text-[#6e6e69] focus:border-[#d8b46a]"
+            />
+            <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as "ALL" | AssetType)} className="h-9 border border-[#34322b] bg-[#11110f] px-2 text-xs text-[#c9c3b5] outline-none focus:border-[#d8b46a]">
+              <option value="ALL">全部类型</option>
+              {Object.values(AssetType).map((type) => <option key={type} value={type}>{ASSET_TYPE_LABELS[type]}</option>)}
+            </select>
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "ALL" | TaskStatus)} className="h-9 border border-[#34322b] bg-[#11110f] px-2 text-xs text-[#c9c3b5] outline-none focus:border-[#d8b46a]">
+              <option value="ALL">全部状态</option>
+              {Object.values(TaskStatus).map((status) => <option key={status} value={status}>{STATUS_COLORS[status].label}</option>)}
+            </select>
+            <select value={riskFilter} onChange={(event) => setRiskFilter(event.target.value as "ALL" | "NEEDS_REVIEW" | "BLOCKED" | "NO_SHOTS")} className="h-9 border border-[#34322b] bg-[#11110f] px-2 text-xs text-[#c9c3b5] outline-none focus:border-[#d8b46a]">
+              <option value="ALL">全部风险</option>
+              <option value="NEEDS_REVIEW">待审查</option>
+              <option value="BLOCKED">停滞 / 等待</option>
+              <option value="NO_SHOTS">无镜头关联</option>
+            </select>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setTypeFilter("ALL");
+                  setStatusFilter("ALL");
+                  setRiskFilter("ALL");
+                }}
+                disabled={!activeFilterCount}
+                className="h-9 border border-[#34322b] px-3 text-xs text-[#c9c3b5] transition hover:border-[#d8b46a] disabled:opacity-45"
+              >
+                重置
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadCsv("asset-status-report.csv", buildAssetCsvRows(filteredAssets))}
+                className="h-9 border border-[#34322b] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
+              >
+                Export CSV
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <aside className="border border-[#34322b] bg-[#181713] p-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#d8b46a]">Producer queue</p>
+            <span className="font-mono text-[11px] text-[#7f7a70]">{filteredAssets.length}/{assets.length}</span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {summary.riskAssets.length ? summary.riskAssets.slice(0, 3).map((asset) => (
+              <button key={asset.id} type="button" onClick={() => setQuery(asset.name)} className="block w-full border border-[#2f2c25] bg-[#11110f] px-3 py-2 text-left hover:border-[#d8b46a]/60">
+                <span className="block truncate text-sm font-medium text-[#f4f1e8]">{asset.name}</span>
+                <span className="mt-1 block truncate text-xs text-[#8f8a7e]">{getRiskLabel(asset)}</span>
+              </button>
+            )) : <p className="border border-dashed border-[#34322b] px-3 py-4 text-sm text-[#8f8a7e]">当前没有明显资产风险。</p>}
+          </div>
+        </aside>
       </div>
 
-      <div className="overflow-hidden border border-[#34322b] bg-[#181713]">
-        <div className="grid grid-cols-[110px_1.15fr_120px_180px_repeat(6,minmax(76px,1fr))] border-b border-[#2a2a28] bg-[#1e1e1c] text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]">
+      <div className="overflow-x-auto border border-[#34322b] bg-[#181713]">
+        <div className="grid min-w-[1160px] grid-cols-[110px_1.15fr_120px_180px_repeat(6,minmax(76px,1fr))] border-b border-[#2a2a28] bg-[#1e1e1c] text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]">
           <HeaderCell>Preview</HeaderCell>
           <HeaderCell>Asset</HeaderCell>
           <HeaderCell>Status</HeaderCell>
@@ -164,7 +234,7 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
           ))}
         </div>
 
-        {Object.entries(groups).map(([type, typeAssets]) => (
+        {filteredAssets.length ? Object.entries(groups).map(([type, typeAssets]) => (
           <div key={type}>
             <div className="border-b border-[#2a2a28] bg-[#1a1a18] px-3 py-2 text-sm font-medium text-[#9e9d97]">
               ▼ {ASSET_TYPE_LABELS[type as keyof typeof ASSET_TYPE_LABELS]} ({typeAssets.length})
@@ -172,7 +242,7 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
             {typeAssets.map((asset) => (
               <ContextMenu.Root key={asset.id}>
                 <ContextMenu.Trigger asChild>
-                  <div className="grid min-h-20 grid-cols-[110px_1.15fr_120px_180px_repeat(6,minmax(76px,1fr))] border-b border-[#2a2a28] text-sm hover:bg-[#252523]">
+                  <div className="grid min-h-20 min-w-[1160px] grid-cols-[110px_1.15fr_120px_180px_repeat(6,minmax(76px,1fr))] border-b border-[#2a2a28] text-sm hover:bg-[#252523]">
                     <div className="flex items-center px-3">
                       <div className="relative grid h-14 w-[90px] place-items-center overflow-hidden border border-[#34322b] bg-[#11110f]">
                         {asset.thumbnailUrl ? (
@@ -237,7 +307,14 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
               </ContextMenu.Root>
             ))}
           </div>
-        ))}
+        )) : (
+          <div className="grid min-h-52 place-items-center border-t border-[#2a2a28] text-center">
+            <div>
+              <p className="text-sm font-semibold text-[#f4f1e8]">没有匹配的资产</p>
+              <p className="mt-2 text-xs text-[#8f8a7e]">调整搜索、类型、状态或风险筛选后再看。</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {linkAsset ? (
@@ -399,12 +476,87 @@ function PipelineDot({ status }: { status: keyof typeof STATUS_COLORS }) {
   );
 }
 
+function SummaryCell({ label, value, tone = "neutral" }: { label: string; value: number; tone?: "neutral" | "good" | "warn" | "bad" }) {
+  const color = tone === "good" ? "#83d6ae" : tone === "warn" ? "#e8c678" : tone === "bad" ? "#ff9c8c" : "#f4f1e8";
+
+  return (
+    <div className="border-r border-[#2a2a28] px-3 py-3 last:border-r-0">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6e6e69]">{label}</p>
+      <p className="mt-2 font-mono text-2xl" style={{ color }}>{value}</p>
+    </div>
+  );
+}
+
 function groupAssetsByType(assets: AssetTableItem[]) {
   return assets.reduce<Record<string, AssetTableItem[]>>((groups, asset) => {
     groups[asset.type] ??= [];
     groups[asset.type].push(asset);
     return groups;
   }, {});
+}
+
+function getAssetSummary(assets: AssetTableItem[]) {
+  const riskAssets = assets.filter((asset) => isRiskAsset(asset));
+
+  return {
+    total: assets.length,
+    done: assets.filter((asset) => asset.status === "FINAL" || asset.status === "APPROVED").length,
+    review: assets.filter((asset) => asset.status === "PENDING_REVIEW" || Object.values(asset.pipeline).some((task) => task?.status === "PENDING_REVIEW")).length,
+    blocked: assets.filter((asset) => asset.status === "ON_HOLD" || asset.status === "WAITING_TO_START" || Object.values(asset.pipeline).some((task) => task?.status === "ON_HOLD")).length,
+    riskAssets,
+  };
+}
+
+function filterAssets(
+  assets: AssetTableItem[],
+  filters: {
+    query: string;
+    typeFilter: "ALL" | AssetType;
+    statusFilter: "ALL" | TaskStatus;
+    riskFilter: "ALL" | "NEEDS_REVIEW" | "BLOCKED" | "NO_SHOTS";
+  },
+) {
+  const search = filters.query.trim().toLowerCase();
+
+  return assets.filter((asset) => {
+    const searchText = [
+      asset.name,
+      asset.description ?? "",
+      ASSET_TYPE_LABELS[asset.type],
+      STATUS_COLORS[asset.status].label,
+      ...asset.linkedShots.map((shot) => shot.code),
+    ].join(" ").toLowerCase();
+    const matchesSearch = !search || searchText.includes(search);
+    const matchesType = filters.typeFilter === "ALL" || asset.type === filters.typeFilter;
+    const matchesStatus = filters.statusFilter === "ALL" || asset.status === filters.statusFilter;
+    const matchesRisk = filters.riskFilter === "ALL"
+      || (filters.riskFilter === "NEEDS_REVIEW" && isReviewAsset(asset))
+      || (filters.riskFilter === "BLOCKED" && isBlockedAsset(asset))
+      || (filters.riskFilter === "NO_SHOTS" && asset.linkedShots.length === 0);
+
+    return matchesSearch && matchesType && matchesStatus && matchesRisk;
+  });
+}
+
+function isRiskAsset(asset: AssetTableItem) {
+  return isReviewAsset(asset) || isBlockedAsset(asset) || asset.linkedShots.length === 0;
+}
+
+function isReviewAsset(asset: AssetTableItem) {
+  return asset.status === "PENDING_REVIEW" || Object.values(asset.pipeline).some((task) => task?.status === "PENDING_REVIEW");
+}
+
+function isBlockedAsset(asset: AssetTableItem) {
+  return asset.status === "ON_HOLD"
+    || asset.status === "WAITING_TO_START"
+    || Object.values(asset.pipeline).some((task) => task?.status === "ON_HOLD" || task?.status === "WAITING_TO_START");
+}
+
+function getRiskLabel(asset: AssetTableItem) {
+  if (asset.linkedShots.length === 0) return "无镜头关联，无法进入镜头排期。";
+  if (isReviewAsset(asset)) return "待审查版本，需要导演/监制确认。";
+  if (isBlockedAsset(asset)) return "存在等待或停滞状态，需要制片跟进。";
+  return "可正常推进。";
 }
 
 function buildAssetCsvRows(assets: AssetTableItem[]) {

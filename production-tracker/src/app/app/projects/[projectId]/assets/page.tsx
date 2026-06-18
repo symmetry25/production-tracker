@@ -28,10 +28,6 @@ export default async function ProjectAssetsPage({ params }: { params: Promise<{ 
         </div>
         <div className="flex h-10 items-center gap-2 text-xs text-[#aaa599]">
           <CreateAssetForm projectId={projectId} />
-          <button className="h-10 border border-[#3f3c33] px-3">Sort</button>
-          <button className="h-10 border border-[#3f3c33] px-3">Group</button>
-          <button className="h-10 border border-[#3f3c33] px-3">Fields</button>
-          <button className="h-10 border border-[#3f3c33] px-3">Filter</button>
         </div>
       </div>
 
