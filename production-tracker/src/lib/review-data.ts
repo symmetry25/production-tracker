@@ -201,6 +201,62 @@ export async function getReviewVersion(versionId: string): Promise<ReviewVersion
   return version ? mapVersion(version) : null;
 }
 
+export async function getReviewVersionWorkspace(versionId: string): Promise<{ selected: ReviewVersionItem; versions: ReviewVersionItem[] } | null> {
+  if (shouldUseDemoData()) {
+    const versions = getDemoProjectReviewVersions("demo-mkali-mission");
+    const selected = versions.find((version) => version.id === versionId);
+
+    return selected ? { selected, versions } : null;
+  }
+
+  const prisma = getPrisma();
+  const version = await prisma.version.findUnique({
+    where: { id: versionId },
+    include: {
+      uploadedBy: {
+        select: {
+          id: true,
+          name: true,
+          department: true,
+        },
+      },
+      task: {
+        include: {
+          shot: { select: { code: true, projectId: true } },
+          asset: { select: { name: true, projectId: true } },
+          phase: { select: { projectId: true } },
+        },
+      },
+      notes: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              department: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!version) {
+    return null;
+  }
+
+  const selected = mapVersion(version);
+  const projectId = version.task.shot?.projectId ?? version.task.asset?.projectId ?? version.task.phase?.projectId ?? null;
+
+  if (!projectId) {
+    return { selected, versions: [selected] };
+  }
+
+  const versions = await getProjectReviewVersions(projectId);
+  return { selected, versions: versions.some((item) => item.id === selected.id) ? versions : [selected, ...versions] };
+}
+
 function mapVersion(version: {
   id: string;
   number: number;

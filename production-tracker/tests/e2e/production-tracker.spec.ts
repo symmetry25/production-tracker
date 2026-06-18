@@ -34,6 +34,9 @@ test.describe("production tracker smoke flow", () => {
 
     await page.goto("/app/review/demo-version-rain-v003");
     await expect(page.locator("h1", { hasText: "VFX_0300_RainComp_v003" })).toBeVisible();
+    await expect(page.getByText("Screening Queue")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Next cut" })).toBeVisible();
+    await expect(page.getByText("2 cuts ready")).toBeVisible();
     await expect(page.getByText("Review Player")).toBeVisible();
 
     await page.goto("/app/resource-planning/DIT%E7%BB%84?start=2026-05-01&end=2026-06-30");
