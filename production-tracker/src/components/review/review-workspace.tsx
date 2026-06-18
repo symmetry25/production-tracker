@@ -21,16 +21,21 @@ const VERSION_STATUS_COLORS: Record<VersionStatus, { bg: string; text: string; d
   CHANGES_REQUESTED: { bg: "#3a1717", text: "#e24b4a", dot: "#e24b4a" },
 };
 
+type ReviewMode = "player" | "compare";
+
 export function ReviewWorkspace({ versions, initialVersionId }: { versions: ReviewVersionItem[]; initialVersionId?: string }) {
   const router = useRouter();
   const initialSelectedId = useMemo(() => getInitialSelectedId(versions, initialVersionId), [initialVersionId, versions]);
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [playlistIds, setPlaylistIds] = useState<string[]>(() => buildDefaultPlaylist(versions, initialSelectedId));
+  const [viewMode, setViewMode] = useState<ReviewMode>("player");
+  const [compareIds, setCompareIds] = useState<[string | null, string | null]>(() => buildDefaultCompareIds(versions, initialSelectedId));
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const selected = useMemo(() => versions.find((version) => version.id === selectedId) ?? versions[0] ?? null, [selectedId, versions]);
   const playlistVersions = useMemo(() => getPlaylistVersions(versions, playlistIds), [playlistIds, versions]);
+  const compareVersions = useMemo(() => getCompareVersions(versions, compareIds, selected?.id ?? null), [compareIds, selected, versions]);
   const selectedQueueIndex = selected ? playlistVersions.findIndex((version) => version.id === selected.id) : -1;
   const canPrevious = selectedQueueIndex > 0;
   const canNext = selectedQueueIndex >= 0 && selectedQueueIndex < playlistVersions.length - 1;
@@ -65,6 +70,13 @@ export function ReviewWorkspace({ versions, initialVersionId }: { versions: Revi
     if (nextId) {
       setSelectedId(nextId);
     }
+  }
+
+  function startCompare(primaryId: string, secondaryId?: string | null) {
+    const nextIds = buildCompareIdsFromSelection(versions, primaryId, secondaryId);
+    setCompareIds(nextIds);
+    setSelectedId(primaryId);
+    setViewMode("compare");
   }
 
   async function updateStatus(versionId: string, status: VersionStatus) {
@@ -103,6 +115,7 @@ export function ReviewWorkspace({ versions, initialVersionId }: { versions: Revi
     }
 
     setPlaylistIds((current) => current.filter((id) => id !== versionId));
+    setCompareIds(([leftId, rightId]) => [leftId === versionId ? null : leftId, rightId === versionId ? null : rightId]);
 
     if (selectedId === versionId) {
       setSelectedId(playlistVersions.find((version) => version.id !== versionId)?.id ?? versions.find((version) => version.id !== versionId)?.id ?? null);
@@ -187,20 +200,36 @@ export function ReviewWorkspace({ versions, initialVersionId }: { versions: Revi
           onDelete={deleteVersion}
           onAddToPlaylist={addToPlaylist}
           onRemoveFromPlaylist={removeFromPlaylist}
+          onCompare={(versionId) => startCompare(versionId)}
         />
-        <VersionPlayer
-          version={selected}
-          queueIndex={selectedQueueIndex}
-          queueSize={playlistVersions.length}
-          isQueued={selectedQueueIndex >= 0}
-          canPrevious={canPrevious}
-          canNext={canNext}
-          onStatus={updateStatus}
-          onPrevious={() => selectPlaylistOffset(-1)}
-          onNext={() => selectPlaylistOffset(1)}
-          onAddToQueue={() => addToPlaylist(selected.id)}
-          onRemoveFromQueue={() => removeFromPlaylist(selected.id)}
-        />
+        {viewMode === "compare" ? (
+          <VersionCompare
+            versions={versions}
+            left={compareVersions.left}
+            right={compareVersions.right}
+            onSelectLeft={(id) => {
+              setCompareIds((current) => [id, current[1]]);
+              setSelectedId(id);
+            }}
+            onSelectRight={(id) => setCompareIds(([leftId]) => [leftId, id])}
+            onExit={() => setViewMode("player")}
+          />
+        ) : (
+          <VersionPlayer
+            version={selected}
+            queueIndex={selectedQueueIndex}
+            queueSize={playlistVersions.length}
+            isQueued={selectedQueueIndex >= 0}
+            canPrevious={canPrevious}
+            canNext={canNext}
+            onStatus={updateStatus}
+            onPrevious={() => selectPlaylistOffset(-1)}
+            onNext={() => selectPlaylistOffset(1)}
+            onCompare={() => startCompare(selected.id, playlistVersions[selectedQueueIndex + 1]?.id)}
+            onAddToQueue={() => addToPlaylist(selected.id)}
+            onRemoveFromQueue={() => removeFromPlaylist(selected.id)}
+          />
+        )}
         <NotesStream version={selected} pending={pendingId === `note:${selected.id}`} onCreate={addNote} onDelete={deleteNote} />
       </div>
       <VersionFilmstrip versions={versions} selectedId={selected.id} onSelect={setSelectedId} />
@@ -218,6 +247,7 @@ function VersionList({
   onDelete,
   onAddToPlaylist,
   onRemoveFromPlaylist,
+  onCompare,
 }: {
   versions: ReviewVersionItem[];
   selectedId: string;
@@ -228,6 +258,7 @@ function VersionList({
   onDelete: (id: string) => void;
   onAddToPlaylist: (id: string) => void;
   onRemoveFromPlaylist: (id: string) => void;
+  onCompare: (id: string) => void;
 }) {
   return (
     <aside className="order-2 border-t border-[#34322b] xl:order-none xl:row-span-2 xl:border-r xl:border-t-0 2xl:row-span-1">
@@ -269,6 +300,7 @@ function VersionList({
               onDelete={onDelete}
               onAddToPlaylist={onAddToPlaylist}
               onRemoveFromPlaylist={onRemoveFromPlaylist}
+              onCompare={onCompare}
             />
           </ContextMenu.Root>
           );
@@ -288,6 +320,7 @@ function VersionPlayer({
   onStatus,
   onPrevious,
   onNext,
+  onCompare,
   onAddToQueue,
   onRemoveFromQueue,
 }: {
@@ -300,6 +333,7 @@ function VersionPlayer({
   onStatus: (id: string, status: VersionStatus) => void;
   onPrevious: () => void;
   onNext: () => void;
+  onCompare: () => void;
   onAddToQueue: () => void;
   onRemoveFromQueue: () => void;
 }) {
@@ -332,6 +366,13 @@ function VersionPlayer({
           </button>
           <button
             type="button"
+            onClick={onCompare}
+            className="h-9 border border-[#34322b] px-3 text-xs text-[#aaa599] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
+          >
+            Compare
+          </button>
+          <button
+            type="button"
             onClick={isQueued ? onRemoveFromQueue : onAddToQueue}
             className="h-9 border border-[#3f3c33] px-3 text-xs text-[#d8b46a] transition hover:border-[#e8c678] hover:text-[#f2d996]"
           >
@@ -353,14 +394,7 @@ function VersionPlayer({
 
       <div className="grid flex-1 place-items-center p-5">
         <div className="grid aspect-video w-full max-w-5xl place-items-center overflow-hidden border border-[#34322b] bg-black">
-          {version.fileType.startsWith("video/") ? (
-            <video key={version.fileUrl} src={version.fileUrl} controls className="h-full w-full bg-black object-contain" />
-          ) : version.fileType.startsWith("image/") ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={version.fileUrl} alt={version.name} className="h-full w-full object-contain" />
-          ) : (
-            <div className="text-sm text-[#aaa599]">无法预览此文件类型</div>
-          )}
+          <MediaPreview version={version} />
         </div>
       </div>
 
@@ -373,6 +407,129 @@ function VersionPlayer({
       </div>
     </section>
   );
+}
+
+function VersionCompare({
+  versions,
+  left,
+  right,
+  onSelectLeft,
+  onSelectRight,
+  onExit,
+}: {
+  versions: ReviewVersionItem[];
+  left: ReviewVersionItem | null;
+  right: ReviewVersionItem | null;
+  onSelectLeft: (id: string) => void;
+  onSelectRight: (id: string) => void;
+  onExit: () => void;
+}) {
+  return (
+    <section className="order-1 flex min-w-0 flex-col bg-[#11110f] xl:order-none">
+      <div className="flex flex-col gap-3 border-b border-[#34322b] bg-[#181713] px-5 py-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">Compare Versions</p>
+          <h2 className="mt-1 truncate text-xl font-semibold text-[#f4f1e8]">Screening Room Compare</h2>
+          <p className="mt-1 text-xs text-[#8f8a7e]">并排检查两个版本的画面、状态和技术信息。</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <CompareSelect label="A" value={left?.id ?? ""} versions={versions} onChange={onSelectLeft} />
+          <CompareSelect label="B" value={right?.id ?? ""} versions={versions} onChange={onSelectRight} />
+          <button
+            type="button"
+            onClick={onExit}
+            className="h-9 border border-[#34322b] px-3 text-xs text-[#aaa599] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
+          >
+            Back to player
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 p-5 xl:grid-cols-2">
+        <ComparePane label="A" version={left} />
+        <ComparePane label="B" version={right} />
+      </div>
+
+      <div className="grid border-t border-[#34322b] bg-[#181713] text-xs md:grid-cols-4">
+        <MetadataCell label="Status A" value={left ? VERSION_STATUS_LABELS[left.status] : "--"} />
+        <MetadataCell label="Status B" value={right ? VERSION_STATUS_LABELS[right.status] : "--"} />
+        <MetadataCell label="Frames delta" value={formatFrameDelta(left, right)} />
+        <MetadataCell label="Context" value={left?.task.contextLabel ?? right?.task.contextLabel ?? "--"} />
+      </div>
+    </section>
+  );
+}
+
+function CompareSelect({
+  label,
+  value,
+  versions,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  versions: ReviewVersionItem[];
+  onChange: (id: string) => void;
+}) {
+  return (
+    <label className="flex h-9 items-center border border-[#34322b] bg-[#11110f] text-xs text-[#aaa599]">
+      <span className="border-r border-[#34322b] px-2 font-semibold text-[#d8b46a]">{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-full min-w-48 bg-transparent px-2 text-[#f4f1e8] outline-none">
+        {versions.map((version) => (
+          <option key={version.id} value={version.id}>
+            {version.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function ComparePane({ label, version }: { label: string; version: ReviewVersionItem | null }) {
+  if (!version) {
+    return (
+      <div className="grid min-h-[360px] place-items-center border border-dashed border-[#3f3c33] text-sm text-[#aaa599]">
+        选择一个版本作为 {label} 画面。
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-w-0 border border-[#34322b] bg-[#181713]">
+      <div className="flex items-start justify-between gap-3 border-b border-[#34322b] px-3 py-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d8b46a]">Version {label}</p>
+          <h3 className="mt-1 truncate font-mono text-sm text-[#4a9eff]">{version.name}</h3>
+          <p className="mt-1 truncate text-xs text-[#8f8a7e]">{version.task.contextLabel} / {version.task.name}</p>
+        </div>
+        <StatusPill status={version.status} />
+      </div>
+      <div className="grid aspect-video place-items-center bg-black">
+        <MediaPreview version={version} />
+      </div>
+      <div className="grid grid-cols-3 border-t border-[#34322b] text-xs">
+        <MetadataCell label="Runtime" value={formatVersionRuntime(version)} />
+        <MetadataCell label="Frames" value={version.frameCount?.toLocaleString() ?? "--"} />
+        <MetadataCell label="Owner" value={version.uploadedBy.name} />
+      </div>
+      {version.description ? <p className="border-t border-[#2a2a28] px-3 py-3 text-xs leading-5 text-[#aaa599]">{version.description}</p> : null}
+    </div>
+  );
+}
+
+function MediaPreview({ version }: { version: ReviewVersionItem }) {
+  if (version.fileType.startsWith("video/")) {
+    return <video key={version.fileUrl} src={version.fileUrl} controls className="h-full w-full bg-black object-contain" />;
+  }
+
+  if (version.fileType.startsWith("image/")) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={version.fileUrl} alt={version.name} className="h-full w-full object-contain" />
+    );
+  }
+
+  return <div className="text-sm text-[#aaa599]">无法预览此文件类型</div>;
 }
 
 function NotesStream({
@@ -568,6 +725,7 @@ function VersionContextMenu({
   onDelete,
   onAddToPlaylist,
   onRemoveFromPlaylist,
+  onCompare,
 }: {
   version: ReviewVersionItem;
   isQueued: boolean;
@@ -575,12 +733,13 @@ function VersionContextMenu({
   onDelete: (id: string) => void;
   onAddToPlaylist: (id: string) => void;
   onRemoveFromPlaylist: (id: string) => void;
+  onCompare: (id: string) => void;
 }) {
   return (
     <ContextMenu.Portal>
       <ContextMenu.Content className="z-50 min-w-64 border border-[#3b382f] bg-[#181713] p-1 text-sm text-[#d8d3c7] shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
         <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">{version.name}</ContextMenu.Label>
-        <MenuItem>⊞ Compare Versions</MenuItem>
+        <MenuItem onSelect={() => onCompare(version.id)}>⊞ Compare Versions</MenuItem>
         <MenuItem>⇩ Download Original</MenuItem>
         <MenuItem>⌕ Add Note</MenuItem>
         {isQueued ? (
@@ -672,6 +831,21 @@ function buildDefaultPlaylist(versions: ReviewVersionItem[], selectedId: string 
   return reviewIds.length ? reviewIds : selectedId ? [selectedId] : [];
 }
 
+function buildDefaultCompareIds(versions: ReviewVersionItem[], selectedId: string | null): [string | null, string | null] {
+  if (!selectedId) {
+    return [versions[0]?.id ?? null, versions[1]?.id ?? null];
+  }
+
+  return buildCompareIdsFromSelection(versions, selectedId);
+}
+
+function buildCompareIdsFromSelection(versions: ReviewVersionItem[], primaryId: string, secondaryId?: string | null): [string | null, string | null] {
+  const primaryIndex = versions.findIndex((version) => version.id === primaryId);
+  const fallbackSecondary = versions.find((version, index) => index !== primaryIndex && version.id !== primaryId)?.id ?? null;
+
+  return [primaryId, secondaryId && secondaryId !== primaryId ? secondaryId : fallbackSecondary];
+}
+
 function buildNeedsReviewPlaylist(versions: ReviewVersionItem[], selectedId: string | null) {
   const reviewIds = versions
     .filter((version) => version.status === VersionStatus.PENDING_REVIEW || version.status === VersionStatus.CHANGES_REQUESTED)
@@ -691,6 +865,17 @@ function getPlaylistVersions(versions: ReviewVersionItem[], ids: string[]) {
     const version = versionMap.get(id);
     return version ? [version] : [];
   });
+}
+
+function getCompareVersions(versions: ReviewVersionItem[], ids: [string | null, string | null], selectedId: string | null) {
+  const [leftId, rightId] = ids;
+  const left = versions.find((version) => version.id === leftId) ?? versions.find((version) => version.id === selectedId) ?? versions[0] ?? null;
+  const right =
+    versions.find((version) => version.id === rightId && version.id !== left?.id) ??
+    versions.find((version) => version.id !== left?.id) ??
+    null;
+
+  return { left, right };
 }
 
 function getPlaylistStats(versions: ReviewVersionItem[]) {
@@ -713,6 +898,15 @@ function getPlaylistStats(versions: ReviewVersionItem[]) {
 function formatVersionRuntime(version: ReviewVersionItem) {
   if (!version.frameCount || !version.fps) return "runtime --";
   return formatDuration(version.frameCount / version.fps);
+}
+
+function formatFrameDelta(left: ReviewVersionItem | null, right: ReviewVersionItem | null) {
+  if (!left?.frameCount || !right?.frameCount) return "--";
+
+  const delta = right.frameCount - left.frameCount;
+  if (delta === 0) return "0";
+
+  return `${delta > 0 ? "+" : ""}${delta.toLocaleString()}`;
 }
 
 function formatDuration(seconds: number) {

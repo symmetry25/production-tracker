@@ -38,6 +38,10 @@ test.describe("production tracker smoke flow", () => {
     await expect(page.getByRole("button", { name: "Next cut" })).toBeVisible();
     await expect(page.getByText("2 cuts ready")).toBeVisible();
     await expect(page.getByText("Review Player")).toBeVisible();
+    await page.getByRole("button", { name: "Compare" }).click();
+    await expect(page.getByText("Screening Room Compare")).toBeVisible();
+    await expect(page.getByText("Version A")).toBeVisible();
+    await expect(page.getByText("Version B")).toBeVisible();
 
     await page.goto("/app/resource-planning/DIT%E7%BB%84?start=2026-05-01&end=2026-06-30");
     await expect(page.getByRole("heading", { name: /DIT组 资源下钻/ })).toBeVisible();
