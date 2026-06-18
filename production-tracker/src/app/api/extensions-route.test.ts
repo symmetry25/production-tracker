@@ -12,6 +12,7 @@ import { resetScoringForTests } from "@/lib/scoring";
 
 import { POST as recognizeDocument } from "./ai/recognize/route";
 import { GET as listRecognizedScans } from "./ai/scans/route";
+import { PATCH as updateCalendarException } from "./calendar-exceptions/[exceptionId]/route";
 import { DELETE as deleteWidget } from "./dashboards/[dashboardId]/widgets/[widgetId]/route";
 import { POST as createWidget } from "./dashboards/[dashboardId]/widgets/route";
 import { POST as readWidgetData } from "./dashboards/widget-data/route";
@@ -586,5 +587,57 @@ describe("extension API routes", () => {
       error: null,
     });
     expect(getPrisma).toHaveBeenCalled();
+  });
+
+  it("updates calendar exceptions through the exception endpoint", async () => {
+    const update = vi.fn().mockResolvedValue({
+      id: "calendar-exception-db-1",
+      date: new Date("2026-05-03T00:00:00.000Z"),
+      type: "REDUCED_HOURS",
+      description: "半天技术测试",
+      hoursWorked: 4,
+      projectId: "demo-mkali-mission",
+      inheritedFrom: null,
+    });
+    vi.mocked(getPrisma).mockReturnValue({
+      calendarException: {
+        update,
+      },
+    } as never);
+
+    const response = await updateCalendarException(
+      new Request("http://app.test/api/calendar-exceptions/calendar-exception-db-1", {
+        method: "PATCH",
+        body: JSON.stringify({
+          date: "2026-05-03",
+          type: "REDUCED_HOURS",
+          description: "半天技术测试",
+          hoursWorked: 4,
+          projectId: "demo-mkali-mission",
+        }),
+      }),
+      { params: Promise.resolve({ exceptionId: "calendar-exception-db-1" }) },
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        id: "calendar-exception-db-1",
+        type: "REDUCED_HOURS",
+        description: "半天技术测试",
+        hoursWorked: 4,
+        projectId: "demo-mkali-mission",
+      },
+      error: null,
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "calendar-exception-db-1" },
+      data: {
+        date: new Date("2026-05-03"),
+        type: "REDUCED_HOURS",
+        description: "半天技术测试",
+        hoursWorked: 4,
+        projectId: "demo-mkali-mission",
+      },
+    });
   });
 });
