@@ -1,6 +1,7 @@
 import { CreateTaskForm } from "@/components/task/create-task-form";
 import { TaskWorkspace } from "@/components/task/task-workspace";
 import { getDictionary, getLocale } from "@/lib/i18n";
+import { buildScheduleSuggestionsWithAi, type ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
 import { getTaskFormOptions, getTaskTableItems, type TaskFormOptions, type TaskTableItem } from "@/lib/task-data";
 
 export default async function ProjectTasksPage({ params }: { params: Promise<{ projectId: string }> }) {
@@ -9,10 +10,12 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ p
   const t = getDictionary(locale).pages.tasks;
   let tasks: TaskTableItem[] = [];
   let options: TaskFormOptions = { shots: [], assets: [], users: [] };
+  let scheduleSuggestions: ScheduleSuggestionSummary | null = null;
   let error: string | null = null;
 
   try {
     [tasks, options] = await Promise.all([getTaskTableItems({ projectId }), getTaskFormOptions(projectId)]);
+    scheduleSuggestions = await buildScheduleSuggestionsWithAi({ projectId, tasks });
   } catch (caught) {
     error = caught instanceof Error ? caught.message : "任务数据暂时无法读取。";
   }
@@ -41,7 +44,7 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ p
           <p className="mt-3 max-w-3xl text-sm leading-6 text-[#c9c3b5]">{error}</p>
         </div>
       ) : (
-        <TaskWorkspace tasks={tasks} />
+        <TaskWorkspace tasks={tasks} scheduleSuggestions={scheduleSuggestions} />
       )}
     </>
   );
