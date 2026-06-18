@@ -38,7 +38,12 @@ export default async function ProjectAssetsPage({ params }: { params: Promise<{ 
           <p className="mt-3 max-w-3xl text-sm leading-6 text-[#c9c3b5]">{error}</p>
         </div>
       ) : (
-        <AssetTable assets={assets} shots={shots} />
+        <AssetTable
+          key={assets.map((asset) => `${asset.id}:${asset.name}:${asset.status}:${asset.linkedShots.length}`).join("|")}
+          projectId={projectId}
+          assets={assets}
+          shots={shots}
+        />
       )}
     </>
   );

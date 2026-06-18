@@ -12,29 +12,59 @@ import { ASSET_TYPE_LABELS, PIPELINE_COLORS, PIPELINE_STEPS, STATUS_COLORS } fro
 
 const statusCycle: TaskStatus[] = ["WAITING_TO_START", "READY_TO_START", "IN_PROGRESS", "PENDING_REVIEW", "APPROVED", "FINAL"];
 const assetMenuStatuses: TaskStatus[] = ["WAITING_TO_START", "READY_TO_START", "IN_PROGRESS", "PENDING_REVIEW", "FINAL", "ON_HOLD"];
+const demoTaskIdPrefix = "demo-";
 
-export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots: Pick<ShotTableItem, "id" | "code" | "sequenceCode">[] }) {
+export function AssetTable({ projectId, assets, shots }: { projectId: string; assets: AssetTableItem[]; shots: Pick<ShotTableItem, "id" | "code" | "sequenceCode">[] }) {
   const router = useRouter();
+  const [assetItems, setAssetItems] = useState(assets);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [linkAsset, setLinkAsset] = useState<AssetTableItem | null>(null);
+  const [detailAsset, setDetailAsset] = useState<AssetTableItem | null>(null);
+  const [editAsset, setEditAsset] = useState<AssetTableItem | null>(null);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"ALL" | AssetType>("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
   const [riskFilter, setRiskFilter] = useState<"ALL" | "NEEDS_REVIEW" | "BLOCKED" | "NO_SHOTS">("ALL");
   const [, startTransition] = useTransition();
-  const summary = useMemo(() => getAssetSummary(assets), [assets]);
+  const summary = useMemo(() => getAssetSummary(assetItems), [assetItems]);
   const filteredAssets = useMemo(
-    () => filterAssets(assets, { query, typeFilter, statusFilter, riskFilter }),
-    [assets, query, riskFilter, statusFilter, typeFilter],
+    () => filterAssets(assetItems, { query, typeFilter, statusFilter, riskFilter }),
+    [assetItems, query, riskFilter, statusFilter, typeFilter],
   );
   const groups = groupAssetsByType(filteredAssets);
   const activeFilterCount = [query.trim(), typeFilter !== "ALL", statusFilter !== "ALL", riskFilter !== "ALL"].filter(Boolean).length;
+  const totalAssetCount = assetItems.length;
+
+  function patchLocalAsset(assetId: string, patch: Partial<AssetTableItem>) {
+    setAssetItems((current) => current.map((asset) => asset.id === assetId ? { ...asset, ...patch } : asset));
+    setLinkAsset((current) => current?.id === assetId ? { ...current, ...patch } : current);
+    setDetailAsset((current) => current?.id === assetId ? { ...current, ...patch } : current);
+    setEditAsset((current) => current?.id === assetId ? { ...current, ...patch } : current);
+  }
+
+  function patchLocalTask(taskId: string, status: TaskStatus) {
+    const updatePipeline = (asset: AssetTableItem): AssetTableItem => ({
+      ...asset,
+      pipeline: Object.fromEntries(Object.entries(asset.pipeline).map(([step, task]) => [step, task?.id === taskId ? { ...task, status } : task])) as AssetTableItem["pipeline"],
+    });
+    setAssetItems((current) => current.map(updatePipeline));
+    setDetailAsset((current) => current ? updatePipeline(current) : current);
+    setEditAsset((current) => current ? updatePipeline(current) : current);
+    setLinkAsset((current) => current ? updatePipeline(current) : current);
+  }
 
   async function updateTaskStatus(taskId: string, currentStatus: TaskStatus) {
     const nextStatus = statusCycle[(statusCycle.indexOf(currentStatus) + 1) % statusCycle.length];
     setPendingId(taskId);
     setMessage(null);
+
+    if (taskId.startsWith(demoTaskIdPrefix)) {
+      patchLocalTask(taskId, nextStatus);
+      setPendingId(null);
+      setMessage("演示资产任务状态已更新。");
+      return;
+    }
 
     const response = await fetch(`/api/tasks/${taskId}`, {
       method: "PATCH",
@@ -56,6 +86,13 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
     setPendingId(assetId);
     setMessage(null);
 
+    if (assetId.startsWith(demoTaskIdPrefix)) {
+      patchLocalAsset(assetId, { status });
+      setPendingId(null);
+      setMessage("演示资产状态已更新。");
+      return;
+    }
+
     const response = await fetch(`/api/assets/${assetId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -72,9 +109,48 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
     startTransition(() => router.refresh());
   }
 
+  async function updateAsset(assetId: string, input: Pick<AssetTableItem, "name" | "type" | "status" | "description" | "thumbnailUrl">) {
+    setPendingId(assetId);
+    setMessage(null);
+
+    if (assetId.startsWith(demoTaskIdPrefix)) {
+      patchLocalAsset(assetId, input);
+      setPendingId(null);
+      setEditAsset(null);
+      setMessage("演示资产信息已更新。");
+      return;
+    }
+
+    const response = await fetch(`/api/assets/${assetId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+
+    setPendingId(null);
+
+    if (!response.ok) {
+      setMessage("更新资产信息失败。");
+      return;
+    }
+
+    patchLocalAsset(assetId, input);
+    setEditAsset(null);
+    startTransition(() => router.refresh());
+  }
+
   async function deleteAsset(assetId: string) {
     setPendingId(assetId);
     setMessage(null);
+
+    if (assetId.startsWith(demoTaskIdPrefix)) {
+      setAssetItems((current) => current.filter((asset) => asset.id !== assetId));
+      setDetailAsset((current) => current?.id === assetId ? null : current);
+      setEditAsset((current) => current?.id === assetId ? null : current);
+      setPendingId(null);
+      setMessage("演示资产已删除。");
+      return;
+    }
 
     const response = await fetch(`/api/assets/${assetId}`, {
       method: "DELETE",
@@ -93,6 +169,19 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
   async function linkShot(assetId: string, shotId: string) {
     setPendingId(`${assetId}:${shotId}`);
     setMessage(null);
+
+    if (assetId.startsWith(demoTaskIdPrefix)) {
+      const shot = shots.find((item) => item.id === shotId);
+      if (shot) {
+        const target = assetItems.find((asset) => asset.id === assetId);
+        const linkedShots = target?.linkedShots.some((item) => item.id === shot.id) ? target.linkedShots : [...(target?.linkedShots ?? []), { id: shot.id, code: shot.code }];
+        patchLocalAsset(assetId, { linkedShots });
+      }
+      setPendingId(null);
+      setLinkAsset(null);
+      setMessage("演示资产已关联镜头。");
+      return;
+    }
 
     const response = await fetch(`/api/assets/${assetId}/link-shot`, {
       method: "POST",
@@ -115,6 +204,14 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
     setPendingId(`${assetId}:${shotId}`);
     setMessage(null);
 
+    if (assetId.startsWith(demoTaskIdPrefix)) {
+      const target = assetItems.find((asset) => asset.id === assetId);
+      patchLocalAsset(assetId, { linkedShots: (target?.linkedShots ?? []).filter((shot) => shot.id !== shotId) });
+      setPendingId(null);
+      setMessage("演示资产已移除镜头关联。");
+      return;
+    }
+
     const response = await fetch(`/api/assets/${assetId}/link-shot/${shotId}`, {
       method: "DELETE",
     });
@@ -135,7 +232,58 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
     setMessage("Asset URL 已复制。");
   }
 
-  if (assets.length === 0) {
+  async function duplicateAsset(asset: AssetTableItem) {
+    setPendingId(asset.id);
+    setMessage(null);
+    const name = `${asset.name} Copy`;
+
+    if (asset.id.startsWith(demoTaskIdPrefix)) {
+      setAssetItems((current) => {
+        const baseId = `${asset.id}-copy`;
+        let copyIndex = current.filter((item) => item.id.startsWith(baseId)).length + 1;
+        while (current.some((item) => item.id === `${baseId}-${copyIndex}`)) copyIndex += 1;
+        const copyId = `${baseId}-${copyIndex}`;
+        const copy: AssetTableItem = {
+          ...asset,
+          id: copyId,
+          name,
+          status: "WAITING_TO_START",
+          pipeline: Object.fromEntries(PIPELINE_STEPS.map((step) => [step, {
+            id: `${copyId}-${step.toLowerCase()}`,
+            name: step,
+            status: "WAITING_TO_START" as TaskStatus,
+          }])) as AssetTableItem["pipeline"],
+        };
+        return [copy, ...current];
+      });
+      setPendingId(null);
+      setMessage("演示资产已复制。");
+      return;
+    }
+
+    const response = await fetch(`/api/projects/${projectId}/assets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        type: asset.type,
+        description: asset.description ?? "",
+        thumbnailUrl: asset.thumbnailUrl ?? "",
+      }),
+    });
+
+    setPendingId(null);
+
+    if (!response.ok) {
+      setMessage("复制资产失败。");
+      return;
+    }
+
+    setMessage("资产已复制。");
+    startTransition(() => router.refresh());
+  }
+
+  if (assetItems.length === 0) {
     return (
       <div className="grid min-h-72 place-items-center border border-dashed border-[#3f3c33] bg-[#181713] p-10 text-center">
         <div>
@@ -208,7 +356,7 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
         <aside className="border border-[#34322b] bg-[#181713] p-3">
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#d8b46a]">Producer queue</p>
-            <span className="font-mono text-[11px] text-[#7f7a70]">{filteredAssets.length}/{assets.length}</span>
+            <span className="font-mono text-[11px] text-[#7f7a70]">{filteredAssets.length}/{totalAssetCount}</span>
           </div>
           <div className="mt-3 space-y-2">
             {summary.riskAssets.length ? summary.riskAssets.slice(0, 3).map((asset) => (
@@ -254,10 +402,10 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
                         <span className="absolute bottom-1 right-1 grid size-4 place-items-center bg-black/60 text-[9px] text-white">▶</span>
                       </div>
                     </div>
-                    <div className="flex min-w-0 flex-col justify-center px-3">
+                    <button type="button" onClick={() => setDetailAsset(asset)} className="flex min-w-0 flex-col justify-center px-3 text-left">
                       <span className="font-medium text-[#4a9eff] hover:underline">{asset.name}</span>
                       <span className="truncate text-xs text-[#8f8a7e]">{asset.description || "No description"}</span>
-                    </div>
+                    </button>
                     <div className="flex items-center px-3">
                       <StatusPill status={asset.status} />
                     </div>
@@ -301,7 +449,10 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
                   asset={asset}
                   onCopy={() => copyAssetUrl(asset.id)}
                   onDelete={() => deleteAsset(asset.id)}
+                  onDuplicate={() => duplicateAsset(asset)}
+                  onEdit={() => setEditAsset(asset)}
                   onLink={() => setLinkAsset(asset)}
+                  onPreview={() => setDetailAsset(asset)}
                   onSetStatus={(status) => updateAssetStatus(asset.id, status)}
                 />
               </ContextMenu.Root>
@@ -326,6 +477,26 @@ export function AssetTable({ assets, shots }: { assets: AssetTableItem[]; shots:
           onLink={(shotId) => linkShot(linkAsset.id, shotId)}
         />
       ) : null}
+
+      {detailAsset ? (
+        <AssetDetailDialog
+          asset={detailAsset}
+          onClose={() => setDetailAsset(null)}
+          onEdit={() => {
+            setEditAsset(detailAsset);
+            setDetailAsset(null);
+          }}
+        />
+      ) : null}
+
+      {editAsset ? (
+        <AssetEditDialog
+          asset={editAsset}
+          pending={pendingId === editAsset.id}
+          onClose={() => setEditAsset(null)}
+          onSave={(input) => updateAsset(editAsset.id, input)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -334,22 +505,28 @@ function AssetContextMenu({
   asset,
   onCopy,
   onDelete,
+  onDuplicate,
+  onEdit,
   onLink,
+  onPreview,
   onSetStatus,
 }: {
   asset: AssetTableItem;
   onCopy: () => void;
   onDelete: () => void;
+  onDuplicate: () => void;
+  onEdit: () => void;
   onLink: () => void;
+  onPreview: () => void;
   onSetStatus: (status: TaskStatus) => void;
 }) {
   return (
     <ContextMenu.Portal>
       <ContextMenu.Content className="z-50 min-w-64 border border-[#3b382f] bg-[#181713] p-1 text-sm text-[#d8d3c7] shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
         <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">{asset.name}</ContextMenu.Label>
-        <MenuItem>✎ Edit Asset</MenuItem>
-        <MenuItem>⧉ Duplicate Asset</MenuItem>
-        <MenuItem>▶ Preview Latest Version</MenuItem>
+        <MenuItem onSelect={onEdit}>✎ Edit Asset</MenuItem>
+        <MenuItem onSelect={onDuplicate}>⧉ Duplicate Asset</MenuItem>
+        <MenuItem onSelect={onPreview}>▶ Preview Asset</MenuItem>
         <MenuItem onSelect={onCopy}>⌘ Copy Asset URL</MenuItem>
         <Separator />
         <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">状态</ContextMenu.Label>
@@ -422,6 +599,180 @@ function LinkShotDialog({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function AssetDetailDialog({ asset, onClose, onEdit }: { asset: AssetTableItem; onClose: () => void; onEdit: () => void }) {
+  const doneSteps = PIPELINE_STEPS.filter((step) => {
+    const status = asset.pipeline[step]?.status;
+    return status === "FINAL" || status === "APPROVED";
+  }).length;
+  const progress = Math.round((doneSteps / PIPELINE_STEPS.length) * 100);
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/62">
+      <aside className="flex h-full w-full max-w-2xl flex-col border-l border-[#3d392f] bg-[#181713] shadow-[0_28px_80px_rgba(0,0,0,0.55)]">
+        <div className="flex items-start justify-between border-b border-[#34322b] px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d8b46a]">Asset detail</p>
+            <h2 className="mt-1 truncate text-2xl font-semibold text-[#f4f1e8]">{asset.name}</h2>
+            <p className="mt-2 text-sm text-[#8f8a7e]">{ASSET_TYPE_LABELS[asset.type]} · {STATUS_COLORS[asset.status].label}</p>
+          </div>
+          <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-[#aaa599] hover:text-[#f4f1e8]">
+            关闭
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto p-5">
+          <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+            <div className="relative grid aspect-video place-items-center overflow-hidden border border-[#34322b] bg-[#11110f]">
+              {asset.thumbnailUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={asset.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="font-mono text-sm text-[#7f7a70]">{asset.type}</span>
+              )}
+            </div>
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 border border-[#2f2c25] bg-[#11110f]">
+                <DetailMetric label="Progress" value={`${progress}%`} />
+                <DetailMetric label="Shots" value={asset.linkedShots.length.toString()} />
+                <DetailMetric label="Risk" value={isRiskAsset(asset) ? "Open" : "Clear"} />
+              </div>
+              <div className="border border-[#2f2c25] bg-[#11110f] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6e6e69]">Description</p>
+                <p className="mt-2 text-sm leading-6 text-[#c9c3b5]">{asset.description || "No description"}</p>
+              </div>
+            </div>
+          </div>
+
+          <section className="mt-4 border border-[#2f2c25] bg-[#11110f]">
+            <div className="border-b border-[#2a2a28] px-4 py-3">
+              <p className="text-sm font-semibold text-[#f4f1e8]">Pipeline</p>
+            </div>
+            <div className="grid grid-cols-6">
+              {PIPELINE_STEPS.map((step) => {
+                const status = asset.pipeline[step]?.status ?? "WAITING_TO_START";
+                return (
+                  <div key={step} className="border-r border-[#2a2a28] p-3 last:border-r-0">
+                    <p className="font-mono text-xs" style={{ color: PIPELINE_COLORS[step] }}>{step}</p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <PipelineDot status={status} />
+                      <span className="truncate text-xs text-[#c9c3b5]">{STATUS_COLORS[status].label}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="mt-4 border border-[#2f2c25] bg-[#11110f] p-4">
+            <p className="text-sm font-semibold text-[#f4f1e8]">Linked shots</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {asset.linkedShots.length ? asset.linkedShots.map((shot) => (
+                <span key={shot.id} className="border border-[#34322b] px-2 py-1 font-mono text-xs text-[#c9c3b5]">{shot.code}</span>
+              )) : <span className="text-sm text-[#8f8a7e]">No linked shots</span>}
+            </div>
+          </section>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-[#34322b] px-5 py-4">
+          <button type="button" onClick={onClose} className="h-9 border border-[#3f3c33] px-4 text-sm text-[#c9c3b5]">关闭</button>
+          <button type="button" onClick={onEdit} className="h-9 bg-[#378add] px-4 text-sm font-semibold text-white transition hover:bg-[#4a9eff]">编辑资产</button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function AssetEditDialog({
+  asset,
+  pending,
+  onClose,
+  onSave,
+}: {
+  asset: AssetTableItem;
+  pending: boolean;
+  onClose: () => void;
+  onSave: (input: Pick<AssetTableItem, "name" | "type" | "status" | "description" | "thumbnailUrl">) => void;
+}) {
+  const [name, setName] = useState(asset.name);
+  const [type, setType] = useState(asset.type);
+  const [status, setStatus] = useState(asset.status);
+  const [description, setDescription] = useState(asset.description ?? "");
+  const [thumbnailUrl, setThumbnailUrl] = useState(asset.thumbnailUrl ?? "");
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/62 px-6">
+      <div className="w-full max-w-2xl border border-[#3d392f] bg-[#181713] shadow-[0_28px_80px_rgba(0,0,0,0.55)]">
+        <div className="flex items-center justify-between border-b border-[#34322b] px-5 py-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d8b46a]">Edit asset</p>
+            <h2 className="mt-1 text-xl font-semibold text-[#f4f1e8]">{asset.name}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-[#aaa599] hover:text-[#f4f1e8]">
+            关闭
+          </button>
+        </div>
+
+        <form
+          className="grid grid-cols-2 gap-4 p-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSave({
+              name,
+              type,
+              status,
+              description: description.trim() || null,
+              thumbnailUrl: thumbnailUrl.trim() || null,
+            });
+          }}
+        >
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">Asset Name</span>
+            <input value={name} onChange={(event) => setName(event.target.value)} required className="h-11 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm outline-none focus:border-[#d8b46a]" />
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">Type</span>
+            <select value={type} onChange={(event) => setType(event.target.value as AssetType)} className="h-11 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm outline-none focus:border-[#d8b46a]">
+              {Object.values(AssetType).map((assetType) => <option key={assetType} value={assetType}>{ASSET_TYPE_LABELS[assetType]}</option>)}
+            </select>
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">Status</span>
+            <select value={status} onChange={(event) => setStatus(event.target.value as TaskStatus)} className="h-11 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm outline-none focus:border-[#d8b46a]">
+              {Object.values(TaskStatus).map((assetStatus) => <option key={assetStatus} value={assetStatus}>{STATUS_COLORS[assetStatus].label}</option>)}
+            </select>
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">Thumbnail URL</span>
+            <input value={thumbnailUrl} onChange={(event) => setThumbnailUrl(event.target.value)} className="h-11 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm outline-none focus:border-[#d8b46a]" />
+          </label>
+          <label className="col-span-2 space-y-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">描述</span>
+            <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} className="w-full resize-none border border-[#34322b] bg-[#11110f] px-3 py-3 text-sm outline-none focus:border-[#d8b46a]" />
+          </label>
+
+          <div className="col-span-2 flex justify-end gap-2 border-t border-[#34322b] pt-4">
+            <button type="button" onClick={onClose} className="h-10 border border-[#3f3c33] px-4 text-sm text-[#c9c3b5]">
+              取消
+            </button>
+            <button type="submit" disabled={pending || name.trim().length < 2} className="h-10 bg-[#378add] px-5 text-sm font-semibold text-white disabled:opacity-70">
+              {pending ? "保存中..." : "保存资产"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function DetailMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border-r border-[#2a2a28] p-3 last:border-r-0">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6e6e69]">{label}</p>
+      <p className="mt-2 font-mono text-xl text-[#e8c678]">{value}</p>
     </div>
   );
 }
