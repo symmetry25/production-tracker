@@ -17,6 +17,12 @@ test.describe("production tracker smoke flow", () => {
     await expect(page.getByText("Industry Templates")).toBeVisible();
     await expect(page.getByRole("button", { name: /采购单/ })).toBeVisible();
     await expect(page.getByText("合计金额")).toBeVisible();
+    await page.getByRole("button", { name: "打开导入向导" }).click();
+    await page.getByRole("button", { name: "解析并自动映射" }).click();
+    await expect(page.getByText("字段映射", { exact: true })).toBeVisible();
+    await expect(page.getByText(/行 3: unit_cost - 非数字值/)).toBeVisible();
+    await page.getByRole("button", { name: "仅导入有效行 (1)" }).click();
+    await expect(page.getByText("已导入 1 条有效记录")).toBeVisible();
 
     await page.goto("/app/projects/demo-mkali-mission/overview");
     await expect(page.getByRole("heading", { name: /Mkali's Mission · MKALI/ })).toBeVisible();

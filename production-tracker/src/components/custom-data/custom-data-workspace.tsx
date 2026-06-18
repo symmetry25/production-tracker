@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import type { CustomRecord, IndustryTemplate } from "@/lib/custom-data";
 import type { FieldDefinition } from "@/lib/field-types";
 import { applyFormulaFields } from "@/lib/formula";
+import { autoMapHeaders, buildImportedRecords, parseDelimitedText, validateImportRows, type ImportValidationResult, type ParsedImport } from "@/lib/importer";
 
 type EntryMode = "form" | "spreadsheet" | "quick";
 
@@ -13,6 +14,8 @@ const emptyRecords: CustomRecord[] = [];
 export function CustomDataWorkspace({ templates }: { templates: IndustryTemplate[] }) {
   const [activeTemplateId, setActiveTemplateId] = useState(templates[0]?.id ?? "");
   const [entryMode, setEntryMode] = useState<EntryMode>("spreadsheet");
+  const [importOpen, setImportOpen] = useState(false);
+  const [lastImportSummary, setLastImportSummary] = useState<string | null>(null);
   const [recordsByTemplate, setRecordsByTemplate] = useState<Record<string, CustomRecord[]>>(() =>
     Object.fromEntries(templates.map((template) => [template.id, template.records])),
   );
@@ -34,6 +37,22 @@ export function CustomDataWorkspace({ templates }: { templates: IndustryTemplate
       ...current,
       [activeTemplate.id]: [nextRecord, ...(current[activeTemplate.id] ?? [])],
     }));
+  }
+
+  function createRecords(rows: Record<string, unknown>[]) {
+    const now = Date.now();
+    const nextRecords = rows.map((row, index) => ({
+      id: `import-${now}-${index}`,
+      data: applyFormulaFields(row, activeTemplate.fields),
+      createdAt: new Date().toISOString(),
+      createdBy: "导入向导",
+    }));
+
+    setRecordsByTemplate((current) => ({
+      ...current,
+      [activeTemplate.id]: [...nextRecords, ...(current[activeTemplate.id] ?? [])],
+    }));
+    setLastImportSummary(`已导入 ${nextRecords.length} 条有效记录`);
   }
 
   function updateCell(recordId: string, fieldKey: string, value: unknown) {
@@ -74,7 +93,14 @@ export function CustomDataWorkspace({ templates }: { templates: IndustryTemplate
             </div>
           </div>
 
-          <ContextPanel template={activeTemplate} records={records} />
+          <ContextPanel
+            template={activeTemplate}
+            records={records}
+            importOpen={importOpen}
+            lastImportSummary={lastImportSummary}
+            onToggleImport={() => setImportOpen((current) => !current)}
+            onImport={createRecords}
+          />
         </div>
       </section>
     </div>
@@ -247,7 +273,21 @@ function SpreadsheetEntry({
   );
 }
 
-function ContextPanel({ template, records }: { template: IndustryTemplate; records: CustomRecord[] }) {
+function ContextPanel({
+  template,
+  records,
+  importOpen,
+  lastImportSummary,
+  onToggleImport,
+  onImport,
+}: {
+  template: IndustryTemplate;
+  records: CustomRecord[];
+  importOpen: boolean;
+  lastImportSummary: string | null;
+  onToggleImport: () => void;
+  onImport: (records: Record<string, unknown>[]) => void;
+}) {
   const numericFields = template.fields.filter((field) => ["number", "currency", "percentage", "score", "formula"].includes(field.type));
   const requiredFields = template.fields.filter((field) => field.required);
 
@@ -258,7 +298,9 @@ function ContextPanel({ template, records }: { template: IndustryTemplate; recor
         <h3 className="mt-2 text-lg font-semibold">Excel · AI · Schema</h3>
       </div>
       <div className="space-y-3 p-4">
-        <PanelCard title="Excel 导入" detail="下一步接入字段映射、预检报告和错误行下载。" action="打开导入向导" />
+        <PanelCard title="Excel / CSV 导入" detail="粘贴 CSV、TSV 或从 Excel 复制出来的表格，自动字段映射并预检错误行。" action={importOpen ? "收起导入向导" : "打开导入向导"} onAction={onToggleImport} />
+        {lastImportSummary ? <div className="border border-[#27422e] bg-[#132016] px-3 py-2 text-xs text-[#83d6ae]">{lastImportSummary}</div> : null}
+        {importOpen ? <ImportWizard fields={template.fields} onImport={onImport} /> : null}
         <PanelCard title="AI 识别" detail="发票、手写表格、合同和名片识别会按当前字段模板回填。" action="上传识别材料" />
         <PanelCard title="动态 Schema" detail={`${template.fields.length} 个字段 · ${requiredFields.length} 个必填 · ${numericFields.length} 个可聚合字段`} action="管理字段" />
       </div>
@@ -271,14 +313,144 @@ function ContextPanel({ template, records }: { template: IndustryTemplate; recor
   );
 }
 
-function PanelCard({ title, detail, action }: { title: string; detail: string; action: string }) {
+function PanelCard({ title, detail, action, onAction }: { title: string; detail: string; action: string; onAction?: () => void }) {
   return (
     <div className="border border-[#34322b] bg-[#11110f] p-3">
       <p className="text-sm font-semibold text-[#f4f1e8]">{title}</p>
       <p className="mt-2 text-xs leading-5 text-[#8f8a7e]">{detail}</p>
-      <button type="button" className="mt-3 h-8 border border-[#3f3c33] px-3 text-xs text-[#aaa599]">
+      <button type="button" onClick={onAction} className="mt-3 h-8 border border-[#3f3c33] px-3 text-xs text-[#aaa599] transition hover:border-[#d8b46a] hover:text-[#e8c678]">
         {action}
       </button>
+    </div>
+  );
+}
+
+function ImportWizard({ fields, onImport }: { fields: FieldDefinition[]; onImport: (records: Record<string, unknown>[]) => void }) {
+  const importableFields = fields.filter((field) => !field.readOnly && !field.hidden);
+  const [sourceText, setSourceText] = useState("采购单号,供应商,单价,数量,状态\nPO-0099,测试供应商,1200,2,pending\nPO-0100,错误供应商,N/A,1,pending");
+  const [parsed, setParsed] = useState<ParsedImport | null>(null);
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+  const validation = useMemo<ImportValidationResult | null>(() => {
+    if (!parsed) return null;
+    return validateImportRows(parsed.rows, mapping, importableFields);
+  }, [importableFields, mapping, parsed]);
+
+  function parseSource() {
+    const nextParsed = parseDelimitedText(sourceText);
+    setParsed(nextParsed);
+    setMapping(autoMapHeaders(nextParsed.headers, importableFields));
+  }
+
+  function importValidRows() {
+    if (!parsed || !validation?.validRows) return;
+    onImport(buildImportedRecords(parsed.rows, mapping, importableFields));
+  }
+
+  return (
+    <div className="border border-[#34322b] bg-[#11110f]">
+      <div className="border-b border-[#34322b] px-3 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#d8b46a]">Import Wizard</p>
+        <p className="mt-2 text-xs leading-5 text-[#8f8a7e]">第一版支持 CSV/TSV 和 Excel 复制粘贴文本。</p>
+      </div>
+      <div className="space-y-3 p-3">
+        <textarea
+          value={sourceText}
+          onChange={(event) => setSourceText(event.target.value)}
+          rows={7}
+          className="w-full resize-none border border-[#34322b] bg-[#151410] px-3 py-2 font-mono text-xs leading-5 text-[#f4f1e8] outline-none focus:border-[#d8b46a]"
+          aria-label="CSV import text"
+        />
+        <button type="button" onClick={parseSource} className="h-9 w-full bg-[#d8b46a] text-xs font-semibold text-[#171713]">
+          解析并自动映射
+        </button>
+
+        {parsed ? (
+          <div className="space-y-3">
+            <ImportSummary parsed={parsed} validation={validation} />
+            <MappingEditor headers={parsed.headers} fields={importableFields} mapping={mapping} onChange={setMapping} />
+            <ErrorList validation={validation} />
+            <button
+              type="button"
+              disabled={!validation?.validRows}
+              onClick={importValidRows}
+              className="h-9 w-full border border-[#27422e] bg-[#132016] text-xs font-semibold text-[#83d6ae] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              仅导入有效行 ({validation?.validRows ?? 0})
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ImportSummary({ parsed, validation }: { parsed: ParsedImport; validation: ImportValidationResult | null }) {
+  return (
+    <div className="grid grid-cols-3 border border-[#2a2a28] text-center text-xs">
+      <MiniImportMetric label="Rows" value={String(parsed.totalRows)} />
+      <MiniImportMetric label="Valid" value={String(validation?.validRows ?? "--")} />
+      <MiniImportMetric label="Errors" value={String(validation?.errorRows ?? "--")} tone={validation?.errorRows ? "bad" : "ok"} />
+    </div>
+  );
+}
+
+function MiniImportMetric({ label, value, tone = "normal" }: { label: string; value: string; tone?: "normal" | "ok" | "bad" }) {
+  const color = tone === "bad" ? "text-[#e24b4a]" : tone === "ok" ? "text-[#83d6ae]" : "text-[#f4f1e8]";
+  return (
+    <div className="border-r border-[#2a2a28] px-2 py-2 last:border-r-0">
+      <p className="text-[10px] uppercase tracking-[0.12em] text-[#7f7a70]">{label}</p>
+      <p className={`mt-1 font-mono text-lg ${color}`}>{value}</p>
+    </div>
+  );
+}
+
+function MappingEditor({
+  headers,
+  fields,
+  mapping,
+  onChange,
+}: {
+  headers: string[];
+  fields: FieldDefinition[];
+  mapping: Record<string, string>;
+  onChange: (mapping: Record<string, string>) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7f7a70]">字段映射</p>
+      {headers.map((header) => (
+        <label key={header} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 text-xs">
+          <span className="truncate text-[#c9c3b5]">{header}</span>
+          <select
+            value={mapping[header] ?? ""}
+            onChange={(event) => onChange({ ...mapping, [header]: event.target.value })}
+            className="h-8 border border-[#34322b] bg-[#151410] px-2 text-[#f4f1e8] outline-none focus:border-[#d8b46a]"
+          >
+            <option value="">忽略此列</option>
+            {fields.map((field) => (
+              <option key={field.key} value={field.key}>
+                {field.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function ErrorList({ validation }: { validation: ImportValidationResult | null }) {
+  if (!validation?.errors.length) {
+    return <div className="border border-[#27422e] bg-[#132016] px-3 py-2 text-xs text-[#83d6ae]">预检通过，没有错误行。</div>;
+  }
+
+  return (
+    <div className="max-h-28 overflow-auto border border-[#4a2b24] bg-[#1d1210] p-2">
+      {validation.errors.slice(0, 6).map((error) => (
+        <p key={`${error.row}-${error.field}-${error.message}`} className="text-xs leading-5 text-[#ff9c8c]">
+          行 {error.row}: {error.field} - {error.message} ({String(error.value || "--")})
+        </p>
+      ))}
     </div>
   );
 }
