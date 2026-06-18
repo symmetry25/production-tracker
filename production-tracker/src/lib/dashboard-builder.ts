@@ -1,4 +1,6 @@
 import { listEntityTypes, listRecords, listRecordsAsync } from "@/lib/custom-data-store";
+import { getPrisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 
 export type WidgetType =
   | "metric_card"
@@ -72,6 +74,26 @@ type DashboardState = {
   sequence: number;
 };
 
+type DbDashboard = {
+  id: string;
+  name: string;
+  description: string | null;
+  projectId: string | null;
+  createdById: string;
+  isShared: boolean;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  widgets: DbDashboardWidget[];
+};
+
+type DbDashboardWidget = {
+  id: string;
+  dashboardId: string;
+  config: unknown;
+  order: number;
+  createdAt: Date | string;
+};
+
 const globalForDashboard = globalThis as typeof globalThis & {
   __productionTrackerDashboardState?: DashboardState;
 };
@@ -81,8 +103,29 @@ export function listDashboards(projectId?: string | null) {
   return projectId ? dashboards.filter((dashboard) => dashboard.projectId === projectId) : dashboards;
 }
 
+export async function listDashboardsAsync(projectId?: string | null) {
+  if (!shouldUsePersistentStore()) return listDashboards(projectId);
+
+  const dashboards = await getPrisma().dashboard.findMany({
+    where: projectId ? { projectId } : undefined,
+    include: dashboardInclude,
+    orderBy: { updatedAt: "desc" },
+  });
+  return dashboards.map(dashboardFromDb);
+}
+
 export function getDashboard(id: string) {
   return clone(getState().dashboards.get(id) ?? null);
+}
+
+export async function getDashboardAsync(id: string) {
+  if (!shouldUsePersistentStore()) return getDashboard(id);
+
+  const dashboard = await getPrisma().dashboard.findUnique({
+    where: { id },
+    include: dashboardInclude,
+  });
+  return dashboard ? dashboardFromDb(dashboard) : null;
 }
 
 export function createDashboard(input: { name: string; description?: string | null; projectId?: string | null; isShared?: boolean }) {
@@ -102,6 +145,22 @@ export function createDashboard(input: { name: string; description?: string | nu
   return clone(dashboard);
 }
 
+export async function createDashboardAsync(input: { name: string; description?: string | null; projectId?: string | null; isShared?: boolean }) {
+  if (!shouldUsePersistentStore()) return createDashboard(input);
+
+  const dashboard = await getPrisma().dashboard.create({
+    data: {
+      name: input.name,
+      description: input.description ?? null,
+      projectId: input.projectId ?? null,
+      createdById: "demo-admin",
+      isShared: input.isShared ?? false,
+    },
+    include: dashboardInclude,
+  });
+  return dashboardFromDb(dashboard);
+}
+
 export function updateDashboard(id: string, input: Partial<Pick<DashboardItem, "name" | "description" | "projectId" | "isShared">>) {
   const dashboard = getState().dashboards.get(id);
   if (!dashboard) return null;
@@ -109,11 +168,41 @@ export function updateDashboard(id: string, input: Partial<Pick<DashboardItem, "
   return clone(dashboard);
 }
 
+export async function updateDashboardAsync(id: string, input: Partial<Pick<DashboardItem, "name" | "description" | "projectId" | "isShared">>) {
+  if (!shouldUsePersistentStore()) return updateDashboard(id, input);
+
+  const existing = await getDashboardAsync(id);
+  if (!existing) return null;
+  const dashboard = await getPrisma().dashboard.update({
+    where: { id: existing.id },
+    data: {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
+      ...(input.isShared !== undefined ? { isShared: input.isShared } : {}),
+    },
+    include: dashboardInclude,
+  });
+  return dashboardFromDb(dashboard);
+}
+
 export function deleteDashboard(id: string) {
   const dashboard = getState().dashboards.get(id);
   if (!dashboard) return null;
   getState().dashboards.delete(id);
   return clone(dashboard);
+}
+
+export async function deleteDashboardAsync(id: string) {
+  if (!shouldUsePersistentStore()) return deleteDashboard(id);
+
+  const existing = await getDashboardAsync(id);
+  if (!existing) return null;
+  const dashboard = await getPrisma().dashboard.delete({
+    where: { id: existing.id },
+    include: dashboardInclude,
+  });
+  return dashboardFromDb(dashboard);
 }
 
 export function addDashboardWidget(dashboardId: string, input: Partial<WidgetConfig> & Pick<WidgetConfig, "type" | "title" | "dataSource">) {
@@ -139,6 +228,33 @@ export function addDashboardWidget(dashboardId: string, input: Partial<WidgetCon
   return clone(widget);
 }
 
+export async function addDashboardWidgetAsync(dashboardId: string, input: Partial<WidgetConfig> & Pick<WidgetConfig, "type" | "title" | "dataSource">) {
+  if (!shouldUsePersistentStore()) return addDashboardWidget(dashboardId, input);
+
+  const dashboard = await getDashboardAsync(dashboardId);
+  if (!dashboard) return null;
+  const widgetId = `widget-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const config: WidgetConfig = {
+    id: input.id ?? `${widgetId}-config`,
+    type: input.type,
+    title: input.title,
+    dataSource: input.dataSource,
+    style: input.style ?? { colorScheme: "producer", showLegend: true, showLabels: true },
+    layout: input.layout ?? { x: 0, y: dashboard.widgets.length * 4, w: 6, h: 4 },
+    refreshInterval: input.refreshInterval ?? 0,
+  };
+  const widget = await getPrisma().dashboardWidget.create({
+    data: {
+      id: widgetId,
+      dashboardId: dashboard.id,
+      order: dashboard.widgets.length,
+      config: toPrismaJson(config),
+    },
+  });
+  await touchDashboard(dashboard.id);
+  return widgetFromDb(widget);
+}
+
 export function updateDashboardWidget(dashboardId: string, widgetId: string, input: Partial<WidgetConfig>) {
   const dashboard = getState().dashboards.get(dashboardId);
   const widget = dashboard?.widgets.find((item) => item.id === widgetId);
@@ -148,6 +264,28 @@ export function updateDashboardWidget(dashboardId: string, widgetId: string, inp
   return clone(widget);
 }
 
+export async function updateDashboardWidgetAsync(dashboardId: string, widgetId: string, input: Partial<WidgetConfig>) {
+  if (!shouldUsePersistentStore()) return updateDashboardWidget(dashboardId, widgetId, input);
+
+  const widget = await getPrisma().dashboardWidget.findFirst({ where: { id: widgetId, dashboardId } });
+  if (!widget) return null;
+  const currentConfig = widgetConfigFromDb(widget.config, widget);
+  const updated = await getPrisma().dashboardWidget.update({
+    where: { id: widgetId },
+    data: {
+      config: toPrismaJson({
+        ...currentConfig,
+        ...input,
+        dataSource: input.dataSource ?? currentConfig.dataSource,
+        style: input.style ?? currentConfig.style,
+        layout: input.layout ?? currentConfig.layout,
+      }),
+    },
+  });
+  await touchDashboard(dashboardId);
+  return widgetFromDb(updated);
+}
+
 export function deleteDashboardWidget(dashboardId: string, widgetId: string) {
   const dashboard = getState().dashboards.get(dashboardId);
   if (!dashboard) return null;
@@ -155,6 +293,18 @@ export function deleteDashboardWidget(dashboardId: string, widgetId: string) {
   dashboard.widgets = dashboard.widgets.filter((item) => item.id !== widgetId).map((item, order) => ({ ...item, order }));
   dashboard.updatedAt = new Date().toISOString();
   return widget ? clone(widget) : null;
+}
+
+export async function deleteDashboardWidgetAsync(dashboardId: string, widgetId: string) {
+  if (!shouldUsePersistentStore()) return deleteDashboardWidget(dashboardId, widgetId);
+
+  const widget = await getPrisma().dashboardWidget.findFirst({ where: { id: widgetId, dashboardId } });
+  if (!widget) return null;
+  const deleted = await getPrisma().dashboardWidget.delete({ where: { id: widgetId } });
+  const remaining = await getPrisma().dashboardWidget.findMany({ where: { dashboardId }, orderBy: { order: "asc" } });
+  await Promise.all(remaining.map((item, order) => getPrisma().dashboardWidget.update({ where: { id: item.id }, data: { order } })));
+  await touchDashboard(dashboardId);
+  return widgetFromDb(deleted);
 }
 
 export function updateDashboardLayout(dashboardId: string, layouts: { widgetId: string; layout: WidgetConfig["layout"] }[]) {
@@ -170,6 +320,25 @@ export function updateDashboardLayout(dashboardId: string, layouts: { widgetId: 
   }));
   dashboard.updatedAt = new Date().toISOString();
   return clone(dashboard.widgets);
+}
+
+export async function updateDashboardLayoutAsync(dashboardId: string, layouts: { widgetId: string; layout: WidgetConfig["layout"] }[]) {
+  if (!shouldUsePersistentStore()) return updateDashboardLayout(dashboardId, layouts);
+
+  const dashboard = await getDashboardAsync(dashboardId);
+  if (!dashboard) return null;
+  const layoutMap = new Map(layouts.map((item) => [item.widgetId, item.layout]));
+  await Promise.all(dashboard.widgets.map((widget) => {
+    const layout = layoutMap.get(widget.id);
+    if (!layout) return Promise.resolve(widget);
+    return getPrisma().dashboardWidget.update({
+      where: { id: widget.id },
+      data: { config: toPrismaJson({ ...widget.config, layout }) },
+    });
+  }));
+  await touchDashboard(dashboard.id);
+  const updated = await getDashboardAsync(dashboard.id);
+  return updated?.widgets ?? null;
 }
 
 export function getWidgetData(dataSource: WidgetConfig["dataSource"]) {
@@ -223,6 +392,111 @@ function aggregateWidgetRows(records: { data: Record<string, unknown> }[], dataS
 
 export function resetDashboardsForTests() {
   globalForDashboard.__productionTrackerDashboardState = createState();
+}
+
+const dashboardInclude = {
+  widgets: { orderBy: { order: "asc" } },
+} as const;
+
+function shouldUsePersistentStore() {
+  return Boolean(process.env.DATABASE_URL);
+}
+
+function dashboardFromDb(dashboard: DbDashboard): DashboardItem {
+  return {
+    id: dashboard.id,
+    name: dashboard.name,
+    description: dashboard.description,
+    projectId: dashboard.projectId,
+    createdById: dashboard.createdById,
+    isShared: dashboard.isShared,
+    createdAt: toIsoString(dashboard.createdAt),
+    updatedAt: toIsoString(dashboard.updatedAt),
+    widgets: dashboard.widgets.map(widgetFromDb),
+  };
+}
+
+function widgetFromDb(widget: DbDashboardWidget): DashboardWidgetItem {
+  return {
+    id: widget.id,
+    dashboardId: widget.dashboardId,
+    config: widgetConfigFromDb(widget.config, widget),
+    order: widget.order,
+    createdAt: toIsoString(widget.createdAt),
+  };
+}
+
+function widgetConfigFromDb(config: unknown, widget: DbDashboardWidget): WidgetConfig {
+  const raw = isPlainRecord(config) ? config : {};
+  return {
+    id: typeof raw.id === "string" ? raw.id : `${widget.id}-config`,
+    type: normalizeWidgetType(raw.type),
+    title: typeof raw.title === "string" ? raw.title : "未命名组件",
+    dataSource: normalizeDataSource(raw.dataSource),
+    style: normalizeWidgetStyle(raw.style),
+    layout: normalizeWidgetLayout(raw.layout, widget.order),
+    refreshInterval: typeof raw.refreshInterval === "number" ? raw.refreshInterval : 0,
+  };
+}
+
+function normalizeWidgetType(value: unknown): WidgetType {
+  const allowed: WidgetType[] = ["metric_card", "bar_chart", "line_chart", "pie_chart", "stacked_bar", "heatmap", "scatter", "table", "progress_bar", "funnel", "gauge", "timeline", "map", "text"];
+  return allowed.includes(value as WidgetType) ? value as WidgetType : "table";
+}
+
+function normalizeDataSource(value: unknown): WidgetConfig["dataSource"] {
+  const raw = isPlainRecord(value) ? value : {};
+  const aggregation = isPlainRecord(raw.aggregation) && typeof raw.aggregation.field === "string" && isAggregationFn(raw.aggregation.fn)
+    ? { field: raw.aggregation.field, fn: raw.aggregation.fn }
+    : undefined;
+  return {
+    entityTypeId: typeof raw.entityTypeId === "string" ? raw.entityTypeId : "",
+    filters: Array.isArray(raw.filters) ? raw.filters as DashboardFilter[] : undefined,
+    groupBy: typeof raw.groupBy === "string" ? raw.groupBy : undefined,
+    aggregation,
+    sortBy: typeof raw.sortBy === "string" ? raw.sortBy : undefined,
+    sortDir: raw.sortDir === "asc" ? "asc" : raw.sortDir === "desc" ? "desc" : undefined,
+    limit: typeof raw.limit === "number" ? raw.limit : undefined,
+  };
+}
+
+function normalizeWidgetStyle(value: unknown): WidgetConfig["style"] {
+  const raw = isPlainRecord(value) ? value : {};
+  return {
+    colorScheme: typeof raw.colorScheme === "string" ? raw.colorScheme : "producer",
+    showLegend: typeof raw.showLegend === "boolean" ? raw.showLegend : true,
+    showLabels: typeof raw.showLabels === "boolean" ? raw.showLabels : true,
+  };
+}
+
+function normalizeWidgetLayout(value: unknown, order: number): WidgetConfig["layout"] {
+  const raw = isPlainRecord(value) ? value : {};
+  return {
+    x: typeof raw.x === "number" ? raw.x : (order % 2) * 6,
+    y: typeof raw.y === "number" ? raw.y : Math.floor(order / 2) * 4,
+    w: typeof raw.w === "number" ? raw.w : 6,
+    h: typeof raw.h === "number" ? raw.h : 4,
+  };
+}
+
+function isAggregationFn(value: unknown): value is NonNullable<WidgetConfig["dataSource"]["aggregation"]>["fn"] {
+  return value === "count" || value === "sum" || value === "avg" || value === "min" || value === "max";
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function toIsoString(value: Date | string) {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function toPrismaJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+async function touchDashboard(dashboardId: string) {
+  await getPrisma().dashboard.update({ where: { id: dashboardId }, data: { updatedAt: new Date() } });
 }
 
 function getState() {

@@ -1,6 +1,6 @@
 import { DashboardsIndex } from "@/components/dashboard-builder/dashboard-pages";
-import { listDashboards } from "@/lib/dashboard-builder";
+import { listDashboardsAsync } from "@/lib/dashboard-builder";
 
-export default function DashboardsPage() {
-  return <DashboardsIndex dashboards={listDashboards()} />;
+export default async function DashboardsPage() {
+  return <DashboardsIndex dashboards={await listDashboardsAsync()} />;
 }

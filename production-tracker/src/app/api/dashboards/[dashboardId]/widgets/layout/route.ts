@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { updateDashboardLayout } from "@/lib/dashboard-builder";
+import { updateDashboardLayoutAsync } from "@/lib/dashboard-builder";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
 
 const layoutSchema = z.object({
@@ -17,6 +17,6 @@ export async function POST(request: Request, ctx: RouteParams<{ dashboardId: str
   const parsed = layoutSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid layout payload.", 422);
 
-  const widgets = updateDashboardLayout(dashboardId, parsed.data.layouts);
+  const widgets = await updateDashboardLayoutAsync(dashboardId, parsed.data.layouts);
   return widgets ? ok(widgets) : fail("Dashboard not found.", 404);
 }

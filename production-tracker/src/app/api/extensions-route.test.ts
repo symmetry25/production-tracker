@@ -14,6 +14,7 @@ import { POST as recognizeDocument } from "./ai/recognize/route";
 import { DELETE as deleteWidget } from "./dashboards/[dashboardId]/widgets/[widgetId]/route";
 import { POST as createWidget } from "./dashboards/[dashboardId]/widgets/route";
 import { POST as readWidgetData } from "./dashboards/widget-data/route";
+import { POST as createDashboard } from "./dashboards/route";
 import { POST as addField } from "./entity-types/[id]/fields/route";
 import { POST as previewImport } from "./entity-types/[id]/import/preview/route";
 import { POST as createRecord } from "./entity-types/[id]/records/route";
@@ -112,6 +113,44 @@ describe("extension API routes", () => {
         name: "数据库采购单",
         slug: "db-purchase-order",
         fields: [{ key: "name", name: "名称" }],
+      },
+      error: null,
+    });
+    expect(getPrisma).toHaveBeenCalled();
+  });
+
+  it("persists dashboards through Prisma when a database is configured", async () => {
+    process.env.DATABASE_URL = "postgresql://unit.test/db";
+    vi.mocked(getPrisma).mockReturnValue({
+      dashboard: {
+        create: vi.fn().mockResolvedValue({
+          id: "dashboard-db-1",
+          name: "数据库看板",
+          description: "落库后的制片看板",
+          projectId: "demo-mkali-mission",
+          createdById: "demo-admin",
+          isShared: true,
+          createdAt: new Date("2026-06-18T00:00:00.000Z"),
+          updatedAt: new Date("2026-06-18T00:00:00.000Z"),
+          widgets: [],
+        }),
+      },
+    } as never);
+
+    const response = await createDashboard(
+      new Request("http://app.test/api/dashboards", {
+        method: "POST",
+        body: JSON.stringify({ name: "数据库看板", description: "落库后的制片看板", projectId: "demo-mkali-mission", isShared: true }),
+      }),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        id: "dashboard-db-1",
+        name: "数据库看板",
+        projectId: "demo-mkali-mission",
+        isShared: true,
+        widgets: [],
       },
       error: null,
     });

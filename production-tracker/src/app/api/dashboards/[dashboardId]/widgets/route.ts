@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { addDashboardWidget, getDashboard } from "@/lib/dashboard-builder";
+import { addDashboardWidgetAsync, getDashboardAsync } from "@/lib/dashboard-builder";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
 
 const widgetSchema = z.object({
@@ -19,7 +19,7 @@ export async function GET(_: Request, ctx: RouteParams<{ dashboardId: string }>)
   if (!session?.user) return fail("Unauthorized", 401);
 
   const { dashboardId } = await getRouteParams(ctx);
-  const dashboard = getDashboard(dashboardId);
+  const dashboard = await getDashboardAsync(dashboardId);
   return dashboard ? ok(dashboard.widgets) : fail("Dashboard not found.", 404);
 }
 
@@ -31,6 +31,6 @@ export async function POST(request: Request, ctx: RouteParams<{ dashboardId: str
   const parsed = widgetSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid widget payload.", 422);
 
-  const widget = addDashboardWidget(dashboardId, parsed.data as never);
+  const widget = await addDashboardWidgetAsync(dashboardId, parsed.data as never);
   return widget ? ok(widget) : fail("Dashboard not found.", 404);
 }

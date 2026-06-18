@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
-import { createDashboard, listDashboards } from "@/lib/dashboard-builder";
+import { createDashboardAsync, listDashboardsAsync } from "@/lib/dashboard-builder";
 
 const createDashboardSchema = z.object({
   name: z.string().trim().min(1),
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   if (!session?.user) return fail("Unauthorized", 401);
 
   const { searchParams } = new URL(request.url);
-  return ok(listDashboards(searchParams.get("projectId")));
+  return ok(await listDashboardsAsync(searchParams.get("projectId")));
 }
 
 export async function POST(request: Request) {
@@ -26,5 +26,5 @@ export async function POST(request: Request) {
   const parsed = createDashboardSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid dashboard payload.", 422);
 
-  return ok(createDashboard(parsed.data));
+  return ok(await createDashboardAsync(parsed.data));
 }
