@@ -8,6 +8,7 @@ vi.mock("@/lib/dashboard-data", () => ({ getDashboardStats: vi.fn() }));
 import { getBurndownReport } from "./burndown/route";
 import { getOverviewReport } from "./overview/route";
 import { getWorkloadReport } from "./workload/route";
+import { getScheduleSuggestions } from "../projects/[projectId]/schedule-suggestions/route";
 
 const session = { user: { id: "demo-admin", role: "ADMIN" } };
 
@@ -120,6 +121,37 @@ describe("reports routes", () => {
     expect(getDashboardStats).toHaveBeenCalledWith("demo-mkali-mission");
     await expect(response.json()).resolves.toMatchObject({
       data: [{ id: "u1", taskCount: 4 }],
+      error: null,
+    });
+  });
+
+  it("returns project schedule suggestions", async () => {
+    const response = await getScheduleSuggestions(
+      new Request("http://app.test/api/projects/demo/schedule-suggestions"),
+      { params: Promise.resolve({ projectId: "demo" }) },
+      {
+        auth: vi.fn().mockResolvedValue(session),
+        getTaskTableItems: vi.fn().mockResolvedValue([{ id: "task-1", name: "Risky task" }]),
+        buildScheduleSuggestionsWithAi: vi.fn().mockResolvedValue({
+          projectId: "demo",
+          provider: "rules",
+          healthScore: 72,
+          criticalCount: 1,
+          warningCount: 2,
+          totalBudgetRisk: 1300,
+          generatedAt: "2026-06-18T00:00:00.000Z",
+          narrative: "先处理逾期和超预算任务。",
+          suggestions: [{ id: "task-1:overdue", kind: "overdue", severity: "critical", taskId: "task-1", taskName: "Risky task" }],
+        }),
+      },
+    );
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        projectId: "demo",
+        healthScore: 72,
+        suggestions: [{ kind: "overdue", severity: "critical" }],
+      },
       error: null,
     });
   });
