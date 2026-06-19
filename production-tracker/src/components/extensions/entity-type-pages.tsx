@@ -140,7 +140,7 @@ export function EntitySettings({ entity }: { entity: EntityTypeItem }) {
 export function EntityImportPageView({ entity, preview, sourceText }: { entity: EntityTypeItem; preview: ImportPreview; sourceText: string }) {
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow="Excel import" title={`${entity.name} 导入向导`} description="支持 CSV、TSV、从 Excel 复制的表格文本，以及 API multipart Excel 文件上传。这里展示默认样例的字段映射和预检结果。" />
+      <PageHeader eyebrow="Excel import" title={`${entity.name} 导入向导`} description="支持 xlsx、xls、csv、TSV 和从 Excel 复制的表格文本。右侧上传文件或粘贴文本后，系统会按字段映射写入有效行。" />
       <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
         <section className="border border-[#34322b] bg-[#181713]">
           <div className="border-b border-[#2a2a28] px-4 py-3">
