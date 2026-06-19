@@ -2,6 +2,7 @@
 
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
+import { ChartViewport } from "@/components/charts/chart-viewport";
 import type { WidgetConfig } from "@/lib/dashboard-builder";
 
 export type DashboardWidgetData = { rows: unknown[]; total: number };
@@ -9,7 +10,7 @@ export type ChartRow = { name: string; value: number };
 
 const palette = ["#d8b46a", "#4a9eff", "#1d9e75", "#ef9f27", "#7f77dd", "#e24b4a", "#4f7f9b"];
 
-export function DashboardWidgetContent({ type, rows, total }: { type: WidgetConfig["type"]; rows: ChartRow[]; total: number }) {
+export function DashboardWidgetContent({ type, rows, total, title = "Dashboard widget", compact = false }: { type: WidgetConfig["type"]; rows: ChartRow[]; total: number; title?: string; compact?: boolean }) {
   if (!rows.length) {
     return <div className="flex min-h-0 flex-1 items-center justify-center text-xs text-[#6e6e69]">暂无可视化数据</div>;
   }
@@ -25,7 +26,7 @@ export function DashboardWidgetContent({ type, rows, total }: { type: WidgetConf
 
   if (type === "pie_chart") {
     return (
-      <div className="min-h-0 flex-1">
+      <ChartViewport title={title} compact={compact} minHeight={compact ? 180 : 240}>
         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <PieChart>
             <Pie data={rows} dataKey="value" nameKey="name" innerRadius={48} outerRadius={78} paddingAngle={2}>
@@ -34,13 +35,13 @@ export function DashboardWidgetContent({ type, rows, total }: { type: WidgetConf
             <Tooltip contentStyle={tooltipStyle} formatter={(value) => formatNumber(Number(value))} />
           </PieChart>
         </ResponsiveContainer>
-      </div>
+      </ChartViewport>
     );
   }
 
   if (type === "line_chart" || type === "timeline") {
     return (
-      <div className="min-h-0 flex-1">
+      <ChartViewport title={title} compact={compact} minHeight={compact ? 180 : 240}>
         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <LineChart data={rows} margin={{ top: 18, right: 18, bottom: 0, left: -12 }}>
             <CartesianGrid stroke="#24231f" vertical={false} />
@@ -50,7 +51,7 @@ export function DashboardWidgetContent({ type, rows, total }: { type: WidgetConf
             <Line type="monotone" dataKey="value" stroke="#d8b46a" strokeWidth={2} dot={{ r: 2, fill: "#d8b46a" }} activeDot={{ r: 4 }} />
           </LineChart>
         </ResponsiveContainer>
-      </div>
+      </ChartViewport>
     );
   }
 
@@ -60,7 +61,7 @@ export function DashboardWidgetContent({ type, rows, total }: { type: WidgetConf
   if (type === "table") return <WidgetTable rows={rows} total={total} />;
 
   return (
-    <div className="min-h-0 flex-1">
+    <ChartViewport title={title} compact={compact} minHeight={compact ? 180 : 240}>
       <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
         <BarChart data={rows} margin={{ top: 18, right: 14, bottom: 0, left: -12 }}>
           <XAxis dataKey="name" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -69,7 +70,7 @@ export function DashboardWidgetContent({ type, rows, total }: { type: WidgetConf
           <Bar dataKey="value" fill="#d8b46a" radius={[2, 2, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </ChartViewport>
   );
 }
 

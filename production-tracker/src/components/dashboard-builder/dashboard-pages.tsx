@@ -65,7 +65,7 @@ function WidgetCard({ config, data }: { config: WidgetConfig; data?: DashboardWi
       <div className="shrink-0 border-b border-[#2a2a28] px-4 py-3">
         <p className="text-sm font-semibold">{config.title}</p>
       </div>
-      <DashboardWidgetContent type={config.type} rows={rows} total={data?.total ?? 0} />
+      <DashboardWidgetContent type={config.type} rows={rows} total={data?.total ?? 0} title={config.title} />
     </section>
   );
 }

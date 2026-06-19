@@ -323,7 +323,7 @@ export function DashboardLayoutEditor({ dashboard, entities, widgetData }: { das
                   </div>
                   <div className="flex min-h-0 flex-1 flex-col p-3">
                     <div className="flex min-h-0 flex-1 flex-col overflow-hidden border border-[#2f2c25] bg-[#11110f]">
-                      <DashboardWidgetContent type={draft.type} rows={rows} total={data?.total ?? 0} />
+                      <DashboardWidgetContent type={draft.type} rows={rows} total={data?.total ?? 0} title={draft.title} compact />
                     </div>
                     <WidgetActions dashboardId={dashboard.id} widgetId={widget.id} compact />
                   </div>
