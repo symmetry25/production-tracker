@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { getDictionary, getLocale } from "@/lib/i18n";
+import { ManualLedgerPanel } from "@/components/resource/manual-ledger-panel";
 import { ResourceExportButton } from "@/components/resource/resource-export-button";
 import { SankeyFlow } from "@/components/resource/sankey-flow";
 import {
@@ -85,6 +86,7 @@ export default async function ProjectResourcesPage({ params }: { params: Promise
         <SankeyFlow data={data} />
       </div>
       <AuditLedgerPanel ledger={ledger} />
+      <ManualLedgerPanel projectId={projectId} baseEntries={ledger.entries} />
 
       <div className="grid grid-cols-[minmax(420px,0.88fr)_minmax(620px,1.12fr)] gap-5">
         <section className="space-y-5">

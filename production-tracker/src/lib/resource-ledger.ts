@@ -87,7 +87,7 @@ export function buildResourceAuditLedger(data: ResourceBudgetData, todayIso = "2
         evidence: `预算 ${formatMoney(department.budget)}，已承诺 ${formatMoney(department.committed)}，支出 ${formatMoney(department.actual)}`,
         nextStep: department.risk === "over" ? "冻结新增采购，提交追加审批或缩减 scope" : "确认剩余工作量和供应商暴露",
       })),
-  ].sort(sortLedgerEntries);
+  ].sort(sortResourceLedgerEntries);
 
   const holdEntries = entries.filter((entry) => entry.status === "hold");
   const watchEntries = entries.filter((entry) => entry.status === "watch");
@@ -107,7 +107,7 @@ function departmentExposure(department: BudgetDepartment) {
   return Math.max(0, department.committed - department.budget, department.actual - department.budget);
 }
 
-function sortLedgerEntries(a: ResourceLedgerEntry, b: ResourceLedgerEntry) {
+export function sortResourceLedgerEntries(a: ResourceLedgerEntry, b: ResourceLedgerEntry) {
   const statusPriority: Record<ResourceLedgerEntry["status"], number> = {
     hold: 0,
     watch: 1,
