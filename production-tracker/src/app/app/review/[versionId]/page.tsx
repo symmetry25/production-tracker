@@ -19,12 +19,13 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
 
   const { selected, versions } = workspace;
   const t = getDictionary(locale).pages.media;
+  const backHref = `/app/projects/${encodeURIComponent(selected.projectId)}/media`;
 
   return (
     <>
       <div className="mb-4 flex items-end justify-between gap-5">
         <div>
-          <Link href="/app/projects/demo-mkali-mission/media" className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8f8a7e] transition hover:text-[#d8b46a]">
+          <Link href={backHref} className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8f8a7e] transition hover:text-[#d8b46a]">
             {t.reviewRoute.back}
           </Link>
           <h1 className="mt-2 text-3xl font-semibold">{selected.name}</h1>

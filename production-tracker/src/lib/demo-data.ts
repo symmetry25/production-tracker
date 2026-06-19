@@ -314,6 +314,7 @@ const taskSeeds: DemoTaskSeed[] = [
 const reviewVersions: ReviewVersionItem[] = [
   {
     id: "demo-version-rain-v003",
+    projectId: demoProjectId,
     number: 3,
     name: "VFX_0300_RainComp_v003",
     status: "PENDING_REVIEW",
@@ -343,6 +344,7 @@ const reviewVersions: ReviewVersionItem[] = [
   },
   {
     id: "demo-version-raid0010-v002",
+    projectId: demoProjectId,
     number: 2,
     name: "RAID_0010_CMP_v002",
     status: "APPROVED",
@@ -366,6 +368,7 @@ const reviewVersions: ReviewVersionItem[] = [
   },
   {
     id: "demo-version-lgt-v001",
+    projectId: demoProjectId,
     number: 1,
     name: "RAID_0030_LGT_v001",
     status: "CHANGES_REQUESTED",

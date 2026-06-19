@@ -1,4 +1,5 @@
 import { shouldUseDemoData } from "@/lib/demo-data";
+import { demoProjectId } from "@/lib/current-project";
 import { getPrisma } from "@/lib/prisma";
 import { getProjectReviewVersions } from "@/lib/review-data";
 import { getTaskTableItems, type TaskTableItem } from "@/lib/task-data";
@@ -20,7 +21,7 @@ export type AdminUserItem = {
   capacity: number;
 };
 
-export async function getMyTaskItems(projectId = "demo-mkali-mission", userId?: string): Promise<TaskTableItem[]> {
+export async function getMyTaskItems(projectId = demoProjectId, userId?: string): Promise<TaskTableItem[]> {
   const tasks = await getTaskTableItems({ projectId });
 
   if (!userId) {
@@ -36,7 +37,7 @@ export async function getMyTaskItems(projectId = "demo-mkali-mission", userId?: 
   return tasks.slice(0, 8);
 }
 
-export async function getInboxItems(projectId = "demo-mkali-mission"): Promise<InboxItem[]> {
+export async function getInboxItems(projectId = demoProjectId): Promise<InboxItem[]> {
   const [tasks, versions] = await Promise.all([getTaskTableItems({ projectId }), getProjectReviewVersions(projectId)]);
   const overBudget = tasks.filter((task) => task.overBudget).slice(0, 3);
   const pendingVersions = versions.filter((version) => version.status === "PENDING_REVIEW").slice(0, 3);

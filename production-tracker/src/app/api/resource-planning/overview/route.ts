@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
+import { getCurrentProjectId } from "@/lib/current-project";
 import { getResourcePlanningData } from "@/lib/resource-planning";
 
 export async function GET(request: Request) {
@@ -10,9 +11,13 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const projectId = searchParams.get("projectId") ?? "demo-mkali-mission";
+  const projectId = await getCurrentProjectId(searchParams.get("projectId"));
   const start = searchParams.get("start") ?? undefined;
   const end = searchParams.get("end") ?? undefined;
+
+  if (!projectId) {
+    return fail("No active project.", 404);
+  }
 
   try {
     const data = await getResourcePlanningData(projectId, start, end);

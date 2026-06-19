@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { ResourcePlanningRangeControls } from "@/components/resource-planning/resource-planning-range-controls";
 import { ResourcePlanningWorkspace } from "@/components/resource-planning/resource-planning-workspace";
+import { getCurrentProjectId, getProjectIdFromSearchParams } from "@/lib/current-project";
 import { getDepartmentResourcePlanningData, getResourcePlanningData, type ResourcePlanningData } from "@/lib/resource-planning";
 
 type DepartmentResourcePlanningPageProps = {
@@ -16,12 +17,29 @@ const defaultRange = {
 
 export default async function DepartmentResourcePlanningPage({ params, searchParams }: DepartmentResourcePlanningPageProps) {
   const { department: rawDepartment } = await params;
-  const range = parseRange(await searchParams);
-  const rangeQuery = `?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}`;
+  const resolvedSearchParams = await searchParams;
+  const range = parseRange(resolvedSearchParams);
+  const projectId = await getCurrentProjectId(getProjectIdFromSearchParams(resolvedSearchParams));
+  const rangeQuery = buildRangeQuery(range, projectId);
   const department = decodeURIComponent(rawDepartment);
-  const fullData = await getResourcePlanningData("demo-mkali-mission", range.start, range.end);
+
+  if (!projectId) {
+    return (
+      <>
+        <div className="mb-5">
+          <Link href={`/app/resource-planning${rangeQuery}`} className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8f8a7e] transition hover:text-[#d8b46a]">
+            Resource Planning / Back
+          </Link>
+          <h1 className="mt-2 text-3xl font-semibold">{department} 资源下钻</h1>
+        </div>
+        <div className="border border-dashed border-[#34322b] bg-[#181713] p-8 text-sm text-[#aaa599]">还没有可用于资源规划的项目。</div>
+      </>
+    );
+  }
+
+  const fullData = await getResourcePlanningData(projectId, range.start, range.end);
   const departmentNames = fullData.departments.map((row) => row.department);
-  const data = await getDepartmentResourcePlanningData("demo-mkali-mission", department, range.start, range.end);
+  const data = await getDepartmentResourcePlanningData(projectId, department, range.start, range.end);
   const busiestWeek = getBusiestWeek(data);
   const busiestUser = data.users.slice().sort((a, b) => b.totalWorkload - a.totalWorkload)[0];
   const riskTasks = getRiskTasks(data);
@@ -121,11 +139,23 @@ export default async function DepartmentResourcePlanningPage({ params, searchPar
             </div>
           </section>
 
-          <ResourcePlanningWorkspace data={data} projectId="demo-mkali-mission" />
+          <ResourcePlanningWorkspace data={data} projectId={projectId} />
         </>
       )}
     </>
   );
+}
+
+function buildRangeQuery(range: { start: string; end: string }, projectId: string | null) {
+  const params = new URLSearchParams();
+  params.set("start", range.start);
+  params.set("end", range.end);
+
+  if (projectId) {
+    params.set("projectId", projectId);
+  }
+
+  return `?${params.toString()}`;
 }
 
 function parseRange(searchParams: Record<string, string | string[] | undefined>) {

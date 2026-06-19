@@ -6,6 +6,7 @@ import {
   getDemoTaskReviewVersions,
   shouldUseDemoData,
 } from "@/lib/demo-data";
+import { demoProjectId } from "@/lib/current-project";
 import { getPrisma } from "@/lib/prisma";
 
 export type ReviewNote = {
@@ -21,6 +22,7 @@ export type ReviewNote = {
 
 export type ReviewVersionItem = {
   id: string;
+  projectId: string;
   number: number;
   name: string;
   status: VersionStatus;
@@ -74,8 +76,9 @@ export async function getProjectReviewVersions(projectId: string): Promise<Revie
       },
       task: {
         include: {
-          shot: { select: { code: true } },
-          asset: { select: { name: true } },
+          shot: { select: { code: true, projectId: true } },
+          asset: { select: { name: true, projectId: true } },
+          phase: { select: { projectId: true } },
         },
       },
       notes: {
@@ -139,8 +142,9 @@ export async function getTaskReviewVersions(taskId: string): Promise<ReviewVersi
       },
       task: {
         include: {
-          shot: { select: { code: true } },
-          asset: { select: { name: true } },
+          shot: { select: { code: true, projectId: true } },
+          asset: { select: { name: true, projectId: true } },
+          phase: { select: { projectId: true } },
         },
       },
       notes: {
@@ -163,7 +167,7 @@ export async function getTaskReviewVersions(taskId: string): Promise<ReviewVersi
 
 export async function getReviewVersion(versionId: string): Promise<ReviewVersionItem | null> {
   if (shouldUseDemoData()) {
-    return getDemoProjectReviewVersions("demo-mkali-mission").find((version) => version.id === versionId) ?? null;
+    return getDemoProjectReviewVersions(demoProjectId).find((version) => version.id === versionId) ?? null;
   }
 
   const prisma = getPrisma();
@@ -179,8 +183,9 @@ export async function getReviewVersion(versionId: string): Promise<ReviewVersion
       },
       task: {
         include: {
-          shot: { select: { code: true } },
-          asset: { select: { name: true } },
+          shot: { select: { code: true, projectId: true } },
+          asset: { select: { name: true, projectId: true } },
+          phase: { select: { projectId: true } },
         },
       },
       notes: {
@@ -203,7 +208,7 @@ export async function getReviewVersion(versionId: string): Promise<ReviewVersion
 
 export async function getReviewVersionWorkspace(versionId: string): Promise<{ selected: ReviewVersionItem; versions: ReviewVersionItem[] } | null> {
   if (shouldUseDemoData()) {
-    const versions = getDemoProjectReviewVersions("demo-mkali-mission");
+    const versions = getDemoProjectReviewVersions(demoProjectId);
     const selected = versions.find((version) => version.id === versionId);
 
     return selected ? { selected, versions } : null;
@@ -273,8 +278,9 @@ function mapVersion(version: {
   task: {
     id: string;
     name: string;
-    shot: { code: string } | null;
-    asset: { name: string } | null;
+    shot: { code: string; projectId?: string | null } | null;
+    asset: { name: string; projectId?: string | null } | null;
+    phase?: { projectId: string } | null;
   };
   notes: {
     id: string;
@@ -287,6 +293,7 @@ function mapVersion(version: {
 
   return {
     id: version.id,
+    projectId: version.task.shot?.projectId ?? version.task.asset?.projectId ?? version.task.phase?.projectId ?? demoProjectId,
     number: version.number,
     name: version.name,
     status: version.status,

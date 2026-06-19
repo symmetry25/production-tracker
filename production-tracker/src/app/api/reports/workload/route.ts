@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
+import { getCurrentProjectId } from "@/lib/current-project";
 import { getDashboardStats, type DashboardStats } from "@/lib/dashboard-data";
 
 export async function GET(request: Request) {
@@ -20,7 +21,11 @@ export async function getWorkloadReport(
   }
 
   const { searchParams } = new URL(request.url);
-  const projectId = searchParams.get("projectId") ?? "demo-mkali-mission";
+  const projectId = await getCurrentProjectId(searchParams.get("projectId"));
+
+  if (!projectId) {
+    return fail("No active project.", 404);
+  }
 
   try {
     const stats = await deps.getDashboardStats(projectId);
