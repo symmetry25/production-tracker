@@ -72,6 +72,7 @@ export async function AppShell({ session, locale, dictionary, children }: AppShe
     { title: t.topNav.assets, subtitle: "Asset pipeline / 资产流水线", href: projectPageHref("assets"), keywords: ["asset", "prop", "vehicle", "资产", "车辆"], shortcut: "g a" },
     { title: t.topNav.tasks, subtitle: "Task table and gantt / 任务表", href: projectPageHref("tasks"), keywords: ["task", "gantt", "timeline", "任务", "甘特"], shortcut: "g t" },
     { title: dictionary.pages.resources.title, subtitle: "Budget, audit, Sankey / 预算审计资金流", href: projectPageHref("resources"), keywords: ["budget", "audit", "sankey", "fund", "预算", "审计", "桑基图", "资金流"] },
+    { title: "制片资源报告", subtitle: "Printable producer report / 可打印制片报告", href: projectPageHref("resources/report"), keywords: ["report", "pdf", "print", "budget", "报告", "打印", "预算", "审计"] },
     { title: t.projectTabs.phases, subtitle: "Production phases / 制片阶段", href: projectPageHref("phases"), keywords: ["phase", "schedule", "阶段", "节点"] },
     { title: t.projectTabs.workOrders, subtitle: "Work orders / 制作工单", href: projectPageHref("work-orders"), keywords: ["work order", "order", "工单", "制片"] },
     ...["DIT组", "调色/VFX组", "摄影组", "灯光电工组", "场地运输组", "后期统筹组"].map((department) => ({
@@ -103,7 +104,7 @@ export async function AppShell({ session, locale, dictionary, children }: AppShe
           "g l": "/app/users/demo-user-vfx/scorecard",
         }}
       />
-      <header className="flex h-14 items-center justify-between border-b border-[#34322b] bg-[#181713] px-6">
+      <header className="flex h-14 items-center justify-between border-b border-[#34322b] bg-[#181713] px-6 print:hidden">
         <div className="flex items-center gap-6">
           <Link href="/app" className="flex items-center gap-3">
             <div className="grid size-8 place-items-center border border-[#d8b46a]/45 bg-[#d8b46a]/10 text-sm font-semibold text-[#e8c678]">
@@ -161,8 +162,8 @@ export async function AppShell({ session, locale, dictionary, children }: AppShe
         </div>
       </header>
 
-      <section className="grid grid-cols-[240px_1fr]">
-        <aside className="min-h-[calc(100vh-56px)] border-r border-[#34322b] bg-[#151410] p-4">
+      <section className="grid grid-cols-[240px_1fr] print:block">
+        <aside className="min-h-[calc(100vh-56px)] border-r border-[#34322b] bg-[#151410] p-4 print:hidden">
           <p className="px-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#7f7a70]">{t.workspace}</p>
           <div className="mt-4 space-y-1">
             {sideNavItems.map((item, index) => (
@@ -180,7 +181,7 @@ export async function AppShell({ session, locale, dictionary, children }: AppShe
           </div>
         </aside>
 
-        <section className="min-w-0 p-6">{children}</section>
+        <section className="min-w-0 p-6 print:p-0">{children}</section>
       </section>
     </main>
   );

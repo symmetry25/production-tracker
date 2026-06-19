@@ -11,6 +11,7 @@ const projectTabs: { key: keyof Dictionary["shell"]["projectTabs"]; slug: string
   { key: "shots", slug: "shots" },
   { key: "tasks", slug: "tasks" },
   { key: "resources", slug: "resources" },
+  { key: "resourceReport", slug: "resources/report" },
   { key: "phases", slug: "phases" },
   { key: "media", slug: "media" },
   { key: "workOrders", slug: "work-orders" },
@@ -21,10 +22,10 @@ export function ProjectSubNav({ projectId, labels }: { projectId: string; labels
   const pathname = usePathname();
 
   return (
-    <div className="mb-5 flex items-center gap-1 border-b border-[#34322b]">
+    <div className="mb-5 flex items-center gap-1 border-b border-[#34322b] print:hidden">
       {projectTabs.map((tab) => {
         const href = `/app/projects/${projectId}/${tab.slug}`;
-        const isActive = pathname.startsWith(href);
+        const isActive = tab.slug === "resources" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 
         return (
           <Link

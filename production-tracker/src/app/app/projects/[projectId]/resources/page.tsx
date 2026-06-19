@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { getDictionary, getLocale } from "@/lib/i18n";
 import { ResourceExportButton } from "@/components/resource/resource-export-button";
 import { SankeyFlow } from "@/components/resource/sankey-flow";
@@ -60,6 +62,12 @@ export default async function ProjectResourcesPage({ params }: { params: Promise
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[#aaa599]">{t.description}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href={`/app/projects/${encodeURIComponent(projectId)}/resources/report`}
+            className="grid h-10 place-items-center border border-[#3f3c33] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
+          >
+            制片报告
+          </Link>
           <ResourceExportButton data={data} />
           <div className="grid grid-cols-3 border border-[#34322b] bg-[#181713] text-right text-xs">
             <Metric label={t.totalBudget} value={money(data.project.totalBudget)} />
