@@ -26,6 +26,7 @@ import {
   type PlanningUserWeek,
   type ResourcePlanningData,
 } from "@/lib/resource-planning";
+import { formatUtcMonthDayTime } from "@/lib/date-format";
 import { rebuildResourcePlanningWithCalendarExceptions } from "@/lib/resource-planning-calendar";
 
 const numberFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
@@ -1079,15 +1080,8 @@ function sortExceptions(a: PlanningCalendarException, b: PlanningCalendarExcepti
 }
 
 function formatSavedAt(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "本机草稿";
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  const formatted = formatUtcMonthDayTime(value);
+  return formatted === "--" ? "本机草稿" : formatted;
 }
 
 function clampHours(value: number) {

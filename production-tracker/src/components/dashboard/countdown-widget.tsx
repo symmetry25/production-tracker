@@ -1,4 +1,5 @@
 import type { DashboardStats } from "@/lib/dashboard-data";
+import { formatUtcDate } from "@/lib/date-format";
 import type { Dictionary } from "@/lib/i18n";
 
 type CountdownLabels = Dictionary["pages"]["overview"]["countdown"];
@@ -12,7 +13,7 @@ export function CountdownWidget({
   counts: DashboardStats["counts"];
   labels: CountdownLabels;
 }) {
-  const dueLabel = new Date(project.dueDate).toLocaleDateString();
+  const dueLabel = formatUtcDate(project.dueDate);
   const tone = project.daysRemaining < 0 ? "text-[#e24b4a]" : project.daysRemaining < 21 ? "text-[#ef9f27]" : "text-[#1d9e75]";
 
   return (

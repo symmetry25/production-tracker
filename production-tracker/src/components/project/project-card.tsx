@@ -1,13 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 
+import { formatUtcDate } from "@/lib/date-format";
 import type { ProjectGridItem } from "@/lib/project-data";
-
-const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
-  month: "2-digit",
-  day: "2-digit",
-  year: "numeric",
-});
 
 export function ProjectCard({ project }: { project: ProjectGridItem }) {
   return (
@@ -37,8 +32,8 @@ export function ProjectCard({ project }: { project: ProjectGridItem }) {
 
         <div className="mt-4">
           <div className="mb-2 flex items-center justify-between text-xs text-[#8f8a7e]">
-            <span>{dateFormatter.format(project.startDate)}</span>
-            <span>{dateFormatter.format(project.dueDate)}</span>
+            <span>{formatUtcDate(project.startDate)}</span>
+            <span>{formatUtcDate(project.dueDate)}</span>
           </div>
           <div className="h-1.5 bg-[#2b2924]">
             <div className="h-full bg-[#d8b46a] transition-all group-hover:bg-[#e5c67f]" style={{ width: `${project.progress}%` }} />
@@ -48,7 +43,7 @@ export function ProjectCard({ project }: { project: ProjectGridItem }) {
         {project.milestone ? (
           <p className="mt-4 text-xs text-[#9f9b8f]">
             Milestone: <span className="text-[#d8b46a]">{project.milestone}</span>
-            {project.milestoneDate ? ` · ${dateFormatter.format(project.milestoneDate)}` : ""}
+            {project.milestoneDate ? ` · ${formatUtcDate(project.milestoneDate)}` : ""}
           </p>
         ) : null}
       </div>

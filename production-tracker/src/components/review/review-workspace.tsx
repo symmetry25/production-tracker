@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
 import type { Dictionary } from "@/lib/i18n";
+import { formatUtcDate, formatUtcDateTime } from "@/lib/date-format";
 import type { ReviewVersionItem } from "@/lib/review-data";
 
 const VERSION_STATUS_COLORS: Record<VersionStatus, { bg: string; text: string; dot: string }> = {
@@ -415,7 +416,7 @@ function VersionPlayer({
         <MetadataCell label={labels.player.metadata.queue} value={queueIndex >= 0 ? `${queueIndex + 1}/${queueSize}` : labels.player.metadata.notQueued} />
         <MetadataCell label={labels.player.metadata.frames} value={formatInteger(version.frameCount)} />
         <MetadataCell label={labels.player.metadata.fps} value={version.fps?.toString() ?? "--"} />
-        <MetadataCell label={labels.player.metadata.uploaded} value={formatDate(version.createdAt)} />
+        <MetadataCell label={labels.player.metadata.uploaded} value={formatUtcDate(version.createdAt)} />
         <MetadataCell label={labels.player.metadata.owner} value={version.uploadedBy.name} />
       </div>
     </section>
@@ -578,7 +579,7 @@ function NotesStream({
                   <div>
                     <p className="text-sm font-medium text-[#f4f1e8]">{note.author.name}</p>
                     <p className="text-[11px] text-[#7f7a70]">
-                      {note.author.department ?? labels.notes.defaultDepartment} · {formatDateTime(note.createdAt)}
+                      {note.author.department ?? labels.notes.defaultDepartment} · {formatUtcDateTime(note.createdAt, { seconds: true })}
                     </p>
                   </div>
                   <button type="button" onClick={() => onDelete(note.id)} className="text-xs text-[#7f7a70] hover:text-[#e24b4a]">
@@ -955,22 +956,4 @@ function formatTemplate(template: string, values: Record<string, string | number
 function formatInteger(value: number | null | undefined) {
   if (value === null || value === undefined || !Number.isFinite(value)) return "--";
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "--";
-
-  return [date.getUTCFullYear(), padDatePart(date.getUTCMonth() + 1), padDatePart(date.getUTCDate())].join("/");
-}
-
-function formatDateTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "--";
-
-  return `${formatDate(value)} ${padDatePart(date.getUTCHours())}:${padDatePart(date.getUTCMinutes())}:${padDatePart(date.getUTCSeconds())}`;
-}
-
-function padDatePart(value: number) {
-  return String(value).padStart(2, "0");
 }
