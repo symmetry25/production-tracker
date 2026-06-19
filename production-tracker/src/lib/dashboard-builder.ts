@@ -5,8 +5,10 @@ import type { Prisma } from "@/generated/prisma/client";
 export type WidgetType =
   | "metric_card"
   | "bar_chart"
+  | "area_chart"
   | "line_chart"
   | "pie_chart"
+  | "radar_chart"
   | "stacked_bar"
   | "heatmap"
   | "scatter"
@@ -100,7 +102,7 @@ const globalForDashboard = globalThis as typeof globalThis & {
 };
 
 const demoDashboardId = "dashboard-producer-demo";
-const demoDashboardVersion = 3;
+const demoDashboardVersion = 4;
 
 export function listDashboards(projectId?: string | null) {
   const dashboards = Array.from(getState().dashboards.values());
@@ -444,7 +446,7 @@ function widgetConfigFromDb(config: unknown, widget: DbDashboardWidget): WidgetC
 }
 
 function normalizeWidgetType(value: unknown): WidgetType {
-  const allowed: WidgetType[] = ["metric_card", "bar_chart", "line_chart", "pie_chart", "stacked_bar", "heatmap", "scatter", "table", "progress_bar", "funnel", "gauge", "timeline", "map", "text"];
+  const allowed: WidgetType[] = ["metric_card", "bar_chart", "area_chart", "line_chart", "pie_chart", "radar_chart", "stacked_bar", "heatmap", "scatter", "table", "progress_bar", "funnel", "gauge", "timeline", "map", "text"];
   return allowed.includes(value as WidgetType) ? value as WidgetType : "table";
 }
 
@@ -537,6 +539,8 @@ function createDemoDashboard(): DashboardItem {
       seedWidget("widget-inventory-funnel", demoDashboardId, 5, "funnel", "库存金额漏斗", inventory.id, { field: "inventory_value", fn: "sum" }, "category"),
       seedWidget("widget-spend-gauge", demoDashboardId, 6, "gauge", "最大供应商占比", purchase.id, { field: "total_amount", fn: "sum" }, "supplier"),
       seedWidget("widget-vendor-table", demoDashboardId, 7, "table", "供应商支出明细", purchase.id, { field: "total_amount", fn: "sum" }, "supplier"),
+      seedWidget("widget-spend-area", demoDashboardId, 8, "area_chart", "供应商金额面积图", purchase.id, { field: "total_amount", fn: "sum" }, "supplier"),
+      seedWidget("widget-inventory-radar", demoDashboardId, 9, "radar_chart", "库存分类雷达图", inventory.id, { field: "inventory_value", fn: "sum" }, "category"),
     ],
   };
 }

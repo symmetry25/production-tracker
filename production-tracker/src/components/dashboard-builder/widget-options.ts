@@ -5,8 +5,10 @@ export type AggregationFn = NonNullable<WidgetConfig["dataSource"]["aggregation"
 
 export const chartTypes: { value: WidgetType; label: string; needsGroupBy: boolean }[] = [
   { value: "bar_chart", label: "柱状图", needsGroupBy: true },
+  { value: "area_chart", label: "面积图", needsGroupBy: true },
   { value: "line_chart", label: "折线图", needsGroupBy: true },
   { value: "pie_chart", label: "环形图", needsGroupBy: true },
+  { value: "radar_chart", label: "雷达图", needsGroupBy: true },
   { value: "progress_bar", label: "进度条", needsGroupBy: true },
   { value: "funnel", label: "漏斗图", needsGroupBy: true },
   { value: "table", label: "数据表", needsGroupBy: true },

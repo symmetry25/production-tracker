@@ -38,8 +38,10 @@ type WidgetDraft = {
 const widgetLabels: Record<WidgetConfig["type"], string> = {
   metric_card: "指标卡",
   bar_chart: "柱状图",
+  area_chart: "面积图",
   line_chart: "折线图",
   pie_chart: "环形图",
+  radar_chart: "雷达图",
   stacked_bar: "堆叠柱状图",
   heatmap: "热力图",
   scatter: "散点图",
@@ -52,7 +54,7 @@ const widgetLabels: Record<WidgetConfig["type"], string> = {
   text: "文本",
 };
 
-const libraryTypes: WidgetConfig["type"][] = ["metric_card", "bar_chart", "line_chart", "pie_chart", "progress_bar", "funnel", "gauge", "table"];
+const libraryTypes: WidgetConfig["type"][] = ["metric_card", "bar_chart", "area_chart", "line_chart", "pie_chart", "radar_chart", "progress_bar", "funnel", "gauge", "table"];
 
 export function DashboardLayoutEditor({ dashboard, entities, widgetData }: { dashboard: DashboardItem; entities: EntityTypeItem[]; widgetData: Record<string, DashboardWidgetData> }) {
   const router = useRouter();

@@ -1,6 +1,25 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  PolarAngleAxis,
+  PolarGrid,
+  Radar,
+  RadarChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import { ChartViewport } from "@/components/charts/chart-viewport";
 import type { WidgetConfig } from "@/lib/dashboard-builder";
@@ -50,6 +69,43 @@ export function DashboardWidgetContent({ type, rows, total, title = "Dashboard w
             <Tooltip contentStyle={tooltipStyle} formatter={(value) => formatNumber(Number(value))} />
             <Line type="monotone" dataKey="value" stroke="#d8b46a" strokeWidth={2} dot={{ r: 2, fill: "#d8b46a" }} activeDot={{ r: 4 }} />
           </LineChart>
+        </ResponsiveContainer>
+      </ChartViewport>
+    );
+  }
+
+  if (type === "area_chart") {
+    return (
+      <ChartViewport title={title} compact={compact} minHeight={compact ? 180 : 240}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+          <AreaChart data={rows} margin={{ top: 18, right: 18, bottom: 0, left: -12 }}>
+            <defs>
+              <linearGradient id={`area-${slugify(title)}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="#d8b46a" stopOpacity={0.42} />
+                <stop offset="100%" stopColor="#d8b46a" stopOpacity={0.04} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke="#24231f" vertical={false} />
+            <XAxis dataKey="name" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(value) => formatNumber(Number(value))} />
+            <Area type="monotone" dataKey="value" stroke="#d8b46a" strokeWidth={2} fill={`url(#area-${slugify(title)})`} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </ChartViewport>
+    );
+  }
+
+  if (type === "radar_chart") {
+    return (
+      <ChartViewport title={title} compact={compact} minHeight={compact ? 180 : 240}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+          <RadarChart data={rows.slice(0, 8)} outerRadius={compact ? 72 : 92}>
+            <PolarGrid stroke="#302d26" />
+            <PolarAngleAxis dataKey="name" tick={{ fill: "#aaa599", fontSize: 10 }} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(value) => formatNumber(Number(value))} />
+            <Radar dataKey="value" stroke="#4a9eff" fill="#4a9eff" fillOpacity={0.24} strokeWidth={2} />
+          </RadarChart>
         </ResponsiveContainer>
       </ChartViewport>
     );
@@ -191,6 +247,10 @@ function toFiniteNumber(value: unknown) {
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function slugify(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "widget";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
