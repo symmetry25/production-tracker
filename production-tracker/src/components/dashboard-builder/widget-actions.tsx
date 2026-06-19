@@ -14,10 +14,10 @@ export function WidgetActions({ dashboardId, widgetId, compact = false }: { dash
   if (compact) {
     return (
       <div className="mt-2 flex h-7 items-center justify-between gap-2">
-        <button type="button" onClick={deleteWidget} disabled={status === "deleting" || status === "deleted"} className="h-7 border border-[#4a2b24] px-2 text-[10px] text-[#ff9c8c] hover:border-[#e24b4a] disabled:opacity-45">
+        <button type="button" aria-label="删除 Widget" onClick={deleteWidget} disabled={status === "deleting" || status === "deleted"} className="h-7 border border-[#4a2b24] px-2 text-[10px] text-[#ff9c8c] hover:border-[#e24b4a] disabled:opacity-45">
           {status === "deleting" ? "删除中" : status === "deleted" ? "已删除" : "删除"}
         </button>
-        {status === "deleted" ? <span className="truncate text-[10px] text-[#83d6ae]">已删除</span> : null}
+        {status === "deleted" ? <span className="truncate text-[10px] text-[#83d6ae]">Widget 已删除</span> : null}
         {status === "error" ? <span className="truncate text-[10px] text-[#ff9c8c]">删除失败</span> : null}
       </div>
     );

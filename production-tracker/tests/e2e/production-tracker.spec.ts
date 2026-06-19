@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 test.describe("production tracker smoke flow", () => {
   test("login, inspect core pages, and read reporting APIs", async ({ page }) => {
     test.setTimeout(60_000);
+    const e2eWidgetTitle = `E2E 临时图表 ${Date.now().toString().slice(-5)}`;
 
     await page.goto("/login");
     await page.locator("#email").fill("admin@studio.com");
@@ -28,7 +29,7 @@ test.describe("production tracker smoke flow", () => {
 
     await page.goto("/app/entity-types");
     await expect(page.getByRole("heading", { name: "实体类型与通用数据表" })).toBeVisible();
-    await expect(page.getByRole("link", { name: /采购单/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: "采购单", exact: true })).toBeVisible();
 
     await page.goto("/app/entity-types/new");
     await page.getByRole("button", { name: "安装模板" }).first().click();
@@ -63,16 +64,19 @@ test.describe("production tracker smoke flow", () => {
 
     await page.goto("/app/dashboards/dashboard-producer-demo/edit");
     await expect(page.getByText("添加 Widget")).toBeVisible();
+    await page.locator("form").filter({ hasText: "添加 Widget" }).getByLabel("标题").fill(e2eWidgetTitle);
     await page.getByRole("button", { name: "添加" }).click();
     await expect(page.getByText("Widget 已添加。")).toBeVisible();
-    await page.getByRole("button", { name: "删除 Widget" }).first().click();
+    await expect(page.getByRole("button", { name: new RegExp(e2eWidgetTitle) })).toBeVisible();
+    await page.getByRole("button", { name: new RegExp(e2eWidgetTitle) }).click();
+    await page.getByRole("button", { name: "删除 Widget" }).last().click();
     await expect(page.getByText("Widget 已删除")).toBeVisible();
 
     await page.goto("/app/ai/recognize");
     await expect(page.getByRole("heading", { name: "AI 单据识别工作台" })).toBeVisible();
-    await expect(page.getByText("INV-2026-0618")).toBeVisible();
+    await expect(page.getByText("INV-2026-0618").first()).toBeVisible();
     await page.getByRole("button", { name: "开始识别" }).click();
-    await expect(page.getByText("invoice_number")).toBeVisible();
+    await expect(page.getByText("invoice_number").first()).toBeVisible();
     await page.getByRole("button", { name: "应用为记录" }).click();
     await expect(page.getByText("识别结果已写入采购单记录。")).toBeVisible();
 
@@ -89,8 +93,8 @@ test.describe("production tracker smoke flow", () => {
 
     await page.goto("/app/projects/demo-mkali-mission/overview");
     await expect(page.getByRole("heading", { name: /Mkali's Mission · MKALI/ })).toBeVisible();
-    await expect(page.getByText("Shot Status")).toBeVisible();
-    await expect(page.getByText("Version Review Status")).toBeVisible();
+    await expect(page.getByRole("button", { name: /流水线健康.*镜头状态/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /审片队列.*版本审阅状态/ })).toBeVisible();
     await expect(page.getByRole("button", { name: "下载报告" })).toBeVisible();
 
     await page.goto("/app/projects/demo-mkali-mission/shots");
@@ -109,14 +113,14 @@ test.describe("production tracker smoke flow", () => {
 
     await page.goto("/app/review/demo-version-rain-v003");
     await expect(page.locator("h1", { hasText: "VFX_0300_RainComp_v003" })).toBeVisible();
-    await expect(page.getByText("Screening Queue")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Next cut" })).toBeVisible();
-    await expect(page.getByText("2 cuts ready")).toBeVisible();
-    await expect(page.getByText("Review Player")).toBeVisible();
-    await page.getByRole("button", { name: "Compare" }).click();
-    await expect(page.getByText("Screening Room Compare")).toBeVisible();
-    await expect(page.getByText("Version A")).toBeVisible();
-    await expect(page.getByText("Version B")).toBeVisible();
+    await expect(page.getByText("审片队列")).toBeVisible();
+    await expect(page.getByRole("button", { name: "下一版" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "2 条可审" })).toBeVisible();
+    await expect(page.getByText("审片播放器")).toBeVisible();
+    await page.getByRole("button", { name: "对比" }).click();
+    await expect(page.getByText("审片室对比")).toBeVisible();
+    await expect(page.getByText("版本 A")).toBeVisible();
+    await expect(page.getByText("版本 B")).toBeVisible();
 
     await page.goto("/app/resource-planning/DIT%E7%BB%84?start=2026-05-01&end=2026-06-30");
     await expect(page.getByRole("heading", { name: /DIT组 资源下钻/ })).toBeVisible();

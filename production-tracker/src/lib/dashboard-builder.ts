@@ -100,7 +100,7 @@ const globalForDashboard = globalThis as typeof globalThis & {
 };
 
 const demoDashboardId = "dashboard-producer-demo";
-const demoDashboardVersion = 2;
+const demoDashboardVersion = 3;
 
 export function listDashboards(projectId?: string | null) {
   const dashboards = Array.from(getState().dashboards.values());
