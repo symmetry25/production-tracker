@@ -1,6 +1,8 @@
 import { LoginForm } from "./login-form";
 
 export default function LoginPage() {
+  const googleEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+
   return (
     <main className="grid min-h-screen grid-cols-[0.95fr_1.05fr] bg-[#11110f] text-[#f4f1e8]">
       <section className="flex flex-col justify-between border-r border-[#34322b] bg-[#181713] px-10 py-8">
@@ -18,7 +20,7 @@ export default function LoginPage() {
           <p className="mb-4 text-xs font-semibold uppercase tracking-[0.34em] text-[#898477]">Step 2</p>
           <h1 className="max-w-xl text-5xl font-semibold leading-[1.02]">登录后进入项目、镜头、资产和资源规划工作台。</h1>
           <p className="mt-5 max-w-lg text-sm leading-7 text-[#aaa599]">
-            本地开发环境没有数据库时，会启用演示登录；接入 PostgreSQL 后会自动读取 Prisma 用户表。
+            本地开发环境没有数据库时，会启用演示登录；接入 PostgreSQL 后会读取 Prisma 用户表，也可以按需开启 Google OAuth。
           </p>
         </div>
 
@@ -43,7 +45,7 @@ export default function LoginPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d8b46a]">Sign in</p>
           <h2 className="mt-3 text-2xl font-semibold">制片后台入口</h2>
           <p className="mt-3 text-sm leading-6 text-[#aaa599]">本地演示账号：admin@studio.com / admin123</p>
-          <LoginForm />
+          <LoginForm googleEnabled={googleEnabled} />
         </div>
       </section>
     </main>

@@ -31,8 +31,8 @@ const authConfig = {
     jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.role = user.role;
-        token.department = user.department;
+        token.role = isRole(user.role) ? user.role : "REVIEWER";
+        token.department = typeof user.department === "string" ? user.department : null;
       }
 
       return token;

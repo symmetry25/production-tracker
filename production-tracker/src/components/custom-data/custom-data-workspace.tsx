@@ -209,7 +209,15 @@ function FormEntry({ fields, onSubmit }: { fields: FieldDefinition[]; onSubmit: 
       </div>
       <aside className="border border-[#34322b] bg-[#11110f] p-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#d8b46a]">Context</p>
-        <p className="mt-3 text-sm leading-6 text-[#aaa599]">这里预留给 AI 识别、历史记录、关联条目。识别结果后续会直接填充左侧表单。</p>
+        <div className="mt-3 space-y-3 text-sm leading-6 text-[#aaa599]">
+          <p>右侧用于核对录入来源、必填字段和最近记录，适合制片助理边看单据边录入。</p>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <ContextChip label="AI" value="可转到识别台" />
+            <ContextChip label="History" value="保存后置顶" />
+            <ContextChip label="Schema" value={`${fields.length} 字段`} />
+            <ContextChip label="Mode" value="表单录入" />
+          </div>
+        </div>
         <button type="submit" className="mt-5 h-10 w-full bg-[#d8b46a] text-sm font-semibold text-[#171713]">
           保存记录
         </button>
@@ -321,6 +329,15 @@ function PanelCard({ title, detail, action, onAction }: { title: string; detail:
       <button type="button" onClick={onAction} className="mt-3 h-8 border border-[#3f3c33] px-3 text-xs text-[#aaa599] transition hover:border-[#d8b46a] hover:text-[#e8c678]">
         {action}
       </button>
+    </div>
+  );
+}
+
+function ContextChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-[#2f2d27] bg-[#181713] px-2 py-2">
+      <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#7f7a70]">{label}</p>
+      <p className="mt-1 truncate text-[#c9c3b5]">{value}</p>
     </div>
   );
 }

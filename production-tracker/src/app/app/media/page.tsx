@@ -17,7 +17,7 @@ export default async function GlobalMediaPage({ searchParams }: GlobalMediaPageP
       <div className="mb-5">
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d8b46a]">Global Media</p>
         <h1 className="mt-2 text-3xl font-semibold">全局媒体中心</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-[#aaa599]">跨项目查看最新版本、审阅状态和上传人，后续可扩展成 playlist 和 screening room。</p>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-[#aaa599]">跨项目查看最新版本、审阅状态和上传人；点击任意版本进入审片室，组建播放队列、对比版本并留下制片备注。</p>
       </div>
 
       {projectId && versions.length > 0 ? (

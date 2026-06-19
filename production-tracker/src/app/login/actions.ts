@@ -25,3 +25,7 @@ export async function loginAction(_: LoginState, formData: FormData): Promise<Lo
 
   return {};
 }
+
+export async function googleLoginAction() {
+  await signIn("google", { redirectTo: "/app" });
+}

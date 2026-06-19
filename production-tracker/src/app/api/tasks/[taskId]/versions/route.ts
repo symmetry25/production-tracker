@@ -1,4 +1,3 @@
-import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 
@@ -7,6 +6,7 @@ import { fail, ok } from "@/lib/api-response";
 import { canUploadVersions } from "@/lib/permissions";
 import { getPrisma } from "@/lib/prisma";
 import { getTaskReviewVersions } from "@/lib/review-data";
+import { storeUploadedFile } from "@/lib/storage";
 import { validateUploadFile } from "@/lib/upload-validation";
 
 const versionMetadataSchema = z.object({
@@ -95,12 +95,11 @@ export async function POST(request: Request, ctx: TaskRouteContext) {
     const safeBaseName = `${resolveTaskBaseName(task)}_${task.name}_v${String(nextNumber).padStart(3, "0")}`
       .replace(/[^a-zA-Z0-9_-]+/g, "_")
       .replace(/^_+|_+$/g, "");
-    const fileName = `${safeBaseName}${extension}`;
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "versions", taskId);
-    const publicUrl = `/uploads/versions/${taskId}/${fileName}`;
-
-    await mkdir(uploadDir, { recursive: true });
-    await writeFile(path.join(uploadDir, fileName), Buffer.from(await file.arrayBuffer()));
+    const storedFile = await storeUploadedFile({
+      file,
+      keyPrefix: `versions/${taskId}`,
+      fileName: `${safeBaseName}${extension}`,
+    });
 
     const version = await prisma.version.create({
       data: {
@@ -108,9 +107,9 @@ export async function POST(request: Request, ctx: TaskRouteContext) {
         name: safeBaseName,
         taskId,
         uploadedById: userId,
-        fileUrl: publicUrl,
+        fileUrl: storedFile.publicUrl,
         fileType: file.type,
-        thumbnailUrl: file.type.startsWith("image/") ? publicUrl : null,
+        thumbnailUrl: file.type.startsWith("image/") ? storedFile.publicUrl : null,
         description: parsed.data.description || null,
         frameCount: parsed.data.frameCount === "" ? null : parsed.data.frameCount,
         fps: parsed.data.fps === "" ? 24 : parsed.data.fps,

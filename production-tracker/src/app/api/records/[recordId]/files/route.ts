@@ -1,11 +1,10 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
 import { addRecordFileAsync, getRecordAsync } from "@/lib/custom-data-store";
 import { getRouteParams, type RouteParams } from "@/lib/route-context";
+import { safeFilename, storeUploadedFile } from "@/lib/storage";
 import { isAllowedRecordAttachmentMimeType, validateUploadFile } from "@/lib/upload-validation";
 
 const fileSchema = z.object({
@@ -42,15 +41,15 @@ export async function POST(request: Request, ctx: RouteParams<{ recordId: string
     if (!fileValidation.valid) return fail(fileValidation.message, 422);
 
     const safeName = safeFilename(file.name || "attachment");
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "records", recordId);
-    const publicUrl = `/uploads/records/${recordId}/${Date.now()}-${safeName}`;
-
-    await mkdir(uploadDir, { recursive: true });
-    await writeFile(path.join(uploadDir, path.basename(publicUrl)), Buffer.from(await file.arrayBuffer()));
+    const storedFile = await storeUploadedFile({
+      file,
+      keyPrefix: `records/${recordId}`,
+      fileName: safeName,
+    });
 
     const uploaded = await addRecordFileAsync(recordId, {
       filename: safeName,
-      fileUrl: publicUrl,
+      fileUrl: storedFile.publicUrl,
       fileType: file.type,
       fileSize: file.size,
     });
@@ -63,10 +62,4 @@ export async function POST(request: Request, ctx: RouteParams<{ recordId: string
 
   const file = await addRecordFileAsync(recordId, parsed.data);
   return file ? ok(file) : fail("Record not found.", 404);
-}
-
-function safeFilename(filename: string) {
-  const extension = path.extname(filename);
-  const baseName = path.basename(filename, extension).replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "attachment";
-  return `${baseName}${extension.toLowerCase()}`;
 }

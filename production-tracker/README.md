@@ -101,7 +101,7 @@ AI 功能会用于单据识别和排期建议。没有 key 时页面仍可试用
 - `AUTH_SECRET`
 - `AUTH_URL=https://your-domain.com`
 - `NEXTAUTH_URL=https://your-domain.com`
-- 可选：`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`
+- 可选：`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`、`GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`
 
 部署后执行数据库迁移和 seed：
 
@@ -132,6 +132,21 @@ npm run build
 
 Netlify 会通过 Next.js/OpenNext 适配运行服务端路由。生产环境同样需要设置 `DATABASE_URL`、`AUTH_SECRET`、`AUTH_URL`、`NEXTAUTH_URL`。
 
+## Storage
+
+默认上传文件写入 `UPLOAD_DIR`，本地通常是 `./public/uploads`。生产环境可以打开 S3：
+
+```env
+USE_S3=true
+AWS_REGION=ap-southeast-1
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+S3_BUCKET_NAME=production-tracker-media
+S3_PUBLIC_URL=https://your-cdn-or-bucket-url
+```
+
+版本上传和通用记录附件会自动使用同一套存储适配器；没有开启 S3 时继续走本地目录。
+
 ## Trial Checklist
 
 给别人试用前建议检查：
@@ -148,4 +163,4 @@ Netlify 会通过 Next.js/OpenNext 适配运行服务端路由。生产环境同
 
 - 本地演示模式不需要数据库，但写操作通常只在前端模拟或内存态中生效。
 - 真实多人试用必须连接 PostgreSQL，并设置强随机 `AUTH_SECRET`。
-- 上传文件当前默认落在 `public/uploads`，生产级 S3 持久化仍需要继续接入对象存储适配。
+- Google OAuth 配置后会显示 Google 登录按钮；未配置时只显示账号密码登录。

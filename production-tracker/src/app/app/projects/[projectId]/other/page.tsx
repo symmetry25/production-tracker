@@ -3,12 +3,12 @@ import Link from "next/link";
 const tools = [
   {
     title: "Project Settings",
-    detail: "集中管理项目描述、里程碑、模板标记和缩略图。",
+    detail: "回到总览核对项目描述、里程碑、交付日期和核心健康指标。",
     hrefSuffix: "overview",
   },
   {
     title: "API Health",
-    detail: "检查项目、镜头、资产、任务、报表和资源规划接口是否可接入。",
+    detail: "通过项目页、报表页和资源规划入口确认关键数据链路是否正常。",
     hrefSuffix: "overview",
   },
   {
@@ -32,7 +32,7 @@ export default async function ProjectOtherPage({ params }: { params: Promise<{ p
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d8b46a]">Other</p>
         <h1 className="mt-2 text-3xl font-semibold">项目工具与扩展</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-[#aaa599]">
-          这里放项目级辅助入口，避免导航里的 Other 进入空页面。后续可以继续扩展成字段配置、模板复制、导入导出和审计包。
+          项目级辅助入口集中放在这里：审计准备、接口巡检、日历例外和预算资源检查都能从同一页进入。
         </p>
       </div>
 
