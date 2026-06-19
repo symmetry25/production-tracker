@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import { canManageProjects } from "@/lib/permissions";
+import { bootstrapProjectWorkspace } from "@/lib/project-bootstrap";
 import { getPrisma } from "@/lib/prisma";
 
 export type CreateProjectState = {
@@ -24,6 +26,7 @@ const projectFormSchema = z.object({
   dueDate: z.iso.date("请选择截止日期。"),
   milestone: z.string().trim().optional(),
   milestoneDate: z.iso.date().optional().or(z.literal("")),
+  bootstrap: z.boolean().default(true),
 });
 
 export async function createProjectAction(_: CreateProjectState, formData: FormData): Promise<CreateProjectState> {
@@ -31,6 +34,10 @@ export async function createProjectAction(_: CreateProjectState, formData: FormD
 
   if (!session?.user) {
     redirect("/login");
+  }
+
+  if (!canManageProjects(session.user)) {
+    return { error: "只有管理员和制片可以创建项目。" };
   }
 
   const parsed = projectFormSchema.safeParse({
@@ -41,6 +48,7 @@ export async function createProjectAction(_: CreateProjectState, formData: FormD
     dueDate: formData.get("dueDate"),
     milestone: formData.get("milestone"),
     milestoneDate: formData.get("milestoneDate"),
+    bootstrap: formData.get("bootstrap") === "on",
   });
 
   if (!parsed.success) {
@@ -55,7 +63,7 @@ export async function createProjectAction(_: CreateProjectState, formData: FormD
       return { error: "这个项目代号已经存在，请换一个。" };
     }
 
-    await prisma.project.create({
+    const project = await prisma.project.create({
       data: {
         name: parsed.data.name,
         code: parsed.data.code,
@@ -66,10 +74,14 @@ export async function createProjectAction(_: CreateProjectState, formData: FormD
         milestoneDate: parsed.data.milestoneDate ? new Date(parsed.data.milestoneDate) : null,
       },
     });
+
+    if (parsed.data.bootstrap) {
+      await bootstrapProjectWorkspace(prisma, project);
+    }
   } catch (error) {
     return { error: error instanceof Error ? error.message : "创建项目失败。" };
   }
 
   revalidatePath("/app/projects");
-  return {};
+  redirect("/app/projects");
 }

@@ -62,6 +62,13 @@ export function CreateProjectForm() {
                 <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">描述</span>
                 <textarea name="description" rows={3} className="w-full resize-none border border-[#34322b] bg-[#11110f] px-3 py-3 text-sm outline-none focus:border-[#d8b46a]" />
               </label>
+              <label className="col-span-2 flex items-start gap-3 border border-[#34322b] bg-[#11110f] p-3">
+                <input name="bootstrap" type="checkbox" defaultChecked className="mt-1 size-4 accent-[#d8b46a]" />
+                <span>
+                  <span className="block text-sm font-semibold text-[#f4f1e8]">初始化基础制作结构</span>
+                  <span className="mt-1 block text-xs leading-5 text-[#8f8a7e]">自动创建阶段、MAIN 分组、3 个镜头、3 个资产和基础任务，适合马上测试项目流程。</span>
+                </span>
+              </label>
 
               {state.error ? (
                 <p className="col-span-2 border border-[#6f2f2f] bg-[#2b1717] px-3 py-2 text-sm text-[#ffb5a8]">{state.error}</p>

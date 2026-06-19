@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
 import { canManageProjects } from "@/lib/permissions";
+import { bootstrapProjectWorkspace } from "@/lib/project-bootstrap";
 import { getPrisma } from "@/lib/prisma";
 import { getProjectGridItems } from "@/lib/project-data";
 
@@ -20,6 +21,7 @@ const createProjectSchema = z.object({
   dueDate: z.iso.date(),
   milestone: z.string().trim().optional(),
   milestoneDate: z.iso.date().optional().or(z.literal("")),
+  bootstrap: z.boolean().default(true),
 });
 
 export async function GET() {
@@ -69,6 +71,10 @@ export async function POST(request: Request) {
         milestoneDate: parsed.data.milestoneDate ? new Date(parsed.data.milestoneDate) : null,
       },
     });
+
+    if (parsed.data.bootstrap) {
+      await bootstrapProjectWorkspace(prisma, project);
+    }
 
     return ok(project);
   } catch (error) {
