@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { AssetType, TaskStatus } from "@/generated/prisma/enums";
 
-import { downloadCsv } from "@/lib/csv";
+import { downloadCsv, downloadXlsx } from "@/lib/csv";
 import type { AssetTableItem } from "@/lib/asset-data";
 import type { ShotTableItem } from "@/lib/shot-data";
 import { ASSET_TYPE_LABELS, PIPELINE_COLORS, PIPELINE_STEPS, STATUS_COLORS } from "@/lib/status-colors";
@@ -477,6 +477,13 @@ export function AssetTable({ projectId, assets, shots }: { projectId: string; as
               >
                 Export CSV
               </button>
+              <button
+                type="button"
+                onClick={() => downloadXlsx("asset-status-report.xlsx", buildAssetCsvRows(filteredAssets), "Assets")}
+                className="h-9 border border-[#34322b] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
+              >
+                Export XLSX
+              </button>
             </div>
           </div>
         </section>
@@ -527,6 +534,13 @@ export function AssetTable({ projectId, assets, shots }: { projectId: string; as
               className="h-8 border border-[#4b432f] px-3 text-xs font-semibold text-[#c9c3b5] hover:border-[#d8b46a] hover:text-[#e8c678]"
             >
               Export selected
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadXlsx("selected-asset-status-report.xlsx", buildAssetCsvRows(selectedAssets), "Selected Assets")}
+              className="h-8 border border-[#4b432f] px-3 text-xs font-semibold text-[#c9c3b5] hover:border-[#d8b46a] hover:text-[#e8c678]"
+            >
+              Excel selected
             </button>
             <button
               type="button"

@@ -6,7 +6,7 @@ import { type Dispatch, type SetStateAction, useMemo, useState, useTransition } 
 import { DependencyType } from "@/generated/prisma/enums";
 import type { TaskStatus } from "@/generated/prisma/enums";
 
-import { downloadCsv } from "@/lib/csv";
+import { downloadCsv, downloadXlsx } from "@/lib/csv";
 import { STATUS_COLORS } from "@/lib/status-colors";
 import type { TaskFormOptions, TaskTableItem } from "@/lib/task-data";
 
@@ -357,7 +357,7 @@ export function TaskTable({
         <SummaryCell label="Risk Items" value={summary.blocked.toString()} tone={summary.blocked > 0 ? "danger" : "normal"} />
       </div>
 
-      <div className="mb-3 grid gap-2 border border-[#34322b] bg-[#181713] p-3 lg:grid-cols-[minmax(240px,1fr)_170px_210px_auto_auto]">
+      <div className="mb-3 grid gap-2 border border-[#34322b] bg-[#181713] p-3 lg:grid-cols-[minmax(240px,1fr)_170px_210px_auto_auto_auto]">
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -399,6 +399,13 @@ export function TaskTable({
         >
           Export CSV
         </button>
+        <button
+          type="button"
+          onClick={() => downloadXlsx("task-status-report.xlsx", buildTaskCsvRows(filteredTasks), "Tasks")}
+          className="h-9 border border-[#34322b] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
+        >
+          Export XLSX
+        </button>
       </div>
 
       {selectedTasks.length ? (
@@ -433,6 +440,13 @@ export function TaskTable({
               className="h-8 border border-[#4b432f] px-3 text-xs font-semibold text-[#c9c3b5] hover:border-[#d8b46a] hover:text-[#e8c678]"
             >
               Export selected
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadXlsx("selected-task-status-report.xlsx", buildTaskCsvRows(selectedTasks), "Selected Tasks")}
+              className="h-8 border border-[#4b432f] px-3 text-xs font-semibold text-[#c9c3b5] hover:border-[#d8b46a] hover:text-[#e8c678]"
+            >
+              Excel selected
             </button>
             <button
               type="button"

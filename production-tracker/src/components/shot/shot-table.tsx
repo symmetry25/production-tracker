@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { TaskStatus } from "@/generated/prisma/enums";
 
-import { downloadCsv } from "@/lib/csv";
+import { downloadCsv, downloadXlsx } from "@/lib/csv";
 import type { ShotTableItem } from "@/lib/shot-data";
 import { PIPELINE_COLORS, PIPELINE_STEPS, STATUS_COLORS } from "@/lib/status-colors";
 
@@ -433,6 +433,13 @@ export function ShotTable({ projectId, shots }: { projectId: string; shots: Shot
               >
                 Export CSV
               </button>
+              <button
+                type="button"
+                onClick={() => downloadXlsx("shot-status-report.xlsx", buildShotCsvRows(filteredShots), "Shots")}
+                className="h-9 border border-[#34322b] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
+              >
+                Export XLSX
+              </button>
             </div>
           </div>
         </section>
@@ -483,6 +490,13 @@ export function ShotTable({ projectId, shots }: { projectId: string; shots: Shot
               className="h-8 border border-[#4b432f] px-3 text-xs font-semibold text-[#c9c3b5] hover:border-[#d8b46a] hover:text-[#e8c678]"
             >
               Export selected
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadXlsx("selected-shot-status-report.xlsx", buildShotCsvRows(selectedShots), "Selected Shots")}
+              className="h-8 border border-[#4b432f] px-3 text-xs font-semibold text-[#c9c3b5] hover:border-[#d8b46a] hover:text-[#e8c678]"
+            >
+              Excel selected
             </button>
             <button
               type="button"
