@@ -5,10 +5,12 @@ import { fail, ok } from "@/lib/api-response";
 import { getProjectWorkOrders } from "@/lib/phase-work-order-data";
 import { getPrisma } from "@/lib/prisma";
 
+const workOrderStatuses = ["open", "scheduled", "review", "approved", "blocked", "closed"] as const;
+
 const createWorkOrderSchema = z.object({
   title: z.string().trim().min(2),
   description: z.string().trim().optional(),
-  status: z.string().trim().min(2).default("open"),
+  status: z.enum(workOrderStatuses).default("open"),
 });
 
 type ProjectRouteContext = {

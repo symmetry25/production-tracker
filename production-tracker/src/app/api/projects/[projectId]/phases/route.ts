@@ -9,6 +9,9 @@ const createPhaseSchema = z.object({
   name: z.string().trim().min(2),
   startDate: z.iso.date(),
   endDate: z.iso.date(),
+}).refine((value) => new Date(value.endDate) >= new Date(value.startDate), {
+  message: "Phase end date cannot be before start date.",
+  path: ["endDate"],
 });
 
 type ProjectRouteContext = {
