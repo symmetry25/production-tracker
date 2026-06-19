@@ -1,5 +1,4 @@
 import { AssetTable } from "@/components/asset/asset-table";
-import { CreateAssetForm } from "@/components/asset/create-asset-form";
 import { getAssetTableItems, type AssetTableItem } from "@/lib/asset-data";
 import { getDictionary, getLocale } from "@/lib/i18n";
 import { getShotTableItems, type ShotTableItem } from "@/lib/shot-data";
@@ -25,9 +24,6 @@ export default async function ProjectAssetsPage({ params }: { params: Promise<{ 
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d8b46a]">{t.eyebrow}</p>
           <h1 className="mt-2 text-3xl font-semibold">{t.title}</h1>
           <p className="mt-2 text-sm text-[#aaa599]">{t.description}</p>
-        </div>
-        <div className="flex h-10 items-center gap-2 text-xs text-[#aaa599]">
-          <CreateAssetForm projectId={projectId} />
         </div>
       </div>
 

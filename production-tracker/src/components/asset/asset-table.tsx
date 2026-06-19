@@ -22,6 +22,7 @@ export function AssetTable({ projectId, assets, shots }: { projectId: string; as
   const [linkAsset, setLinkAsset] = useState<AssetTableItem | null>(null);
   const [detailAsset, setDetailAsset] = useState<AssetTableItem | null>(null);
   const [editAsset, setEditAsset] = useState<AssetTableItem | null>(null);
+  const [newAssetOpen, setNewAssetOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"ALL" | AssetType>("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
@@ -232,6 +233,61 @@ export function AssetTable({ projectId, assets, shots }: { projectId: string; as
     setMessage("Asset URL 已复制。");
   }
 
+  async function createAsset(input: Pick<AssetTableItem, "name" | "type" | "status" | "description" | "thumbnailUrl">) {
+    setPendingId("new-asset");
+    setMessage(null);
+
+    if (projectId === "demo-mkali-mission") {
+      setAssetItems((current) => {
+        const baseId = `demo-asset-${input.name.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-") || "new-asset"}`;
+        let copyIndex = current.some((item) => item.id === baseId) ? 1 : 0;
+        while (copyIndex > 0 && current.some((item) => item.id === `${baseId}-${copyIndex}`)) copyIndex += 1;
+        const id = copyIndex > 0 ? `${baseId}-${copyIndex}` : baseId;
+        const asset: AssetTableItem = {
+          id,
+          name: input.name,
+          type: input.type,
+          status: input.status,
+          description: input.description,
+          thumbnailUrl: input.thumbnailUrl,
+          linkedShots: [],
+          pipeline: Object.fromEntries(PIPELINE_STEPS.map((step) => [step, {
+            id: `${id}-${step.toLowerCase()}`,
+            name: step,
+            status: "WAITING_TO_START" as TaskStatus,
+          }])) as AssetTableItem["pipeline"],
+        };
+        return [asset, ...current];
+      });
+      setPendingId(null);
+      setNewAssetOpen(false);
+      setMessage("演示资产已创建。");
+      return;
+    }
+
+    const response = await fetch(`/api/projects/${projectId}/assets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: input.name,
+        type: input.type,
+        description: input.description ?? "",
+        thumbnailUrl: input.thumbnailUrl ?? "",
+      }),
+    });
+
+    setPendingId(null);
+
+    if (!response.ok) {
+      setMessage("创建资产失败。");
+      return;
+    }
+
+    setNewAssetOpen(false);
+    setMessage("资产已创建。");
+    startTransition(() => router.refresh());
+  }
+
   async function duplicateAsset(asset: AssetTableItem) {
     setPendingId(asset.id);
     setMessage(null);
@@ -329,6 +385,13 @@ export function AssetTable({ projectId, assets, shots }: { projectId: string; as
               <option value="NO_SHOTS">无镜头关联</option>
             </select>
             <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setNewAssetOpen(true)}
+                className="h-9 bg-[#378add] px-3 text-xs font-semibold text-white transition hover:bg-[#4a9eff]"
+              >
+                Add Asset
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -492,9 +555,20 @@ export function AssetTable({ projectId, assets, shots }: { projectId: string; as
       {editAsset ? (
         <AssetEditDialog
           asset={editAsset}
+          mode="edit"
           pending={pendingId === editAsset.id}
           onClose={() => setEditAsset(null)}
           onSave={(input) => updateAsset(editAsset.id, input)}
+        />
+      ) : null}
+
+      {newAssetOpen ? (
+        <AssetEditDialog
+          asset={createBlankAsset()}
+          mode="create"
+          pending={pendingId === "new-asset"}
+          onClose={() => setNewAssetOpen(false)}
+          onSave={createAsset}
         />
       ) : null}
     </div>
@@ -688,11 +762,13 @@ function AssetDetailDialog({ asset, onClose, onEdit }: { asset: AssetTableItem; 
 
 function AssetEditDialog({
   asset,
+  mode,
   pending,
   onClose,
   onSave,
 }: {
   asset: AssetTableItem;
+  mode: "create" | "edit";
   pending: boolean;
   onClose: () => void;
   onSave: (input: Pick<AssetTableItem, "name" | "type" | "status" | "description" | "thumbnailUrl">) => void;
@@ -708,8 +784,8 @@ function AssetEditDialog({
       <div className="w-full max-w-2xl border border-[#3d392f] bg-[#181713] shadow-[0_28px_80px_rgba(0,0,0,0.55)]">
         <div className="flex items-center justify-between border-b border-[#34322b] px-5 py-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d8b46a]">Edit asset</p>
-            <h2 className="mt-1 text-xl font-semibold text-[#f4f1e8]">{asset.name}</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d8b46a]">{mode === "create" ? "Asset setup" : "Edit asset"}</p>
+            <h2 className="mt-1 text-xl font-semibold text-[#f4f1e8]">{mode === "create" ? "创建资产" : asset.name}</h2>
           </div>
           <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-[#aaa599] hover:text-[#f4f1e8]">
             关闭
@@ -759,7 +835,7 @@ function AssetEditDialog({
               取消
             </button>
             <button type="submit" disabled={pending || name.trim().length < 2} className="h-10 bg-[#378add] px-5 text-sm font-semibold text-white disabled:opacity-70">
-              {pending ? "保存中..." : "保存资产"}
+              {pending ? "保存中..." : mode === "create" ? "创建资产" : "保存资产"}
             </button>
           </div>
         </form>
@@ -775,6 +851,19 @@ function DetailMetric({ label, value }: { label: string; value: string }) {
       <p className="mt-2 font-mono text-xl text-[#e8c678]">{value}</p>
     </div>
   );
+}
+
+function createBlankAsset(): AssetTableItem {
+  return {
+    id: "new-asset",
+    name: "",
+    type: "PROP",
+    status: "WAITING_TO_START",
+    description: "",
+    thumbnailUrl: null,
+    linkedShots: [],
+    pipeline: Object.fromEntries(PIPELINE_STEPS.map((step) => [step, null])) as AssetTableItem["pipeline"],
+  };
 }
 
 function MenuItem({ children, danger = false, onSelect }: { children: React.ReactNode; danger?: boolean; onSelect?: () => void }) {
