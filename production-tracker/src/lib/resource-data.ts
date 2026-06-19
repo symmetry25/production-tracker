@@ -1,4 +1,7 @@
+import type { AssetType, Role, TaskStatus } from "@/generated/prisma/enums";
 import { shouldUseDemoData } from "@/lib/demo-data";
+import { getPrisma } from "@/lib/prisma";
+import { TASK_COST_PER_DAY } from "@/lib/task-data";
 
 export type BudgetDepartment = {
   id: string;
@@ -84,6 +87,75 @@ export type ResourceBudgetData = {
   documents: AuditDocument[];
   insights: ResourceInsight[];
   fundFlow: FundFlowLink[];
+};
+
+export type ResourceProjectSnapshot = {
+  id: string;
+  name: string;
+  tasks: ResourceProjectTask[];
+  assets: ResourceProjectAsset[];
+};
+
+export type ResourceProjectTask = {
+  id: string;
+  name: string;
+  status: TaskStatus;
+  timeLogged: number;
+  estimatedCost: number | null;
+  shot: { id: string; code: string; status: TaskStatus } | null;
+  asset: ResourceProjectAsset | null;
+  assignments: {
+    user: ResourceProjectUser;
+  }[];
+};
+
+export type ResourceProjectAsset = {
+  id: string;
+  name: string;
+  type: AssetType;
+  status: TaskStatus;
+};
+
+export type ResourceProjectUser = {
+  id: string;
+  name: string;
+  role: Role;
+  department: string | null;
+  capacity: number;
+  userGrade: { grade: { code: string } } | null;
+  scores: {
+    score: number;
+    dimension: {
+      maxScore: number;
+      weight: number;
+    };
+  }[];
+};
+
+type DepartmentBucket = {
+  id: string;
+  name: string;
+  budget: number;
+  actual: number;
+  committed: number;
+  color: string;
+};
+
+type PersonBucket = {
+  user: ResourceProjectUser;
+  department: string;
+  days: number;
+  total: number;
+};
+
+type VendorBucket = {
+  id: string;
+  name: string;
+  category: VendorSpend["category"];
+  owner: string;
+  amount: number;
+  actual: number;
+  statuses: Set<TaskStatus>;
 };
 
 const departments: BudgetDepartment[] = [
@@ -275,9 +347,84 @@ const documents: AuditDocument[] = [
   },
 ];
 
+const taskSelect = {
+  id: true,
+  name: true,
+  status: true,
+  timeLogged: true,
+  estimatedCost: true,
+  shot: {
+    select: {
+      id: true,
+      code: true,
+      status: true,
+    },
+  },
+  asset: {
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      status: true,
+    },
+  },
+  assignments: {
+    select: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          role: true,
+          department: true,
+          capacity: true,
+          userGrade: {
+            select: {
+              grade: {
+                select: {
+                  code: true,
+                },
+              },
+            },
+          },
+          scores: {
+            select: {
+              score: true,
+              dimension: {
+                select: {
+                  maxScore: true,
+                  weight: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+const departmentColors = [
+  "#157a6e",
+  "#2867b2",
+  "#b25f7c",
+  "#c84c39",
+  "#4f7f9b",
+  "#c98a1c",
+  "#6b5aa6",
+  "#173f52",
+  "#567d3f",
+  "#7d4b72",
+  "#7b658c",
+  "#8f6f2a",
+];
+
 export async function getResourceBudgetData(projectId: string): Promise<ResourceBudgetData> {
-  if (!shouldUseDemoData() || projectId !== "demo-mkali-mission") {
-    return createEmptyResourceBudgetData(projectId);
+  if (shouldUseDemoData()) {
+    if (projectId !== "demo-mkali-mission") {
+      return createEmptyResourceBudgetData(projectId);
+    }
+  } else {
+    return getLiveResourceBudgetData(projectId);
   }
 
   const actualTotal = departments.reduce((sum, department) => sum + department.actual, 0) + vendors.reduce((sum, vendor) => sum + vendor.amount, 0);
@@ -300,6 +447,147 @@ export async function getResourceBudgetData(projectId: string): Promise<Resource
     insights: buildInsights(totalBudget, actualTotal),
     fundFlow: buildFundFlow(totalBudget),
   };
+}
+
+export function buildResourceBudgetDataFromProject(project: ResourceProjectSnapshot): ResourceBudgetData {
+  const departmentBuckets = new Map<string, DepartmentBucket>();
+  const personBuckets = new Map<string, PersonBucket>();
+  const vendorBuckets = new Map<string, VendorBucket>();
+
+  for (const task of project.tasks) {
+    const calculatedCost = getTaskActualCost(task);
+    const budgetCost = getTaskBudgetCost(task);
+    const taskDepartments = resolveTaskDepartments(task);
+    const departmentShare = taskDepartments.length > 0 ? 1 / taskDepartments.length : 1;
+
+    for (const departmentName of taskDepartments) {
+      const bucket = getDepartmentBucket(departmentBuckets, departmentName);
+      bucket.budget += budgetCost * departmentShare;
+      bucket.actual += calculatedCost * departmentShare;
+      bucket.committed += Math.max(budgetCost, calculatedCost) * departmentShare;
+    }
+
+    const assignedPeople = task.assignments.map((assignment) => assignment.user);
+    const personShare = assignedPeople.length > 0 ? 1 / assignedPeople.length : 0;
+    for (const user of assignedPeople) {
+      const personBucket = personBuckets.get(user.id) ?? {
+        user,
+        department: user.department ?? resolveAssetDepartment(task.asset),
+        days: 0,
+        total: 0,
+      };
+      personBucket.days += task.timeLogged * personShare;
+      personBucket.total += calculatedCost * personShare;
+      personBuckets.set(user.id, personBucket);
+    }
+
+    const vendorMeta = resolveVendorMeta(task);
+    const vendor = vendorBuckets.get(vendorMeta.id) ?? {
+      ...vendorMeta,
+      amount: 0,
+      actual: 0,
+      statuses: new Set<TaskStatus>(),
+    };
+    vendor.amount += budgetCost;
+    vendor.actual += calculatedCost;
+    vendor.statuses.add(task.status);
+    vendorBuckets.set(vendor.id, vendor);
+  }
+
+  const departments = Array.from(departmentBuckets.values())
+    .map((bucket) => ({
+      id: bucket.id,
+      name: bucket.name,
+      budget: Math.round(bucket.budget),
+      committed: Math.round(bucket.committed),
+      actual: Math.round(bucket.actual),
+      risk: resolveDepartmentRisk(bucket),
+      color: bucket.color,
+    }))
+    .sort((a, b) => b.budget - a.budget);
+  const people = Array.from(personBuckets.values())
+    .map((bucket) => buildResourcePerson(bucket))
+    .sort((a, b) => b.total - a.total);
+  const vendors = Array.from(vendorBuckets.values())
+    .map((bucket) => buildVendorSpend(bucket))
+    .filter((vendor) => vendor.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
+  const payments = buildLivePayments(vendors);
+  const documents = buildLiveDocuments(vendors, departments);
+  const totalBudget = Math.round(departments.reduce((sum, department) => sum + department.budget, 0));
+  const actualTotal = Math.round(departments.reduce((sum, department) => sum + department.actual, 0));
+  const committedTotal = Math.round(departments.reduce((sum, department) => sum + department.committed, 0));
+
+  return {
+    project: {
+      id: project.id,
+      name: project.name,
+      totalBudget,
+      actualTotal,
+      committedTotal,
+    },
+    departments,
+    people,
+    vendors,
+    payments,
+    documents,
+    insights: buildResourceInsights({
+      totalBudget,
+      actualTotal,
+      departments,
+      vendors,
+      payments,
+      documents,
+    }),
+    fundFlow: buildLiveFundFlow({
+      totalBudget,
+      departments,
+      vendors,
+    }),
+  };
+}
+
+async function getLiveResourceBudgetData(projectId: string): Promise<ResourceBudgetData> {
+  const prisma = getPrisma();
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      id: true,
+      name: true,
+      assets: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          status: true,
+        },
+      },
+      shots: {
+        select: {
+          tasks: {
+            select: taskSelect,
+          },
+        },
+      },
+    },
+  });
+
+  if (!project) {
+    return createEmptyResourceBudgetData(projectId);
+  }
+
+  const assetTasks = await prisma.task.findMany({
+    where: { asset: { projectId } },
+    select: taskSelect,
+  });
+  const tasks = dedupeTasksById([...project.shots.flatMap((shot) => shot.tasks), ...assetTasks]);
+
+  return buildResourceBudgetDataFromProject({
+    id: project.id,
+    name: project.name,
+    assets: project.assets,
+    tasks,
+  });
 }
 
 function createEmptyResourceBudgetData(projectId: string): ResourceBudgetData {
@@ -384,6 +672,363 @@ function buildFundFlow(totalBudget: number): FundFlowLink[] {
   ];
 }
 
+function buildResourceInsights(input: {
+  totalBudget: number;
+  actualTotal: number;
+  departments: BudgetDepartment[];
+  vendors: VendorSpend[];
+  payments: PaymentMilestone[];
+  documents: AuditDocument[];
+}): ResourceInsight[] {
+  const overDepartments = input.departments.filter((department) => department.risk === "over");
+  const watchVendors = input.vendors.filter((vendor) => vendor.status === "review");
+  const blockedPaymentTotal = input.payments.filter((payment) => payment.status === "blocked").reduce((sum, payment) => sum + payment.amount, 0);
+  const missingDocumentTotal = input.documents.reduce((sum, document) => sum + Math.max(0, document.required - document.received), 0);
+  const budgetRate = input.totalBudget > 0 ? input.actualTotal / input.totalBudget : 0;
+
+  return [
+    {
+      id: "budget-rate",
+      title: budgetRate > 0.6 ? "预算消耗偏快" : "预算消耗可控",
+      detail:
+        input.totalBudget > 0
+          ? `已记录支出占总预算 ${Math.round(budgetRate * 100)}%，重点观察 ${overDepartments.map((department) => department.name).join("、") || "高额部门"}。`
+          : "当前项目还没有可汇总的任务成本，资源预算会随着任务、人员和资产录入自动生成。",
+      severity: budgetRate > 0.75 ? "over" : budgetRate > 0.55 ? "watch" : "ok",
+      amount: input.actualTotal,
+    },
+    {
+      id: "over-department",
+      title: "超预算部门",
+      detail: overDepartments.map((department) => department.name).join("、") || "暂无超预算部门。",
+      severity: overDepartments.length ? "over" : "ok",
+    },
+    {
+      id: "review-vendors",
+      title: "供应商付款关口",
+      detail: `${watchVendors.length} 个供应商需要在付款前补齐审查、合同或交付材料。`,
+      severity: watchVendors.length ? "watch" : "ok",
+    },
+    {
+      id: "blocked-payments",
+      title: "应暂缓付款",
+      detail: `${money(blockedPaymentTotal)} 付款被材料、科目或版本审批卡住。`,
+      severity: blockedPaymentTotal > 0 ? "over" : "ok",
+      amount: blockedPaymentTotal,
+    },
+    {
+      id: "missing-documents",
+      title: "审计材料缺口",
+      detail: `仍缺 ${missingDocumentTotal} 份关键材料，优先补齐待复核供应商和超预算部门。`,
+      severity: missingDocumentTotal > 5 ? "over" : missingDocumentTotal > 0 ? "watch" : "ok",
+    },
+  ];
+}
+
+function buildLiveFundFlow(input: {
+  totalBudget: number;
+  departments: BudgetDepartment[];
+  vendors: VendorSpend[];
+}): FundFlowLink[] {
+  const reserve = input.totalBudget - input.departments.reduce((sum, department) => sum + department.budget, 0);
+  return [
+    ...input.departments.map((department) => ({
+      from: "总预算",
+      to: department.name,
+      amount: department.budget,
+    })),
+    ...input.vendors.map((vendor) => ({
+      from: vendor.owner,
+      to: categoryFlowLabel(vendor.category),
+      amount: vendor.amount,
+    })),
+    ...input.vendors.map((vendor) => ({
+      from: categoryFlowLabel(vendor.category),
+      to: vendor.name,
+      amount: vendor.amount,
+    })),
+    ...(reserve > 0 ? [{ from: "总预算", to: "未分配/预备金", amount: reserve }] : []),
+  ];
+}
+
+function buildLivePayments(vendors: VendorSpend[]): PaymentMilestone[] {
+  const today = new Date();
+  return vendors.slice(0, 8).map((vendor, index) => {
+    const isBlocked = vendor.status === "review" || vendor.auditFlag.includes("需");
+    return {
+      id: `pay-${vendor.id}`,
+      vendorId: vendor.id,
+      vendorName: vendor.name,
+      label: `${categoryLabel(vendor.category)}阶段款`,
+      dueDate: addDaysIso(today, 2 + index * 2),
+      amount: Math.round(vendor.amount * (isBlocked ? 0.35 : 0.45)),
+      status: isBlocked ? "blocked" : vendor.status === "paid" ? "paid" : vendor.status === "contracted" ? "scheduled" : "ready",
+      gate: isBlocked ? `${vendor.auditFlag}，付款前需要制片/监制确认。` : "预算、任务和供应商状态已对齐，可进入付款排期。",
+    };
+  });
+}
+
+function buildLiveDocuments(vendors: VendorSpend[], departments: BudgetDepartment[]): AuditDocument[] {
+  const vendorDocuments: AuditDocument[] = vendors.slice(0, 8).map((vendor) => {
+    const required = vendor.status === "review" ? 6 : 4;
+    const received = vendor.status === "paid" ? required : vendor.status === "contracted" ? Math.max(2, required - 1) : vendor.status === "review" ? Math.max(1, required - 3) : 2;
+    return {
+      id: `doc-${vendor.id}`,
+      owner: vendor.name,
+      category: categoryLabel(vendor.category),
+      required,
+      received,
+      missing: buildMissingDocuments(vendor),
+      severity: received === required ? "ok" : received <= required - 3 ? "over" : "watch",
+    };
+  });
+
+  const departmentDocuments: AuditDocument[] = departments
+    .filter((department) => department.risk !== "ok")
+    .slice(0, 4)
+    .map((department) => ({
+      id: `doc-department-${department.id}`,
+      owner: department.name,
+      category: "部门预算",
+      required: 3,
+      received: department.risk === "over" ? 1 : 2,
+      missing: department.risk === "over" ? ["超预算说明", "追加审批"] : ["预算复核"],
+      severity: department.risk,
+    }));
+
+  return [...vendorDocuments, ...departmentDocuments];
+}
+
+function buildMissingDocuments(vendor: VendorSpend) {
+  if (vendor.status === "paid") return [];
+  const base = ["合同/报价单", "发票或收据"];
+  if (vendor.status === "review") {
+    return [...base, vendor.category === "vfx" ? "版本 approved 截图" : "现场签收/交付确认"];
+  }
+  if (vendor.status === "contracted") return ["发票或收据"];
+  return base;
+}
+
+function buildVendorSpend(bucket: VendorBucket): VendorSpend {
+  const progress = resolveProgress(bucket.statuses);
+  const status = resolveVendorStatus(bucket.statuses);
+  return {
+    id: bucket.id,
+    name: bucket.name,
+    category: bucket.category,
+    owner: bucket.owner,
+    amount: Math.round(bucket.amount),
+    status,
+    progress,
+    auditFlag: buildAuditFlag({
+      category: bucket.category,
+      status,
+      amount: bucket.amount,
+      actual: bucket.actual,
+    }),
+  };
+}
+
+function buildResourcePerson(bucket: PersonBucket): ResourcePerson {
+  const trustScore = resolveTrustScore(bucket.user);
+  const days = roundOne(bucket.days);
+  return {
+    id: bucket.user.id,
+    name: bucket.user.name,
+    role: roleLabel(bucket.user.role),
+    department: bucket.department,
+    vendor: "个人 / 项目人员",
+    grade: normalizeGrade(bucket.user.userGrade?.grade.code) ?? gradeFromTrustScore(trustScore),
+    trustScore,
+    dayRate: days > 0 ? Math.round(bucket.total / days) : 0,
+    days,
+    total: Math.round(bucket.total),
+  };
+}
+
+function getTaskActualCost(task: ResourceProjectTask) {
+  return Math.round(task.timeLogged * TASK_COST_PER_DAY);
+}
+
+function getTaskBudgetCost(task: ResourceProjectTask) {
+  return Math.round(task.estimatedCost ?? getTaskActualCost(task));
+}
+
+function getDepartmentBucket(buckets: Map<string, DepartmentBucket>, departmentName: string) {
+  const id = slugify(departmentName);
+  const existing = buckets.get(id);
+  if (existing) return existing;
+  const bucket = {
+    id,
+    name: departmentName,
+    budget: 0,
+    actual: 0,
+    committed: 0,
+    color: departmentColors[buckets.size % departmentColors.length] ?? "#7b658c",
+  };
+  buckets.set(id, bucket);
+  return bucket;
+}
+
+function resolveTaskDepartments(task: ResourceProjectTask) {
+  const departments = task.assignments.map((assignment) => assignment.user.department).filter((department): department is string => Boolean(department));
+  if (departments.length > 0) return Array.from(new Set(departments));
+  return [resolveAssetDepartment(task.asset)];
+}
+
+function resolveAssetDepartment(asset: ResourceProjectAsset | null) {
+  if (!asset) return "未分组";
+  const labels: Record<AssetType, string> = {
+    CHARACTER: "演员/角色组",
+    ENVIRONMENT: "场地/置景组",
+    PROP: "道具/器材组",
+    FX: "VFX组",
+    VEHICLE: "车辆组",
+    RIG: "摄影/器械组",
+  };
+  return labels[asset.type] ?? "未分组";
+}
+
+function resolveVendorMeta(task: ResourceProjectTask) {
+  const asset = task.asset;
+  const category = resolveVendorCategory(asset);
+  const owner = task.assignments[0]?.user.department ?? resolveAssetDepartment(asset);
+  return {
+    id: `${category}-${slugify(owner)}`,
+    name: `${owner}${categoryFlowLabel(category)}`,
+    category,
+    owner,
+  };
+}
+
+function resolveVendorCategory(asset: ResourceProjectAsset | null): VendorSpend["category"] {
+  if (!asset) return "production";
+  const categories: Record<AssetType, VendorSpend["category"]> = {
+    CHARACTER: "production",
+    ENVIRONMENT: "location",
+    PROP: "equipment",
+    FX: "vfx",
+    VEHICLE: "vehicle",
+    RIG: "equipment",
+  };
+  return categories[asset.type] ?? "production";
+}
+
+function resolveDepartmentRisk(bucket: DepartmentBucket): BudgetDepartment["risk"] {
+  if (bucket.budget <= 0) return "ok";
+  const rate = bucket.actual / bucket.budget;
+  if (rate > 1) return "over";
+  if (rate > 0.72 || bucket.committed > bucket.budget * 1.05) return "watch";
+  return "ok";
+}
+
+function resolveVendorStatus(statuses: Set<TaskStatus>): VendorSpend["status"] {
+  if (statuses.has("PENDING_REVIEW") || statuses.has("ON_HOLD")) return "review";
+  if (statuses.has("FINAL") || statuses.has("APPROVED")) return "paid";
+  if (statuses.has("IN_PROGRESS") || statuses.has("READY_TO_START")) return "contracted";
+  return "quoted";
+}
+
+function resolveProgress(statuses: Set<TaskStatus>) {
+  const weights: Record<TaskStatus, number> = {
+    WAITING_TO_START: 8,
+    READY_TO_START: 18,
+    IN_PROGRESS: 52,
+    PENDING_REVIEW: 72,
+    APPROVED: 88,
+    FINAL: 100,
+    ON_HOLD: 35,
+    OMIT: 0,
+  };
+  if (statuses.size === 0) return 0;
+  return Math.round(Array.from(statuses).reduce((sum, status) => sum + (weights[status] ?? 0), 0) / statuses.size);
+}
+
+function buildAuditFlag(input: {
+  category: VendorSpend["category"];
+  status: VendorSpend["status"];
+  amount: number;
+  actual: number;
+}) {
+  if (input.status === "review") {
+    return `${categoryLabel(input.category)}处于待复核状态，需补齐交付确认和付款依据`;
+  }
+  if (input.amount > 0 && input.actual > input.amount) {
+    return `实际消耗高于预算 ${Math.round((input.actual / input.amount - 1) * 100)}%，需追加审批`;
+  }
+  if (input.status === "quoted") {
+    return "仅有报价或预估，签约前需确认税费、押金和取消条款";
+  }
+  return "合同、任务进度和预算口径基本一致";
+}
+
+function resolveTrustScore(user: ResourceProjectUser) {
+  if (user.scores.length > 0) {
+    const totalWeight = user.scores.reduce((sum, score) => sum + score.dimension.weight, 0);
+    if (totalWeight > 0) {
+      const weighted = user.scores.reduce((sum, score) => sum + (score.score / Math.max(1, score.dimension.maxScore)) * 100 * score.dimension.weight, 0);
+      return Math.round(weighted / totalWeight);
+    }
+  }
+
+  const fallback: Record<Role, number> = {
+    ADMIN: 92,
+    PRODUCER: 88,
+    SUPERVISOR: 82,
+    REVIEWER: 78,
+    ARTIST: 75,
+  };
+  return fallback[user.role] ?? 75;
+}
+
+function roleLabel(role: Role) {
+  const labels: Record<Role, string> = {
+    ADMIN: "Admin",
+    PRODUCER: "Producer",
+    SUPERVISOR: "Supervisor",
+    ARTIST: "Artist",
+    REVIEWER: "Reviewer",
+  };
+  return labels[role] ?? String(role);
+}
+
+function normalizeGrade(code: string | null | undefined) {
+  if (code === "A" || code === "B" || code === "C" || code === "D" || code === "E" || code === "F" || code === "G") return code;
+  return null;
+}
+
+function gradeFromTrustScore(score: number) {
+  if (score >= 90) return "A";
+  if (score >= 80) return "B";
+  if (score >= 70) return "C";
+  if (score >= 60) return "D";
+  if (score >= 50) return "E";
+  if (score >= 30) return "F";
+  return "G";
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function addDaysIso(date: Date, days: number) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next.toISOString().slice(0, 10);
+}
+
+function roundOne(value: number) {
+  return Math.round(value * 10) / 10;
+}
+
+function dedupeTasksById(tasks: ResourceProjectTask[]) {
+  return Array.from(new Map(tasks.map((task) => [task.id, task])).values());
+}
+
 function money(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -403,4 +1048,17 @@ function categoryLabel(category: string) {
   };
 
   return labels[category] ?? category;
+}
+
+function categoryFlowLabel(category: string) {
+  const labels: Record<string, string> = {
+    equipment: "器材供应商",
+    vehicle: "车辆供应商",
+    hotel: "酒店住宿",
+    location: "场地供应商",
+    vfx: "VFX供应商",
+    production: "制片供应商",
+  };
+
+  return labels[category] ?? `${category}供应商`;
 }
