@@ -1,4 +1,5 @@
 import { getDictionary, getLocale } from "@/lib/i18n";
+import { ResourceExportButton } from "@/components/resource/resource-export-button";
 import { SankeyFlow } from "@/components/resource/sankey-flow";
 import {
   getResourceBudgetData,
@@ -58,10 +59,13 @@ export default async function ProjectResourcesPage({ params }: { params: Promise
           <h1 className="mt-2 text-3xl font-semibold">{t.title}</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[#aaa599]">{t.description}</p>
         </div>
-        <div className="grid grid-cols-3 border border-[#34322b] bg-[#181713] text-right text-xs">
-          <Metric label={t.totalBudget} value={money(data.project.totalBudget)} />
-          <Metric label={t.committed} value={money(data.project.committedTotal)} />
-          <Metric label={t.actual} value={money(data.project.actualTotal)} />
+        <div className="flex shrink-0 items-center gap-2">
+          <ResourceExportButton data={data} />
+          <div className="grid grid-cols-3 border border-[#34322b] bg-[#181713] text-right text-xs">
+            <Metric label={t.totalBudget} value={money(data.project.totalBudget)} />
+            <Metric label={t.committed} value={money(data.project.committedTotal)} />
+            <Metric label={t.actual} value={money(data.project.actualTotal)} />
+          </div>
         </div>
       </div>
 
