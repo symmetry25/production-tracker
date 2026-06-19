@@ -27,6 +27,7 @@ export function AssetTable({ projectId, assets, shots }: { projectId: string; as
   const [typeFilter, setTypeFilter] = useState<"ALL" | AssetType>("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
   const [riskFilter, setRiskFilter] = useState<"ALL" | "NEEDS_REVIEW" | "BLOCKED" | "NO_SHOTS">("ALL");
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [, startTransition] = useTransition();
   const summary = useMemo(() => getAssetSummary(assetItems), [assetItems]);
   const filteredAssets = useMemo(
@@ -36,6 +37,12 @@ export function AssetTable({ projectId, assets, shots }: { projectId: string; as
   const groups = groupAssetsByType(filteredAssets);
   const activeFilterCount = [query.trim(), typeFilter !== "ALL", statusFilter !== "ALL", riskFilter !== "ALL"].filter(Boolean).length;
   const totalAssetCount = assetItems.length;
+  const selectedAssetIdSet = useMemo(() => new Set(selectedAssetIds), [selectedAssetIds]);
+  const selectedAssets = useMemo(() => assetItems.filter((asset) => selectedAssetIdSet.has(asset.id)), [assetItems, selectedAssetIdSet]);
+  const filteredAssetIds = useMemo(() => filteredAssets.map((asset) => asset.id), [filteredAssets]);
+  const allFilteredSelected = filteredAssetIds.length > 0 && filteredAssetIds.every((id) => selectedAssetIdSet.has(id));
+  const selectedLinkedShotCount = new Set(selectedAssets.flatMap((asset) => asset.linkedShots.map((shot) => shot.id))).size;
+  const selectedTypeCount = new Set(selectedAssets.map((asset) => asset.type)).size;
 
   function patchLocalAsset(assetId: string, patch: Partial<AssetTableItem>) {
     setAssetItems((current) => current.map((asset) => asset.id === assetId ? { ...asset, ...patch } : asset));
@@ -110,6 +117,62 @@ export function AssetTable({ projectId, assets, shots }: { projectId: string; as
     startTransition(() => router.refresh());
   }
 
+  function toggleAssetSelection(assetId: string, selected: boolean) {
+    setSelectedAssetIds((current) => {
+      if (selected) return current.includes(assetId) ? current : [...current, assetId];
+      return current.filter((id) => id !== assetId);
+    });
+  }
+
+  function toggleFilteredSelection(selected: boolean) {
+    setSelectedAssetIds((current) => {
+      if (!selected) return current.filter((id) => !filteredAssetIds.includes(id));
+      const next = new Set(current);
+      for (const id of filteredAssetIds) next.add(id);
+      return Array.from(next);
+    });
+  }
+
+  async function bulkSetAssetStatus(status: TaskStatus) {
+    if (selectedAssetIds.length === 0) return;
+
+    const assetIds = [...selectedAssetIds];
+    const realAssetIds = assetIds.filter((assetId) => !assetId.startsWith(demoTaskIdPrefix));
+    setPendingId("bulk-status");
+    setMessage(null);
+
+    if (realAssetIds.length) {
+      const responses = await Promise.all(
+        realAssetIds.map((assetId) =>
+          fetch(`/api/assets/${assetId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+          }),
+        ),
+      );
+
+      if (responses.some((response) => !response.ok)) {
+        setPendingId(null);
+        setMessage("批量更新资产状态失败，请检查权限或资产状态。");
+        return;
+      }
+    }
+
+    const patchSelectedAsset = (asset: AssetTableItem) => (assetIds.includes(asset.id) ? { ...asset, status } : asset);
+    setAssetItems((current) => current.map(patchSelectedAsset));
+    setLinkAsset((current) => (current ? patchSelectedAsset(current) : current));
+    setDetailAsset((current) => (current ? patchSelectedAsset(current) : current));
+    setEditAsset((current) => (current ? patchSelectedAsset(current) : current));
+    setPendingId(null);
+    setSelectedAssetIds([]);
+    setMessage(`已更新 ${assetIds.length} 个资产。`);
+
+    if (realAssetIds.length) {
+      startTransition(() => router.refresh());
+    }
+  }
+
   async function updateAsset(assetId: string, input: Pick<AssetTableItem, "name" | "type" | "status" | "description" | "thumbnailUrl">) {
     setPendingId(assetId);
     setMessage(null);
@@ -148,6 +211,7 @@ export function AssetTable({ projectId, assets, shots }: { projectId: string; as
       setAssetItems((current) => current.filter((asset) => asset.id !== assetId));
       setDetailAsset((current) => current?.id === assetId ? null : current);
       setEditAsset((current) => current?.id === assetId ? null : current);
+      setSelectedAssetIds((current) => current.filter((id) => id !== assetId));
       setPendingId(null);
       setMessage("演示资产已删除。");
       return;
@@ -164,6 +228,7 @@ export function AssetTable({ projectId, assets, shots }: { projectId: string; as
       return;
     }
 
+    setSelectedAssetIds((current) => current.filter((id) => id !== assetId));
     startTransition(() => router.refresh());
   }
 
@@ -432,8 +497,59 @@ export function AssetTable({ projectId, assets, shots }: { projectId: string; as
         </aside>
       </div>
 
+      {selectedAssets.length ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border border-[#4b432f] bg-[#1f1b12] px-3 py-2 text-sm">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-[#c9c3b5]">
+            <span className="font-semibold uppercase tracking-[0.16em] text-[#e8c678]">{selectedAssets.length} selected</span>
+            <span className="font-mono">{selectedTypeCount} types</span>
+            <span className="font-mono text-[#aaa599]">{selectedLinkedShotCount} linked shots</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value=""
+              disabled={pendingId === "bulk-status"}
+              onChange={(event) => {
+                if (event.target.value) void bulkSetAssetStatus(event.target.value as TaskStatus);
+                event.currentTarget.value = "";
+              }}
+              className="h-8 border border-[#4b432f] bg-[#11110f] px-2 text-xs text-[#f4f1e8] outline-none focus:border-[#d8b46a]"
+            >
+              <option value="">批量改状态</option>
+              {assetMenuStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {STATUS_COLORS[status].label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => downloadCsv("selected-asset-status-report.csv", buildAssetCsvRows(selectedAssets))}
+              className="h-8 border border-[#4b432f] px-3 text-xs font-semibold text-[#c9c3b5] hover:border-[#d8b46a] hover:text-[#e8c678]"
+            >
+              Export selected
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedAssetIds([])}
+              className="h-8 border border-[#4b432f] px-3 text-xs text-[#aaa599] hover:border-[#d8b46a] hover:text-[#f4f1e8]"
+            >
+              清空选择
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="overflow-x-auto border border-[#34322b] bg-[#181713]">
-        <div className="grid min-w-[1160px] grid-cols-[110px_1.15fr_120px_180px_repeat(6,minmax(76px,1fr))] border-b border-[#2a2a28] bg-[#1e1e1c] text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]">
+        <div className="grid min-w-[1204px] grid-cols-[44px_110px_1.15fr_120px_180px_repeat(6,minmax(76px,1fr))] border-b border-[#2a2a28] bg-[#1e1e1c] text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]">
+          <div className="flex h-9 items-center justify-center px-2">
+            <input
+              type="checkbox"
+              aria-label="选择当前筛选的资产"
+              checked={allFilteredSelected}
+              onChange={(event) => toggleFilteredSelection(event.target.checked)}
+              className="size-4 accent-[#d8b46a]"
+            />
+          </div>
           <HeaderCell>Preview</HeaderCell>
           <HeaderCell>Asset</HeaderCell>
           <HeaderCell>Status</HeaderCell>
@@ -453,7 +569,22 @@ export function AssetTable({ projectId, assets, shots }: { projectId: string; as
             {typeAssets.map((asset) => (
               <ContextMenu.Root key={asset.id}>
                 <ContextMenu.Trigger asChild>
-                  <div className="grid min-h-20 min-w-[1160px] grid-cols-[110px_1.15fr_120px_180px_repeat(6,minmax(76px,1fr))] border-b border-[#2a2a28] text-sm hover:bg-[#252523]">
+                  <div
+                    className={[
+                      "grid min-h-20 min-w-[1204px] grid-cols-[44px_110px_1.15fr_120px_180px_repeat(6,minmax(76px,1fr))] border-b border-[#2a2a28] text-sm hover:bg-[#252523]",
+                      selectedAssetIdSet.has(asset.id) ? "outline outline-1 -outline-offset-1 outline-[#d8b46a]/45" : "",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-center justify-center px-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`选择资产 ${asset.name}`}
+                        checked={selectedAssetIdSet.has(asset.id)}
+                        onChange={(event) => toggleAssetSelection(asset.id, event.target.checked)}
+                        onClick={(event) => event.stopPropagation()}
+                        className="size-4 accent-[#d8b46a]"
+                      />
+                    </div>
                     <div className="flex items-center px-3">
                       <div className="relative grid h-14 w-[90px] place-items-center overflow-hidden border border-[#34322b] bg-[#11110f]">
                         {asset.thumbnailUrl ? (

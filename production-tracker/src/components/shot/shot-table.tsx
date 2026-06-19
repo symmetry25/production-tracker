@@ -28,6 +28,7 @@ export function ShotTable({ projectId, shots }: { projectId: string; shots: Shot
   const [sequenceFilter, setSequenceFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
   const [riskFilter, setRiskFilter] = useState<ShotRiskFilter>("ALL");
+  const [selectedShotIds, setSelectedShotIds] = useState<string[]>([]);
   const [, startTransition] = useTransition();
 
   const sequenceOptions = useMemo(() => Array.from(new Set(shotItems.map((shot) => shot.sequenceCode))).sort(), [shotItems]);
@@ -38,6 +39,12 @@ export function ShotTable({ projectId, shots }: { projectId: string; shots: Shot
   );
   const groups = groupShotsBySequence(filteredShots);
   const activeFilterCount = [query.trim(), sequenceFilter !== "ALL", statusFilter !== "ALL", riskFilter !== "ALL"].filter(Boolean).length;
+  const selectedShotIdSet = useMemo(() => new Set(selectedShotIds), [selectedShotIds]);
+  const selectedShots = useMemo(() => shotItems.filter((shot) => selectedShotIdSet.has(shot.id)), [selectedShotIdSet, shotItems]);
+  const filteredShotIds = useMemo(() => filteredShots.map((shot) => shot.id), [filteredShots]);
+  const allFilteredSelected = filteredShotIds.length > 0 && filteredShotIds.every((id) => selectedShotIdSet.has(id));
+  const selectedFrameCount = selectedShots.reduce((sum, shot) => sum + (shot.cutDuration ?? 0), 0);
+  const selectedSequenceCount = new Set(selectedShots.map((shot) => shot.sequenceCode)).size;
 
   function patchLocalShot(shotId: string, patch: Partial<ShotTableItem>) {
     setShotItems((current) => current.map((shot) => (shot.id === shotId ? normalizeShot({ ...shot, ...patch }) : shot)));
@@ -113,6 +120,61 @@ export function ShotTable({ projectId, shots }: { projectId: string; shots: Shot
     startTransition(() => router.refresh());
   }
 
+  function toggleShotSelection(shotId: string, selected: boolean) {
+    setSelectedShotIds((current) => {
+      if (selected) return current.includes(shotId) ? current : [...current, shotId];
+      return current.filter((id) => id !== shotId);
+    });
+  }
+
+  function toggleFilteredSelection(selected: boolean) {
+    setSelectedShotIds((current) => {
+      if (!selected) return current.filter((id) => !filteredShotIds.includes(id));
+      const next = new Set(current);
+      for (const id of filteredShotIds) next.add(id);
+      return Array.from(next);
+    });
+  }
+
+  async function bulkSetShotStatus(status: TaskStatus) {
+    if (selectedShotIds.length === 0) return;
+
+    const shotIds = [...selectedShotIds];
+    const realShotIds = shotIds.filter((shotId) => !shotId.startsWith(demoIdPrefix));
+    setPendingId("bulk-status");
+    setMessage(null);
+
+    if (realShotIds.length) {
+      const responses = await Promise.all(
+        realShotIds.map((shotId) =>
+          fetch(`/api/shots/${shotId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status }),
+          }),
+        ),
+      );
+
+      if (responses.some((response) => !response.ok)) {
+        setPendingId(null);
+        setMessage("批量更新镜头状态失败，请检查权限或镜头状态。");
+        return;
+      }
+    }
+
+    const patchSelectedShot = (shot: ShotTableItem) => (shotIds.includes(shot.id) ? normalizeShot({ ...shot, status }) : shot);
+    setShotItems((current) => current.map(patchSelectedShot));
+    setDetailShot((current) => (current ? patchSelectedShot(current) : current));
+    setEditShot((current) => (current ? patchSelectedShot(current) : current));
+    setPendingId(null);
+    setSelectedShotIds([]);
+    setMessage(`已更新 ${shotIds.length} 个镜头。`);
+
+    if (realShotIds.length) {
+      startTransition(() => router.refresh());
+    }
+  }
+
   async function updateShot(shotId: string, input: ShotInput) {
     const normalized = normalizeShot({
       ...input,
@@ -166,6 +228,7 @@ export function ShotTable({ projectId, shots }: { projectId: string; shots: Shot
       setShotItems((current) => current.filter((shot) => shot.id !== shotId));
       setDetailShot((current) => (current?.id === shotId ? null : current));
       setEditShot((current) => (current?.id === shotId ? null : current));
+      setSelectedShotIds((current) => current.filter((id) => id !== shotId));
       setPendingId(null);
       setMessage("演示镜头已删除。");
       return;
@@ -182,6 +245,7 @@ export function ShotTable({ projectId, shots }: { projectId: string; shots: Shot
       return;
     }
 
+    setSelectedShotIds((current) => current.filter((id) => id !== shotId));
     startTransition(() => router.refresh());
   }
 
@@ -389,8 +453,59 @@ export function ShotTable({ projectId, shots }: { projectId: string; shots: Shot
         </aside>
       </div>
 
+      {selectedShots.length ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border border-[#4b432f] bg-[#1f1b12] px-3 py-2 text-sm">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-[#c9c3b5]">
+            <span className="font-semibold uppercase tracking-[0.16em] text-[#e8c678]">{selectedShots.length} selected</span>
+            <span className="font-mono">{selectedSequenceCount} sequences</span>
+            <span className="font-mono text-[#aaa599]">{selectedFrameCount.toLocaleString()} frames</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value=""
+              disabled={pendingId === "bulk-status"}
+              onChange={(event) => {
+                if (event.target.value) void bulkSetShotStatus(event.target.value as TaskStatus);
+                event.currentTarget.value = "";
+              }}
+              className="h-8 border border-[#4b432f] bg-[#11110f] px-2 text-xs text-[#f4f1e8] outline-none focus:border-[#d8b46a]"
+            >
+              <option value="">批量改状态</option>
+              {shotMenuStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {STATUS_COLORS[status].label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => downloadCsv("selected-shot-status-report.csv", buildShotCsvRows(selectedShots))}
+              className="h-8 border border-[#4b432f] px-3 text-xs font-semibold text-[#c9c3b5] hover:border-[#d8b46a] hover:text-[#e8c678]"
+            >
+              Export selected
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedShotIds([])}
+              className="h-8 border border-[#4b432f] px-3 text-xs text-[#aaa599] hover:border-[#d8b46a] hover:text-[#f4f1e8]"
+            >
+              清空选择
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="overflow-x-auto border border-[#34322b] bg-[#181713]">
-        <div className="grid min-w-[1120px] grid-cols-[92px_1.15fr_120px_96px_repeat(6,minmax(76px,1fr))] border-b border-[#2a2a28] bg-[#1e1e1c] text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]">
+        <div className="grid min-w-[1164px] grid-cols-[44px_92px_1.15fr_120px_96px_repeat(6,minmax(76px,1fr))] border-b border-[#2a2a28] bg-[#1e1e1c] text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]">
+          <div className="flex h-9 items-center justify-center px-2">
+            <input
+              type="checkbox"
+              aria-label="选择当前筛选的镜头"
+              checked={allFilteredSelected}
+              onChange={(event) => toggleFilteredSelection(event.target.checked)}
+              className="size-4 accent-[#d8b46a]"
+            />
+          </div>
           <HeaderCell>Seq</HeaderCell>
           <HeaderCell>Shot</HeaderCell>
           <HeaderCell>Status</HeaderCell>
@@ -410,7 +525,22 @@ export function ShotTable({ projectId, shots }: { projectId: string; shots: Shot
             {sequenceShots.map((shot) => (
               <ContextMenu.Root key={shot.id}>
                 <ContextMenu.Trigger asChild>
-                  <div className="grid min-h-14 min-w-[1120px] grid-cols-[92px_1.15fr_120px_96px_repeat(6,minmax(76px,1fr))] border-b border-[#2a2a28] text-sm hover:bg-[#252523]">
+                  <div
+                    className={[
+                      "grid min-h-14 min-w-[1164px] grid-cols-[44px_92px_1.15fr_120px_96px_repeat(6,minmax(76px,1fr))] border-b border-[#2a2a28] text-sm hover:bg-[#252523]",
+                      selectedShotIdSet.has(shot.id) ? "outline outline-1 -outline-offset-1 outline-[#d8b46a]/45" : "",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-center justify-center px-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`选择镜头 ${shot.code}`}
+                        checked={selectedShotIdSet.has(shot.id)}
+                        onChange={(event) => toggleShotSelection(shot.id, event.target.checked)}
+                        onClick={(event) => event.stopPropagation()}
+                        className="size-4 accent-[#d8b46a]"
+                      />
+                    </div>
                     <div className="flex items-center px-3">
                       <div className="grid h-9 w-16 place-items-center border border-[#34322b] bg-[#11110f] font-mono text-[10px] text-[#7f7a70]">
                         {shot.sequenceCode}
