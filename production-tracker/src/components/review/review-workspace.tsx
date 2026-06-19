@@ -5,14 +5,8 @@ import { VersionStatus } from "@/generated/prisma/enums";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
+import type { Dictionary } from "@/lib/i18n";
 import type { ReviewVersionItem } from "@/lib/review-data";
-
-const VERSION_STATUS_LABELS: Record<VersionStatus, string> = {
-  PENDING_REVIEW: "Pending Review",
-  VIEWED: "Viewed",
-  APPROVED: "Approved",
-  CHANGES_REQUESTED: "Changes Requested",
-};
 
 const VERSION_STATUS_COLORS: Record<VersionStatus, { bg: string; text: string; dot: string }> = {
   PENDING_REVIEW: { bg: "#2d2300", text: "#ef9f27", dot: "#ef9f27" },
@@ -22,8 +16,17 @@ const VERSION_STATUS_COLORS: Record<VersionStatus, { bg: string; text: string; d
 };
 
 type ReviewMode = "player" | "compare";
+type ReviewWorkspaceLabels = Dictionary["pages"]["media"]["workspace"];
 
-export function ReviewWorkspace({ versions, initialVersionId }: { versions: ReviewVersionItem[]; initialVersionId?: string }) {
+export function ReviewWorkspace({
+  versions,
+  initialVersionId,
+  labels,
+}: {
+  versions: ReviewVersionItem[];
+  initialVersionId?: string;
+  labels: ReviewWorkspaceLabels;
+}) {
   const router = useRouter();
   const initialSelectedId = useMemo(() => getInitialSelectedId(versions, initialVersionId), [initialVersionId, versions]);
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
@@ -92,7 +95,7 @@ export function ReviewWorkspace({ versions, initialVersionId }: { versions: Revi
     setPendingId(null);
 
     if (!response.ok) {
-      setMessage("更新版本状态失败。");
+      setMessage(labels.messages.updateStatusFailed);
       return;
     }
 
@@ -110,7 +113,7 @@ export function ReviewWorkspace({ versions, initialVersionId }: { versions: Revi
     setPendingId(null);
 
     if (!response.ok) {
-      setMessage("删除版本失败。");
+      setMessage(labels.messages.deleteVersionFailed);
       return;
     }
 
@@ -137,7 +140,7 @@ export function ReviewWorkspace({ versions, initialVersionId }: { versions: Revi
     setPendingId(null);
 
     if (!response.ok) {
-      setMessage("添加备注失败。");
+      setMessage(labels.messages.addNoteFailed);
       return;
     }
 
@@ -155,7 +158,7 @@ export function ReviewWorkspace({ versions, initialVersionId }: { versions: Revi
     setPendingId(null);
 
     if (!response.ok) {
-      setMessage("删除备注失败。");
+      setMessage(labels.messages.deleteNoteFailed);
       return;
     }
 
@@ -166,9 +169,9 @@ export function ReviewWorkspace({ versions, initialVersionId }: { versions: Revi
     return (
       <div className="grid min-h-[560px] place-items-center border border-dashed border-[#3f3c33] bg-[#181713] p-10 text-center">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d8b46a]">No versions</p>
-          <h2 className="mt-3 text-2xl font-semibold">还没有审阅版本</h2>
-          <p className="mt-3 max-w-md text-sm leading-6 text-[#aaa599]">上传 mp4、mov 或图片后，版本会出现在这里，供监制和导演做备注、审批。</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d8b46a]">{labels.empty.eyebrow}</p>
+          <h2 className="mt-3 text-2xl font-semibold">{labels.empty.title}</h2>
+          <p className="mt-3 max-w-md text-sm leading-6 text-[#aaa599]">{labels.empty.description}</p>
         </div>
       </div>
     );
@@ -188,6 +191,7 @@ export function ReviewWorkspace({ versions, initialVersionId }: { versions: Revi
         onClear={() => setPlaylistIds([])}
         onRemove={removeFromPlaylist}
         onMove={movePlaylistItem}
+        labels={labels}
       />
       <div className="grid min-h-[640px] border border-[#34322b] bg-[#181713] xl:grid-cols-[240px_minmax(0,1fr)] 2xl:grid-cols-[260px_minmax(360px,1fr)_300px]">
         <VersionList
@@ -201,6 +205,7 @@ export function ReviewWorkspace({ versions, initialVersionId }: { versions: Revi
           onAddToPlaylist={addToPlaylist}
           onRemoveFromPlaylist={removeFromPlaylist}
           onCompare={(versionId) => startCompare(versionId)}
+          labels={labels}
         />
         {viewMode === "compare" ? (
           <VersionCompare
@@ -213,6 +218,7 @@ export function ReviewWorkspace({ versions, initialVersionId }: { versions: Revi
             }}
             onSelectRight={(id) => setCompareIds(([leftId]) => [leftId, id])}
             onExit={() => setViewMode("player")}
+            labels={labels}
           />
         ) : (
           <VersionPlayer
@@ -228,11 +234,12 @@ export function ReviewWorkspace({ versions, initialVersionId }: { versions: Revi
             onCompare={() => startCompare(selected.id, playlistVersions[selectedQueueIndex + 1]?.id)}
             onAddToQueue={() => addToPlaylist(selected.id)}
             onRemoveFromQueue={() => removeFromPlaylist(selected.id)}
+            labels={labels}
           />
         )}
-        <NotesStream version={selected} pending={pendingId === `note:${selected.id}`} onCreate={addNote} onDelete={deleteNote} />
+        <NotesStream version={selected} pending={pendingId === `note:${selected.id}`} onCreate={addNote} onDelete={deleteNote} labels={labels} />
       </div>
-      <VersionFilmstrip versions={versions} selectedId={selected.id} onSelect={setSelectedId} />
+      <VersionFilmstrip versions={versions} selectedId={selected.id} onSelect={setSelectedId} labels={labels} />
     </div>
   );
 }
@@ -248,6 +255,7 @@ function VersionList({
   onAddToPlaylist,
   onRemoveFromPlaylist,
   onCompare,
+  labels,
 }: {
   versions: ReviewVersionItem[];
   selectedId: string;
@@ -259,12 +267,13 @@ function VersionList({
   onAddToPlaylist: (id: string) => void;
   onRemoveFromPlaylist: (id: string) => void;
   onCompare: (id: string) => void;
+  labels: ReviewWorkspaceLabels;
 }) {
   return (
     <aside className="order-2 border-t border-[#34322b] xl:order-none xl:row-span-2 xl:border-r xl:border-t-0 2xl:row-span-1">
       <div className="border-b border-[#34322b] px-4 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#d8b46a]">Version List</p>
-        <p className="mt-1 text-xs text-[#8f8a7e]">{versions.length} review items</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#d8b46a]">{labels.versionList.eyebrow}</p>
+        <p className="mt-1 text-xs text-[#8f8a7e]">{formatTemplate(labels.versionList.count, { count: versions.length })}</p>
       </div>
       <div className="max-h-[590px] overflow-auto">
         {versions.map((version) => {
@@ -274,6 +283,7 @@ function VersionList({
           <ContextMenu.Root key={version.id}>
             <ContextMenu.Trigger asChild>
               <button
+                id={version.id}
                 type="button"
                 onClick={() => onSelect(version.id)}
                 disabled={pendingId === version.id}
@@ -284,12 +294,12 @@ function VersionList({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate font-mono text-xs text-[#4a9eff]">{version.name}</span>
-                  <StatusPill status={version.status} />
+                  <StatusPill status={version.status} labels={labels} />
                 </div>
                 <p className="mt-2 truncate text-xs text-[#c9c3b5]">{version.task.contextLabel} / {version.task.name}</p>
                 <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[#7f7a70]">
                   <span>v{String(version.number).padStart(3, "0")} · {version.uploadedBy.name}</span>
-                  {isQueued ? <span className="rounded-sm bg-[#253320] px-1.5 py-0.5 text-[#9fce7d]">Queued</span> : null}
+                  {isQueued ? <span className="rounded-sm bg-[#253320] px-1.5 py-0.5 text-[#9fce7d]">{labels.versionList.queued}</span> : null}
                 </div>
               </button>
             </ContextMenu.Trigger>
@@ -301,6 +311,7 @@ function VersionList({
               onAddToPlaylist={onAddToPlaylist}
               onRemoveFromPlaylist={onRemoveFromPlaylist}
               onCompare={onCompare}
+              labels={labels}
             />
           </ContextMenu.Root>
           );
@@ -323,6 +334,7 @@ function VersionPlayer({
   onCompare,
   onAddToQueue,
   onRemoveFromQueue,
+  labels,
 }: {
   version: ReviewVersionItem;
   queueIndex: number;
@@ -336,12 +348,13 @@ function VersionPlayer({
   onCompare: () => void;
   onAddToQueue: () => void;
   onRemoveFromQueue: () => void;
+  labels: ReviewWorkspaceLabels;
 }) {
   return (
     <section className="order-1 flex min-w-0 flex-col bg-[#11110f] xl:order-none">
       <div className="flex flex-col gap-3 border-b border-[#34322b] bg-[#181713] px-5 py-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">Review Player</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">{labels.player.eyebrow}</p>
           <h2 className="mt-1 truncate text-xl font-semibold text-[#f4f1e8]">{version.name}</h2>
           <p className="mt-1 text-xs text-[#8f8a7e]">
             {version.task.contextLabel} / {version.task.name} · {version.fileType}
@@ -354,7 +367,7 @@ function VersionPlayer({
             onClick={onPrevious}
             className="h-9 border border-[#34322b] px-3 text-xs text-[#aaa599] transition hover:border-[#d8b46a] hover:text-[#e8c678] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Previous
+            {labels.player.previous}
           </button>
           <button
             type="button"
@@ -362,21 +375,21 @@ function VersionPlayer({
             onClick={onNext}
             className="h-9 border border-[#34322b] px-3 text-xs text-[#aaa599] transition hover:border-[#d8b46a] hover:text-[#e8c678] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Next cut
+            {labels.player.next}
           </button>
           <button
             type="button"
             onClick={onCompare}
             className="h-9 border border-[#34322b] px-3 text-xs text-[#aaa599] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
           >
-            Compare
+            {labels.player.compare}
           </button>
           <button
             type="button"
             onClick={isQueued ? onRemoveFromQueue : onAddToQueue}
             className="h-9 border border-[#3f3c33] px-3 text-xs text-[#d8b46a] transition hover:border-[#e8c678] hover:text-[#f2d996]"
           >
-            {isQueued ? "Remove queue" : "Add queue"}
+            {isQueued ? labels.player.removeQueue : labels.player.addQueue}
           </button>
           <select
             value={version.status}
@@ -385,7 +398,7 @@ function VersionPlayer({
           >
             {Object.values(VersionStatus).map((status) => (
               <option key={status} value={status}>
-                {VERSION_STATUS_LABELS[status]}
+                {labels.status[status]}
               </option>
             ))}
           </select>
@@ -394,16 +407,16 @@ function VersionPlayer({
 
       <div className="grid flex-1 place-items-center p-5">
         <div className="grid aspect-video w-full max-w-5xl place-items-center overflow-hidden border border-[#34322b] bg-black">
-          <MediaPreview version={version} />
+          <MediaPreview version={version} labels={labels} />
         </div>
       </div>
 
       <div className="grid grid-cols-5 border-t border-[#34322b] bg-[#181713] text-xs">
-        <MetadataCell label="Queue" value={queueIndex >= 0 ? `${queueIndex + 1}/${queueSize}` : "Not queued"} />
-        <MetadataCell label="Frames" value={version.frameCount?.toLocaleString() ?? "--"} />
-        <MetadataCell label="FPS" value={version.fps?.toString() ?? "--"} />
-        <MetadataCell label="Uploaded" value={new Date(version.createdAt).toLocaleDateString()} />
-        <MetadataCell label="Owner" value={version.uploadedBy.name} />
+        <MetadataCell label={labels.player.metadata.queue} value={queueIndex >= 0 ? `${queueIndex + 1}/${queueSize}` : labels.player.metadata.notQueued} />
+        <MetadataCell label={labels.player.metadata.frames} value={formatInteger(version.frameCount)} />
+        <MetadataCell label={labels.player.metadata.fps} value={version.fps?.toString() ?? "--"} />
+        <MetadataCell label={labels.player.metadata.uploaded} value={formatDate(version.createdAt)} />
+        <MetadataCell label={labels.player.metadata.owner} value={version.uploadedBy.name} />
       </div>
     </section>
   );
@@ -416,6 +429,7 @@ function VersionCompare({
   onSelectLeft,
   onSelectRight,
   onExit,
+  labels,
 }: {
   versions: ReviewVersionItem[];
   left: ReviewVersionItem | null;
@@ -423,14 +437,15 @@ function VersionCompare({
   onSelectLeft: (id: string) => void;
   onSelectRight: (id: string) => void;
   onExit: () => void;
+  labels: ReviewWorkspaceLabels;
 }) {
   return (
     <section className="order-1 flex min-w-0 flex-col bg-[#11110f] xl:order-none">
       <div className="flex flex-col gap-3 border-b border-[#34322b] bg-[#181713] px-5 py-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">Compare Versions</p>
-          <h2 className="mt-1 truncate text-xl font-semibold text-[#f4f1e8]">Screening Room Compare</h2>
-          <p className="mt-1 text-xs text-[#8f8a7e]">并排检查两个版本的画面、状态和技术信息。</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">{labels.compare.eyebrow}</p>
+          <h2 className="mt-1 truncate text-xl font-semibold text-[#f4f1e8]">{labels.compare.title}</h2>
+          <p className="mt-1 text-xs text-[#8f8a7e]">{labels.compare.description}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <CompareSelect label="A" value={left?.id ?? ""} versions={versions} onChange={onSelectLeft} />
@@ -440,21 +455,21 @@ function VersionCompare({
             onClick={onExit}
             className="h-9 border border-[#34322b] px-3 text-xs text-[#aaa599] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
           >
-            Back to player
+            {labels.compare.back}
           </button>
         </div>
       </div>
 
       <div className="grid gap-4 p-5 xl:grid-cols-2">
-        <ComparePane label="A" version={left} />
-        <ComparePane label="B" version={right} />
+        <ComparePane label="A" version={left} labels={labels} />
+        <ComparePane label="B" version={right} labels={labels} />
       </div>
 
       <div className="grid border-t border-[#34322b] bg-[#181713] text-xs md:grid-cols-4">
-        <MetadataCell label="Status A" value={left ? VERSION_STATUS_LABELS[left.status] : "--"} />
-        <MetadataCell label="Status B" value={right ? VERSION_STATUS_LABELS[right.status] : "--"} />
-        <MetadataCell label="Frames delta" value={formatFrameDelta(left, right)} />
-        <MetadataCell label="Context" value={left?.task.contextLabel ?? right?.task.contextLabel ?? "--"} />
+        <MetadataCell label={labels.compare.metadata.statusA} value={left ? labels.status[left.status] : "--"} />
+        <MetadataCell label={labels.compare.metadata.statusB} value={right ? labels.status[right.status] : "--"} />
+        <MetadataCell label={labels.compare.metadata.framesDelta} value={formatFrameDelta(left, right)} />
+        <MetadataCell label={labels.compare.metadata.context} value={left?.task.contextLabel ?? right?.task.contextLabel ?? "--"} />
       </div>
     </section>
   );
@@ -485,11 +500,11 @@ function CompareSelect({
   );
 }
 
-function ComparePane({ label, version }: { label: string; version: ReviewVersionItem | null }) {
+function ComparePane({ label, version, labels }: { label: string; version: ReviewVersionItem | null; labels: ReviewWorkspaceLabels }) {
   if (!version) {
     return (
       <div className="grid min-h-[360px] place-items-center border border-dashed border-[#3f3c33] text-sm text-[#aaa599]">
-        选择一个版本作为 {label} 画面。
+        {formatTemplate(labels.compare.choosePane, { label })}
       </div>
     );
   }
@@ -498,26 +513,26 @@ function ComparePane({ label, version }: { label: string; version: ReviewVersion
     <div className="min-w-0 border border-[#34322b] bg-[#181713]">
       <div className="flex items-start justify-between gap-3 border-b border-[#34322b] px-3 py-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d8b46a]">Version {label}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d8b46a]">{formatTemplate(labels.compare.versionLabel, { label })}</p>
           <h3 className="mt-1 truncate font-mono text-sm text-[#4a9eff]">{version.name}</h3>
           <p className="mt-1 truncate text-xs text-[#8f8a7e]">{version.task.contextLabel} / {version.task.name}</p>
         </div>
-        <StatusPill status={version.status} />
+        <StatusPill status={version.status} labels={labels} />
       </div>
       <div className="grid aspect-video place-items-center bg-black">
-        <MediaPreview version={version} />
+        <MediaPreview version={version} labels={labels} />
       </div>
       <div className="grid grid-cols-3 border-t border-[#34322b] text-xs">
-        <MetadataCell label="Runtime" value={formatVersionRuntime(version)} />
-        <MetadataCell label="Frames" value={version.frameCount?.toLocaleString() ?? "--"} />
-        <MetadataCell label="Owner" value={version.uploadedBy.name} />
+        <MetadataCell label={labels.compare.metadata.runtime} value={formatVersionRuntime(version)} />
+        <MetadataCell label={labels.compare.metadata.frames} value={formatInteger(version.frameCount)} />
+        <MetadataCell label={labels.compare.metadata.owner} value={version.uploadedBy.name} />
       </div>
       {version.description ? <p className="border-t border-[#2a2a28] px-3 py-3 text-xs leading-5 text-[#aaa599]">{version.description}</p> : null}
     </div>
   );
 }
 
-function MediaPreview({ version }: { version: ReviewVersionItem }) {
+function MediaPreview({ version, labels }: { version: ReviewVersionItem; labels: ReviewWorkspaceLabels }) {
   if (version.fileType.startsWith("video/")) {
     return <video key={version.fileUrl} src={version.fileUrl} controls className="h-full w-full bg-black object-contain" />;
   }
@@ -529,7 +544,7 @@ function MediaPreview({ version }: { version: ReviewVersionItem }) {
     );
   }
 
-  return <div className="text-sm text-[#aaa599]">无法预览此文件类型</div>;
+  return <div className="text-sm text-[#aaa599]">{labels.player.unavailable}</div>;
 }
 
 function NotesStream({
@@ -537,19 +552,21 @@ function NotesStream({
   pending,
   onCreate,
   onDelete,
+  labels,
 }: {
   version: ReviewVersionItem;
   pending: boolean;
   onCreate: (version: ReviewVersionItem, content: string) => void;
   onDelete: (noteId: string) => void;
+  labels: ReviewWorkspaceLabels;
 }) {
   const [content, setContent] = useState("");
 
   return (
     <aside className="order-3 flex min-h-0 flex-col border-t border-[#34322b] xl:col-start-2 xl:border-l 2xl:col-start-auto 2xl:border-t-0">
       <div className="border-b border-[#34322b] px-4 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#d8b46a]">Notes Stream</p>
-        <p className="mt-1 text-xs text-[#8f8a7e]">{version.notes.length} notes on selected version</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#d8b46a]">{labels.notes.eyebrow}</p>
+        <p className="mt-1 text-xs text-[#8f8a7e]">{formatTemplate(labels.notes.count, { count: version.notes.length })}</p>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto p-4">
@@ -561,11 +578,11 @@ function NotesStream({
                   <div>
                     <p className="text-sm font-medium text-[#f4f1e8]">{note.author.name}</p>
                     <p className="text-[11px] text-[#7f7a70]">
-                      {note.author.department ?? "Production"} · {new Date(note.createdAt).toLocaleString()}
+                      {note.author.department ?? labels.notes.defaultDepartment} · {formatDateTime(note.createdAt)}
                     </p>
                   </div>
                   <button type="button" onClick={() => onDelete(note.id)} className="text-xs text-[#7f7a70] hover:text-[#e24b4a]">
-                    Delete
+                    {labels.notes.delete}
                   </button>
                 </div>
                 <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#c9c3b5]">{note.content}</p>
@@ -573,7 +590,7 @@ function NotesStream({
             ))}
           </div>
         ) : (
-          <div className="grid min-h-40 place-items-center border border-dashed border-[#3f3c33] text-sm text-[#aaa599]">暂无备注。</div>
+          <div className="grid min-h-40 place-items-center border border-dashed border-[#3f3c33] text-sm text-[#aaa599]">{labels.notes.empty}</div>
         )}
       </div>
 
@@ -590,11 +607,11 @@ function NotesStream({
           value={content}
           onChange={(event) => setContent(event.target.value)}
           rows={4}
-          placeholder="给导演、监制或供应商留下审阅意见..."
+          placeholder={labels.notes.placeholder}
           className="w-full resize-none border border-[#34322b] bg-[#11110f] px-3 py-3 text-sm outline-none focus:border-[#d8b46a]"
         />
         <button type="submit" disabled={pending || !content.trim()} className="mt-3 h-9 w-full bg-[#d8b46a] text-sm font-semibold text-[#171713] disabled:opacity-50">
-          Add Note
+          {labels.notes.submit}
         </button>
       </form>
     </aside>
@@ -612,6 +629,7 @@ function ScreeningQueue({
   onClear,
   onRemove,
   onMove,
+  labels,
 }: {
   versions: ReviewVersionItem[];
   allVersions: ReviewVersionItem[];
@@ -623,6 +641,7 @@ function ScreeningQueue({
   onClear: () => void;
   onRemove: (id: string) => void;
   onMove: (id: string, direction: -1 | 1) => void;
+  labels: ReviewWorkspaceLabels;
 }) {
   const stats = useMemo(() => getPlaylistStats(versions), [versions]);
 
@@ -630,13 +649,13 @@ function ScreeningQueue({
     <section className="mb-4 border border-[#34322b] bg-[#181713]">
       <div className="grid gap-3 p-3 lg:grid-cols-[250px_minmax(0,1fr)_260px]">
         <div className="border-r border-[#2f2d27] pr-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">Screening Queue</p>
-          <h2 className="mt-2 text-lg font-semibold text-[#f4f1e8]">{versions.length ? `${versions.length} cuts ready` : "No cuts queued"}</h2>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">{labels.queue.eyebrow}</p>
+          <h2 className="mt-2 text-lg font-semibold text-[#f4f1e8]">{versions.length ? formatTemplate(labels.queue.ready, { count: versions.length }) : labels.queue.empty}</h2>
           <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-[#aaa599]">
-            <QueueMetric label="Runtime" value={formatDuration(stats.durationSeconds)} />
-            <QueueMetric label="Frames" value={stats.frames.toLocaleString()} />
-            <QueueMetric label="Review" value={String(stats.needsReview)} />
-            <QueueMetric label="Changes" value={String(stats.changes)} />
+            <QueueMetric label={labels.queue.runtime} value={formatDuration(stats.durationSeconds)} />
+            <QueueMetric label={labels.queue.frames} value={formatInteger(stats.frames)} />
+            <QueueMetric label={labels.queue.review} value={String(stats.needsReview)} />
+            <QueueMetric label={labels.queue.changes} value={String(stats.changes)} />
           </div>
         </div>
 
@@ -657,7 +676,7 @@ function ScreeningQueue({
                       <span className="truncate font-mono text-xs text-[#4a9eff]">{version.name}</span>
                     </div>
                     <p className="mt-1 truncate text-[11px] text-[#c9c3b5]">{version.task.contextLabel} / {version.task.name}</p>
-                    <p className="mt-1 text-[11px] text-[#7f7a70]">{formatVersionRuntime(version)} · {VERSION_STATUS_LABELS[version.status]}</p>
+                    <p className="mt-1 text-[11px] text-[#7f7a70]">{formatVersionRuntime(version)} · {labels.status[version.status]}</p>
                   </button>
                   <div className="grid w-9 shrink-0 border-l border-[#2f2d27] text-[11px] text-[#8f8a7e]">
                     <button type="button" disabled={index === 0} onClick={() => onMove(version.id, -1)} className="border-b border-[#2f2d27] hover:bg-[#22201c] disabled:opacity-30">
@@ -675,23 +694,33 @@ function ScreeningQueue({
             </div>
           ) : (
             <div className="grid min-h-[88px] place-items-center border border-dashed border-[#3f3c33] text-sm text-[#aaa599]">
-              从版本列表右键加入，或用右侧按钮快速生成审片队列。
+              {labels.queue.emptyHint}
             </div>
           )}
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          <QueueAction onClick={onBuildNeedsReview}>Review needs</QueueAction>
-          <QueueAction onClick={onAddCurrent}>Add current</QueueAction>
-          <QueueAction onClick={onAddAll} disabled={allVersions.length === 0}>Add all</QueueAction>
-          <QueueAction onClick={onClear} disabled={versions.length === 0}>Clear queue</QueueAction>
+          <QueueAction onClick={onBuildNeedsReview}>{labels.queue.actions.reviewNeeds}</QueueAction>
+          <QueueAction onClick={onAddCurrent}>{labels.queue.actions.addCurrent}</QueueAction>
+          <QueueAction onClick={onAddAll} disabled={allVersions.length === 0}>{labels.queue.actions.addAll}</QueueAction>
+          <QueueAction onClick={onClear} disabled={versions.length === 0}>{labels.queue.actions.clear}</QueueAction>
         </div>
       </div>
     </section>
   );
 }
 
-function VersionFilmstrip({ versions, selectedId, onSelect }: { versions: ReviewVersionItem[]; selectedId: string; onSelect: (id: string) => void }) {
+function VersionFilmstrip({
+  versions,
+  selectedId,
+  onSelect,
+  labels,
+}: {
+  versions: ReviewVersionItem[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+  labels: ReviewWorkspaceLabels;
+}) {
   return (
     <div className="mt-4 overflow-x-auto border border-[#34322b] bg-[#181713] p-3">
       <div className="flex gap-3">
@@ -707,7 +736,7 @@ function VersionFilmstrip({ versions, selectedId, onSelect }: { versions: Review
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={version.thumbnailUrl} alt="" className="h-full w-full object-cover" />
               ) : (
-                <span>{version.fileType.startsWith("video/") ? "VIDEO" : "MEDIA"}</span>
+                <span>{version.fileType.startsWith("video/") ? labels.filmstrip.video : labels.filmstrip.media}</span>
               )}
             </div>
             <p className="mt-2 truncate font-mono text-xs text-[#c9c3b5]">{version.name}</p>
@@ -726,6 +755,7 @@ function VersionContextMenu({
   onAddToPlaylist,
   onRemoveFromPlaylist,
   onCompare,
+  labels,
 }: {
   version: ReviewVersionItem;
   isQueued: boolean;
@@ -734,41 +764,40 @@ function VersionContextMenu({
   onAddToPlaylist: (id: string) => void;
   onRemoveFromPlaylist: (id: string) => void;
   onCompare: (id: string) => void;
+  labels: ReviewWorkspaceLabels;
 }) {
   return (
     <ContextMenu.Portal>
       <ContextMenu.Content className="z-50 min-w-64 border border-[#3b382f] bg-[#181713] p-1 text-sm text-[#d8d3c7] shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
         <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">{version.name}</ContextMenu.Label>
-        <MenuItem onSelect={() => onCompare(version.id)}>⊞ Compare Versions</MenuItem>
-        <MenuItem>⇩ Download Original</MenuItem>
-        <MenuItem>⌕ Add Note</MenuItem>
+        <MenuItem onSelect={() => onCompare(version.id)}>⊞ {labels.menu.compare}</MenuItem>
         {isQueued ? (
-          <MenuItem onSelect={() => onRemoveFromPlaylist(version.id)}>Remove from Screening Queue</MenuItem>
+          <MenuItem onSelect={() => onRemoveFromPlaylist(version.id)}>{labels.menu.removeQueue}</MenuItem>
         ) : (
-          <MenuItem onSelect={() => onAddToPlaylist(version.id)}>Add to Screening Queue</MenuItem>
+          <MenuItem onSelect={() => onAddToPlaylist(version.id)}>{labels.menu.addQueue}</MenuItem>
         )}
         <Separator />
         {Object.values(VersionStatus).map((status) => (
           <MenuItem key={status} onSelect={() => onStatus(version.id, status)}>
             <span className="mr-2 inline-block size-2 rounded-full" style={{ backgroundColor: VERSION_STATUS_COLORS[status].dot }} />
-            {VERSION_STATUS_LABELS[status]}
+            {labels.status[status]}
           </MenuItem>
         ))}
         <Separator />
         <MenuItem danger onSelect={() => onDelete(version.id)}>
-          Delete Version
+          {labels.menu.delete}
         </MenuItem>
       </ContextMenu.Content>
     </ContextMenu.Portal>
   );
 }
 
-function StatusPill({ status }: { status: VersionStatus }) {
+function StatusPill({ status, labels }: { status: VersionStatus; labels: ReviewWorkspaceLabels }) {
   const color = VERSION_STATUS_COLORS[status];
 
   return (
     <span className="rounded-sm px-2 py-1 text-[10px] font-semibold" style={{ backgroundColor: color.bg, color: color.text }}>
-      {VERSION_STATUS_LABELS[status]}
+      {labels.status[status]}
     </span>
   );
 }
@@ -896,7 +925,7 @@ function getPlaylistStats(versions: ReviewVersionItem[]) {
 }
 
 function formatVersionRuntime(version: ReviewVersionItem) {
-  if (!version.frameCount || !version.fps) return "runtime --";
+  if (!version.frameCount || !version.fps) return "--";
   return formatDuration(version.frameCount / version.fps);
 }
 
@@ -906,7 +935,7 @@ function formatFrameDelta(left: ReviewVersionItem | null, right: ReviewVersionIt
   const delta = right.frameCount - left.frameCount;
   if (delta === 0) return "0";
 
-  return `${delta > 0 ? "+" : ""}${delta.toLocaleString()}`;
+  return `${delta > 0 ? "+" : ""}${formatInteger(delta)}`;
 }
 
 function formatDuration(seconds: number) {
@@ -917,4 +946,31 @@ function formatDuration(seconds: number) {
   const remainder = rounded % 60;
 
   return minutes > 0 ? `${minutes}m ${String(remainder).padStart(2, "0")}s` : `${remainder}s`;
+}
+
+function formatTemplate(template: string, values: Record<string, string | number>) {
+  return Object.entries(values).reduce((result, [key, value]) => result.replaceAll(`{${key}}`, String(value)), template);
+}
+
+function formatInteger(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "--";
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+
+  return [date.getUTCFullYear(), padDatePart(date.getUTCMonth() + 1), padDatePart(date.getUTCDate())].join("/");
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+
+  return `${formatDate(value)} ${padDatePart(date.getUTCHours())}:${padDatePart(date.getUTCMinutes())}:${padDatePart(date.getUTCSeconds())}`;
+}
+
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
 }

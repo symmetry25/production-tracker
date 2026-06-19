@@ -3,9 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import type { Dictionary } from "@/lib/i18n";
 import type { ReviewTaskOption } from "@/lib/review-data";
 
-export function UploadVersionForm({ tasks }: { tasks: ReviewTaskOption[] }) {
+type UploadLabels = Dictionary["pages"]["media"]["upload"];
+
+export function UploadVersionForm({ tasks, labels }: { tasks: ReviewTaskOption[]; labels: UploadLabels }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -19,7 +22,7 @@ export function UploadVersionForm({ tasks }: { tasks: ReviewTaskOption[] }) {
     const taskId = String(formData.get("taskId") ?? "");
 
     if (!taskId) {
-      setMessage("请选择一个任务。");
+      setMessage(labels.chooseTask);
       return;
     }
 
@@ -36,7 +39,7 @@ export function UploadVersionForm({ tasks }: { tasks: ReviewTaskOption[] }) {
 
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
-      setMessage(payload?.error ?? "上传版本失败。");
+      setMessage(payload?.error ?? labels.failed);
       return;
     }
 
@@ -52,7 +55,7 @@ export function UploadVersionForm({ tasks }: { tasks: ReviewTaskOption[] }) {
         onClick={() => setOpen(true)}
         className="h-10 bg-[#378add] px-4 text-xs font-semibold text-white transition hover:bg-[#4a9eff]"
       >
-        Upload Version
+        {labels.button}
       </button>
 
       {open ? (
@@ -60,19 +63,19 @@ export function UploadVersionForm({ tasks }: { tasks: ReviewTaskOption[] }) {
           <div className="w-full max-w-2xl border border-[#3d392f] bg-[#181713] shadow-[0_28px_80px_rgba(0,0,0,0.55)]">
             <div className="flex items-center justify-between border-b border-[#34322b] px-5 py-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d8b46a]">Version upload</p>
-                <h2 className="mt-1 text-xl font-semibold text-[#f4f1e8]">上传审阅版本</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d8b46a]">{labels.eyebrow}</p>
+                <h2 className="mt-1 text-xl font-semibold text-[#f4f1e8]">{labels.title}</h2>
               </div>
               <button type="button" onClick={() => setOpen(false)} className="px-3 py-2 text-sm text-[#aaa599] hover:text-[#f4f1e8]">
-                关闭
+                {labels.close}
               </button>
             </div>
 
             <form onSubmit={onSubmit} className="grid grid-cols-2 gap-4 p-5">
               <label className="col-span-2 space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">Task</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">{labels.task}</span>
                 <select name="taskId" required className="h-11 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm outline-none focus:border-[#d8b46a]">
-                  <option value="">选择任务</option>
+                  <option value="">{labels.taskPlaceholder}</option>
                   {tasks.map((task) => (
                     <option key={task.id} value={task.id}>
                       {task.contextLabel} / {task.name}
@@ -81,7 +84,7 @@ export function UploadVersionForm({ tasks }: { tasks: ReviewTaskOption[] }) {
                 </select>
               </label>
               <label className="col-span-2 space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">File</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">{labels.file}</span>
                 <input
                   name="file"
                   type="file"
@@ -91,7 +94,7 @@ export function UploadVersionForm({ tasks }: { tasks: ReviewTaskOption[] }) {
                 />
               </label>
               <label className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">Frame Count</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">{labels.frameCount}</span>
                 <input
                   name="frameCount"
                   type="number"
@@ -100,7 +103,7 @@ export function UploadVersionForm({ tasks }: { tasks: ReviewTaskOption[] }) {
                 />
               </label>
               <label className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">FPS</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">{labels.fps}</span>
                 <input
                   name="fps"
                   type="number"
@@ -112,7 +115,7 @@ export function UploadVersionForm({ tasks }: { tasks: ReviewTaskOption[] }) {
                 />
               </label>
               <label className="col-span-2 space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">Description</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">{labels.description}</span>
                 <textarea
                   name="description"
                   rows={3}
@@ -124,10 +127,10 @@ export function UploadVersionForm({ tasks }: { tasks: ReviewTaskOption[] }) {
 
               <div className="col-span-2 flex justify-end gap-2 border-t border-[#34322b] pt-4">
                 <button type="button" onClick={() => setOpen(false)} className="h-10 border border-[#3f3c33] px-4 text-sm text-[#c9c3b5]">
-                  取消
+                  {labels.cancel}
                 </button>
                 <button type="submit" disabled={pending} className="h-10 bg-[#378add] px-5 text-sm font-semibold text-white disabled:opacity-70">
-                  {pending ? "上传中..." : "上传版本"}
+                  {pending ? labels.submitting : labels.submit}
                 </button>
               </div>
             </form>
