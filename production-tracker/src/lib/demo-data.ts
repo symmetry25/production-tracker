@@ -555,6 +555,7 @@ export function getDemoDashboardStats(projectId: string): DashboardStats {
       id: demoProjectId,
       name: "Mkali's Mission",
       code: "MKALI",
+      thumbnailUrl: null,
       description: "用于展示剧组预算、供应商、镜头资产、VFX 审查和制片风险的完整演示项目。",
       startDate: startDate.toISOString(),
       dueDate: dueDate.toISOString(),

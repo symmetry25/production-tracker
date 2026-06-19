@@ -17,6 +17,7 @@ const stats: DashboardStats = {
     id: "demo",
     name: "Demo",
     code: "DEMO",
+    thumbnailUrl: null,
     description: null,
     startDate: "2026-05-01T00:00:00.000Z",
     dueDate: "2026-06-01T00:00:00.000Z",

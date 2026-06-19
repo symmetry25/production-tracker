@@ -24,6 +24,7 @@ export type DashboardStats = {
     id: string;
     name: string;
     code: string;
+    thumbnailUrl: string | null;
     description: string | null;
     startDate: string;
     dueDate: string;
@@ -105,6 +106,7 @@ export async function getDashboardStats(projectId: string): Promise<DashboardSta
         id: true,
         name: true,
         code: true,
+        thumbnailUrl: true,
         description: true,
         startDate: true,
         dueDate: true,
@@ -166,6 +168,7 @@ export async function getDashboardStats(projectId: string): Promise<DashboardSta
       id: project.id,
       name: project.name,
       code: project.code,
+      thumbnailUrl: project.thumbnailUrl,
       description: project.description,
       startDate: project.startDate.toISOString(),
       dueDate: project.dueDate.toISOString(),
