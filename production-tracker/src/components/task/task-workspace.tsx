@@ -2,37 +2,49 @@
 
 import { useState } from "react";
 
+import { CreateTaskForm } from "@/components/task/create-task-form";
 import { GanttPanel } from "@/components/task/gantt-panel";
 import { TaskTable } from "@/components/task/task-table";
-import type { ScheduleSuggestion, ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
-import type { TaskTableItem } from "@/lib/task-data";
+import { buildScheduleSuggestions, type ScheduleSuggestion, type ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
+import type { TaskFormOptions, TaskTableItem } from "@/lib/task-data";
 
-export function TaskWorkspace({ tasks, scheduleSuggestions }: { tasks: TaskTableItem[]; scheduleSuggestions: ScheduleSuggestionSummary | null }) {
+export function TaskWorkspace({
+  projectId,
+  tasks,
+  options,
+  scheduleSuggestions,
+  analysisDate,
+}: {
+  projectId: string;
+  tasks: TaskTableItem[];
+  options: TaskFormOptions;
+  scheduleSuggestions: ScheduleSuggestionSummary | null;
+  analysisDate: string;
+}) {
+  const [taskItems, setTaskItems] = useState(tasks);
   const [view, setView] = useState<"table" | "gantt">("table");
   const [showSuggestions, setShowSuggestions] = useState(Boolean(scheduleSuggestions?.criticalCount || scheduleSuggestions?.warningCount));
+  const currentScheduleSuggestions = buildScheduleSuggestions({ projectId, tasks: taskItems, now: new Date(analysisDate), provider: scheduleSuggestions?.provider ?? "rules" });
 
   return (
     <div>
       <div className="mb-4 flex items-center justify-between border border-[#34322b] bg-[#181713] px-3 py-2">
         <div className="flex items-center gap-2 text-xs text-[#8f8a7e]">
           <span className="font-semibold uppercase tracking-[0.18em] text-[#d8b46a]">View</span>
-          <span>{tasks.length} tasks</span>
-          {scheduleSuggestions ? (
-            <span className={["border px-2 py-1 font-mono", scheduleSuggestions.criticalCount > 0 ? "border-[#5a2b2b] bg-[#211717] text-[#ff9a8f]" : "border-[#2f4b3d] bg-[#14231d] text-[#9cccae]"].join(" ")}>
-              health {scheduleSuggestions.healthScore}
-            </span>
-          ) : null}
+          <span>{taskItems.length} tasks</span>
+          <span className={["border px-2 py-1 font-mono", currentScheduleSuggestions.criticalCount > 0 ? "border-[#5a2b2b] bg-[#211717] text-[#ff9a8f]" : "border-[#2f4b3d] bg-[#14231d] text-[#9cccae]"].join(" ")}>
+            health {currentScheduleSuggestions.healthScore}
+          </span>
         </div>
         <div className="flex items-center gap-2">
-          {scheduleSuggestions ? (
-            <button
-              type="button"
-              onClick={() => setShowSuggestions((current) => !current)}
-              className={["h-8 border px-3 text-xs font-semibold transition", showSuggestions ? "border-[#d8b46a] bg-[#2b2924] text-[#f4f1e8]" : "border-[#3f3c33] text-[#aaa599] hover:border-[#d8b46a] hover:text-[#e8c678]"].join(" ")}
-            >
-              Schedule intelligence
-            </button>
-          ) : null}
+          <CreateTaskForm projectId={projectId} options={options} onTaskCreated={(task) => setTaskItems((current) => [task, ...current])} />
+          <button
+            type="button"
+            onClick={() => setShowSuggestions((current) => !current)}
+            className={["h-8 border px-3 text-xs font-semibold transition", showSuggestions ? "border-[#d8b46a] bg-[#2b2924] text-[#f4f1e8]" : "border-[#3f3c33] text-[#aaa599] hover:border-[#d8b46a] hover:text-[#e8c678]"].join(" ")}
+          >
+            Schedule intelligence
+          </button>
           <div className="grid grid-cols-2 overflow-hidden border border-[#3f3c33] bg-[#11110f] text-xs">
             <button
               type="button"
@@ -52,9 +64,9 @@ export function TaskWorkspace({ tasks, scheduleSuggestions }: { tasks: TaskTable
         </div>
       </div>
 
-      {showSuggestions && scheduleSuggestions ? <ScheduleSuggestionPanel summary={scheduleSuggestions} /> : null}
+      {showSuggestions ? <ScheduleSuggestionPanel summary={currentScheduleSuggestions} /> : null}
 
-      {view === "table" ? <TaskTable tasks={tasks} /> : <GanttPanel tasks={tasks} />}
+      {view === "table" ? <TaskTable projectId={projectId} tasks={taskItems} options={options} onTasksChange={setTaskItems} /> : <GanttPanel tasks={taskItems} />}
     </div>
   );
 }

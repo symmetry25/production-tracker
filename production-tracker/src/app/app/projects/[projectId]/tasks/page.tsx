@@ -1,4 +1,3 @@
-import { CreateTaskForm } from "@/components/task/create-task-form";
 import { TaskWorkspace } from "@/components/task/task-workspace";
 import { getDictionary, getLocale } from "@/lib/i18n";
 import { buildScheduleSuggestions, type ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
@@ -12,10 +11,11 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ p
   let options: TaskFormOptions = { shots: [], assets: [], users: [] };
   let scheduleSuggestions: ScheduleSuggestionSummary | null = null;
   let error: string | null = null;
+  const analysisDate = new Date();
 
   try {
     [tasks, options] = await Promise.all([getTaskTableItems({ projectId }), getTaskFormOptions(projectId)]);
-    scheduleSuggestions = buildScheduleSuggestions({ projectId, tasks });
+    scheduleSuggestions = buildScheduleSuggestions({ projectId, tasks, now: analysisDate });
   } catch (caught) {
     error = caught instanceof Error ? caught.message : "任务数据暂时无法读取。";
   }
@@ -28,13 +28,6 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ p
           <h1 className="mt-2 text-3xl font-semibold">{t.title}</h1>
           <p className="mt-2 text-sm text-[#aaa599]">{t.description}</p>
         </div>
-        <div className="flex h-10 items-center gap-2 text-xs text-[#aaa599]">
-          <CreateTaskForm projectId={projectId} options={options} />
-          <button className="h-10 border border-[#3f3c33] px-3">Sort</button>
-          <button className="h-10 border border-[#3f3c33] px-3">Group</button>
-          <button className="h-10 border border-[#3f3c33] px-3">Fields</button>
-          <button className="h-10 border border-[#3f3c33] px-3">Filter</button>
-        </div>
       </div>
 
       {error ? (
@@ -44,7 +37,7 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ p
           <p className="mt-3 max-w-3xl text-sm leading-6 text-[#c9c3b5]">{error}</p>
         </div>
       ) : (
-        <TaskWorkspace tasks={tasks} scheduleSuggestions={scheduleSuggestions} />
+        <TaskWorkspace projectId={projectId} tasks={tasks} options={options} scheduleSuggestions={scheduleSuggestions} analysisDate={analysisDate.toISOString()} />
       )}
     </>
   );

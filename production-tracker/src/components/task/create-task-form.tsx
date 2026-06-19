@@ -5,14 +5,27 @@ import { TaskStatus } from "@/generated/prisma/enums";
 
 import { createTaskAction, type CreateTaskState } from "@/app/app/projects/[projectId]/tasks/actions";
 import { STATUS_COLORS } from "@/lib/status-colors";
-import type { TaskFormOptions } from "@/lib/task-data";
+import type { TaskFormOptions, TaskTableItem } from "@/lib/task-data";
 
 const initialState: CreateTaskState = {};
+const demoProjectId = "demo-mkali-mission";
+const demoTaskCostPerDay = 8_000;
 
-export function CreateTaskForm({ projectId, options }: { projectId: string; options: TaskFormOptions }) {
+export function CreateTaskForm({ projectId, options, onTaskCreated }: { projectId: string; options: TaskFormOptions; onTaskCreated?: (task: TaskTableItem) => void }) {
   const [open, setOpen] = useState(false);
   const [sourceType, setSourceType] = useState<"shot" | "asset">("shot");
   const [state, formAction, pending] = useActionState(createTaskAction.bind(null, projectId), initialState);
+
+  function handleDemoSubmit(formData: FormData) {
+    const task = buildDemoTaskFromForm(formData, sourceType, options);
+
+    if (!task) {
+      return;
+    }
+
+    onTaskCreated?.(task);
+    setOpen(false);
+  }
 
   return (
     <div>
@@ -37,7 +50,7 @@ export function CreateTaskForm({ projectId, options }: { projectId: string; opti
               </button>
             </div>
 
-            <form action={formAction} className="grid grid-cols-3 gap-4 p-5">
+            <form action={projectId === demoProjectId ? handleDemoSubmit : formAction} className="grid grid-cols-3 gap-4 p-5">
               <label className="col-span-2 space-y-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">Task Name</span>
                 <input
@@ -197,4 +210,66 @@ export function CreateTaskForm({ projectId, options }: { projectId: string; opti
       ) : null}
     </div>
   );
+}
+
+function buildDemoTaskFromForm(formData: FormData, sourceType: "shot" | "asset", options: TaskFormOptions): TaskTableItem | null {
+  const name = String(formData.get("name") ?? "").trim();
+  const status = String(formData.get("status") ?? TaskStatus.WAITING_TO_START) as TaskStatus;
+  const priority = Number(formData.get("priority") || 0);
+  const startDate = String(formData.get("startDate") ?? "");
+  const dueDate = String(formData.get("dueDate") ?? "");
+  const duration = optionalNumber(formData.get("duration"));
+  const timeLogged = optionalNumber(formData.get("timeLogged")) ?? 0;
+  const estimatedCost = optionalNumber(formData.get("estimatedCost"));
+  const assigneeId = String(formData.get("assigneeId") ?? "");
+  const reviewerId = String(formData.get("reviewerId") ?? "");
+  const sourceId = sourceType === "shot" ? String(formData.get("shotId") ?? "") : String(formData.get("assetId") ?? "");
+
+  if (!name || !sourceId) {
+    return null;
+  }
+
+  const shot = sourceType === "shot" ? options.shots.find((item) => item.id === sourceId) : null;
+  const asset = sourceType === "asset" ? options.assets.find((item) => item.id === sourceId) : null;
+  const assignee = assigneeId ? options.users.find((user) => user.id === assigneeId) : null;
+  const calculatedCost = Math.round(timeLogged * demoTaskCostPerDay);
+  const id = `demo-task-${slugify(`${sourceType}-${sourceId}-${name}-${Date.now()}`)}`;
+
+  return {
+    id,
+    name,
+    status,
+    priority,
+    startDate: startDate ? `${startDate}T00:00:00.000Z` : null,
+    dueDate: dueDate ? `${dueDate}T00:00:00.000Z` : null,
+    duration,
+    timeLogged,
+    estimatedCost: estimatedCost ?? null,
+    calculatedCost,
+    overBudget: typeof estimatedCost === "number" && calculatedCost > estimatedCost,
+    context: shot
+      ? { kind: "shot", id: shot.id, label: shot.code, secondary: shot.sequenceCode }
+      : asset
+        ? { kind: "asset", id: asset.id, label: asset.name, secondary: asset.type }
+        : { kind: "unassigned", id: null, label: "Unassigned", secondary: "No source" },
+    assignees: assignee ? [assignee] : [],
+    reviewerIds: reviewerId ? [reviewerId] : [],
+    predecessors: [],
+    successors: [],
+    versionCount: 0,
+    noteCount: 0,
+  };
+}
+
+function optionalNumber(value: FormDataEntryValue | null) {
+  if (value === null || value === "") {
+    return null;
+  }
+
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function slugify(value: string) {
+  return value.toLowerCase().trim().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-|-$/g, "");
 }
