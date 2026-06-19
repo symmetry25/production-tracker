@@ -2,6 +2,7 @@
 
 import { downloadWorkbookXlsx, type WorkbookSheet } from "@/lib/csv";
 import type { ResourceBudgetData, VendorSpend } from "@/lib/resource-data";
+import { buildResourceAuditLedger } from "@/lib/resource-ledger";
 
 const vendorCategoryLabels: Record<VendorSpend["category"], string> = {
   equipment: "器材",
@@ -30,6 +31,7 @@ function buildResourceWorkbook(data: ResourceBudgetData): WorkbookSheet[] {
   const totalVendorSpend = data.vendors.reduce((sum, vendor) => sum + vendor.amount, 0);
   const blockedPayments = data.payments.filter((payment) => payment.status === "blocked");
   const missingDocuments = data.documents.reduce((sum, document) => sum + Math.max(0, document.required - document.received), 0);
+  const auditLedger = buildResourceAuditLedger(data);
 
   return [
     {
@@ -135,6 +137,22 @@ function buildResourceWorkbook(data: ResourceBudgetData): WorkbookSheet[] {
           link.to,
           link.amount,
           pct(link.amount, data.project.totalBudget),
+        ]),
+      ],
+    },
+    {
+      name: "Audit Ledger",
+      rows: [
+        ["date", "status", "type", "owner", "title", "amount", "evidence", "next_step"],
+        ...auditLedger.entries.map((entry) => [
+          entry.date,
+          entry.status,
+          entry.kind,
+          entry.owner,
+          entry.title,
+          entry.amount ?? "",
+          entry.evidence,
+          entry.nextStep,
         ]),
       ],
     },

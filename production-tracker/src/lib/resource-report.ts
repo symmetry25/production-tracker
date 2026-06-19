@@ -1,4 +1,5 @@
 import type { ResourceBudgetData } from "@/lib/resource-data";
+import { buildResourceAuditLedger } from "@/lib/resource-ledger";
 
 export type ResourceReportSummary = {
   budgetBurnPct: number;
@@ -23,11 +24,12 @@ export type ResourceReportSummary = {
 };
 
 export function buildResourceReportSummary(data: ResourceBudgetData, todayIso = "2026-06-18"): ResourceReportSummary {
+  const ledger = buildResourceAuditLedger(data, todayIso);
   const blockedPayments = data.payments.filter((payment) => payment.status === "blocked");
   const dueSoonPayments = data.payments.filter((payment) => payment.status !== "paid" && daysBetween(todayIso, payment.dueDate) <= 7);
   const requiredDocuments = data.documents.reduce((sum, document) => sum + document.required, 0);
   const receivedDocuments = data.documents.reduce((sum, document) => sum + document.received, 0);
-  const missingDocumentCount = data.documents.reduce((sum, document) => sum + Math.max(0, document.required - document.received), 0);
+  const missingDocumentCount = ledger.missingEvidenceCount;
   const overBudgetDepartments = data.departments.filter((department) => department.risk === "over").map((department) => department.name);
   const watchVendors = data.vendors.filter((vendor) => vendor.status === "review").map((vendor) => vendor.name);
   const topDepartment = data.departments.reduce((top, department) => (department.actual > top.actual ? department : top), data.departments[0]);
@@ -49,7 +51,7 @@ export function buildResourceReportSummary(data: ResourceBudgetData, todayIso = 
     committedBurnPct: pct(data.project.committedTotal, data.project.totalBudget),
     reserve,
     blockedPaymentTotal,
-    blockedPaymentCount: blockedPayments.length,
+    blockedPaymentCount: ledger.entries.filter((entry) => entry.kind === "payment" && entry.status === "hold").length,
     dueSoonPaymentTotal: dueSoonPayments.reduce((sum, payment) => sum + payment.amount, 0),
     dueSoonPaymentCount: dueSoonPayments.length,
     missingDocumentCount,

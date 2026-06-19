@@ -11,6 +11,7 @@ import {
   type ResourceBudgetData,
   type VendorSpend,
 } from "@/lib/resource-data";
+import { buildResourceAuditLedger, type ResourceLedgerEntry } from "@/lib/resource-ledger";
 
 const moneyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -52,6 +53,7 @@ export default async function ProjectResourcesPage({ params }: { params: Promise
   const locale = await getLocale();
   const t = getDictionary(locale).pages.resources;
   const data = await getResourceBudgetData(projectId);
+  const ledger = buildResourceAuditLedger(data);
 
   return (
     <>
@@ -82,6 +84,7 @@ export default async function ProjectResourcesPage({ params }: { params: Promise
       <div className="mb-5">
         <SankeyFlow data={data} />
       </div>
+      <AuditLedgerPanel ledger={ledger} />
 
       <div className="grid grid-cols-[minmax(420px,0.88fr)_minmax(620px,1.12fr)] gap-5">
         <section className="space-y-5">
@@ -119,6 +122,85 @@ function ControlSummary({ data }: { data: ResourceBudgetData }) {
       <SummaryTile label="Budget pressure" value={overDepartments.map((department) => department.name).join(" / ") || "No overrun"} tone={overDepartments.length ? "watch" : "ok"} />
     </section>
   );
+}
+
+function AuditLedgerPanel({ ledger }: { ledger: ReturnType<typeof buildResourceAuditLedger> }) {
+  return (
+    <section className="mb-5 border border-[#34322b] bg-[#181713]">
+      <div className="grid grid-cols-[1fr_380px] border-b border-[#34322b]">
+        <div className="p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">audit ledger</p>
+          <h2 className="mt-2 text-xl font-semibold text-[#f4f1e8]">供应商 / 付款 / 材料审计台账</h2>
+          <p className="mt-2 max-w-3xl text-xs leading-6 text-[#aaa599]">
+            把付款节点、供应商状态、缺失材料和部门超支统一到同一张台账里，方便制片主任按 HOLD / WATCH / CLEAR 做会前决策。
+          </p>
+        </div>
+        <div className="grid grid-cols-2 border-l border-[#34322b] text-xs">
+          <LedgerMetric label="HOLD 条目" value={ledger.holdCount.toString()} tone={ledger.holdCount ? "over" : "ok"} />
+          <LedgerMetric label="WATCH 条目" value={ledger.watchCount.toString()} tone={ledger.watchCount ? "watch" : "ok"} />
+          <LedgerMetric label="冻结暴露金额" value={money(ledger.exposureAmount)} tone={ledger.exposureAmount > 0 ? "over" : "ok"} />
+          <LedgerMetric label="缺失材料" value={`${ledger.missingEvidenceCount} 份`} tone={ledger.missingEvidenceCount ? "watch" : "ok"} />
+        </div>
+      </div>
+      <div className="overflow-hidden">
+        <div className="grid grid-cols-[88px_92px_1fr_120px_1.15fr_1fr] border-b border-[#2a2a28] bg-[#1e1e1c] px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]">
+          <span>Status</span>
+          <span>Type</span>
+          <span>Owner / Item</span>
+          <span>Amount</span>
+          <span>Evidence</span>
+          <span>Next step</span>
+        </div>
+        {ledger.entries.slice(0, 12).map((entry) => (
+          <LedgerRow key={entry.id} entry={entry} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function LedgerMetric({ label, value, tone }: { label: string; value: string; tone: keyof typeof riskStyles }) {
+  return (
+    <div className="border-b border-l border-[#34322b] p-3 odd:border-l-0">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7f7a70]">{label}</p>
+      <p className={["mt-2 font-mono text-lg font-semibold", tone === "over" ? "text-[#ff8b7c]" : tone === "watch" ? "text-[#e8c678]" : "text-[#75d9a7]"].join(" ")}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function LedgerRow({ entry }: { entry: ResourceLedgerEntry }) {
+  return (
+    <div className="grid min-h-16 grid-cols-[88px_92px_1fr_120px_1.15fr_1fr] border-b border-[#2a2a28] px-4 py-3 text-sm">
+      <span className={["h-fit w-fit border px-2 py-1 text-[11px] font-semibold", ledgerStatusClass(entry.status)].join(" ")}>{entry.status.toUpperCase()}</span>
+      <span className="text-xs text-[#aaa599]">{ledgerKindLabel(entry.kind)}</span>
+      <div className="min-w-0">
+        <p className="truncate font-medium text-[#f4f1e8]">{entry.title}</p>
+        <p className="mt-1 truncate text-xs text-[#8f8a7e]">{entry.owner} · {entry.date}</p>
+      </div>
+      <span className="font-mono text-xs text-[#e8c678]">{entry.amount === null ? "--" : money(entry.amount)}</span>
+      <p className="text-xs leading-5 text-[#aaa599]">{entry.evidence}</p>
+      <p className="text-xs leading-5 text-[#c9c3b5]">{entry.nextStep}</p>
+    </div>
+  );
+}
+
+function ledgerStatusClass(status: ResourceLedgerEntry["status"]) {
+  if (status === "hold") return riskStyles.over;
+  if (status === "watch") return riskStyles.watch;
+  if (status === "closed") return "border-[#34322b] bg-[#11110f] text-[#8f8a7e]";
+  return riskStyles.ok;
+}
+
+function ledgerKindLabel(kind: ResourceLedgerEntry["kind"]) {
+  const labels: Record<ResourceLedgerEntry["kind"], string> = {
+    payment: "付款",
+    vendor: "供应商",
+    document: "材料",
+    department: "部门",
+  };
+  return labels[kind];
 }
 
 function SummaryTile({ label, value, tone }: { label: string; value: string; tone: keyof typeof riskStyles }) {
