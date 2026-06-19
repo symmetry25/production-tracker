@@ -3,6 +3,7 @@ import { TaskStatus } from "@/generated/prisma/enums";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
+import { canManagePipeline, canPatchTaskFields } from "@/lib/permissions";
 import { getPrisma } from "@/lib/prisma";
 
 const patchTaskSchema = z
@@ -78,6 +79,10 @@ export async function PATCH(request: Request, ctx: TaskRouteContext) {
     return fail(parsed.error.issues[0]?.message ?? "Invalid task payload.", 422);
   }
 
+  if (!canPatchTaskFields(session.user, Object.keys(parsed.data))) {
+    return fail("You can only update task status and logged time unless you are a producer or supervisor.", 403);
+  }
+
   try {
     const prisma = getPrisma();
     const task = await prisma.task.update({
@@ -102,6 +107,10 @@ export async function DELETE(_: Request, ctx: TaskRouteContext) {
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canManagePipeline(session.user)) {
+    return fail("Only producers and supervisors can delete tasks.", 403);
   }
 
   const { taskId } = await ctx.params;

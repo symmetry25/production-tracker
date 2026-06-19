@@ -3,6 +3,7 @@ import { TaskStatus } from "@/generated/prisma/enums";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
+import { canManagePipeline } from "@/lib/permissions";
 import { getPrisma } from "@/lib/prisma";
 import { getShotTableItems } from "@/lib/shot-data";
 import { PIPELINE_STEPS } from "@/lib/status-colors";
@@ -24,6 +25,10 @@ export async function GET(_: Request, ctx: ProjectRouteContext) {
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canManagePipeline(session.user)) {
+    return fail("Only producers and supervisors can create shots.", 403);
   }
 
   const { projectId } = await ctx.params;

@@ -3,6 +3,7 @@ import { CalendarExceptionType } from "@/generated/prisma/enums";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
+import { canManageSchedule } from "@/lib/permissions";
 import { getPrisma } from "@/lib/prisma";
 
 const createCalendarExceptionSchema = z.object({
@@ -42,6 +43,10 @@ export async function POST(request: Request) {
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canManageSchedule(session.user)) {
+    return fail("Only producers and supervisors can create calendar exceptions.", 403);
   }
 
   const body = await request.json().catch(() => null);

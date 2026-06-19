@@ -3,6 +3,7 @@ import { CalendarExceptionType } from "@/generated/prisma/enums";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
+import { canManageSchedule } from "@/lib/permissions";
 import { getPrisma } from "@/lib/prisma";
 
 type CalendarExceptionRouteContext = {
@@ -25,6 +26,10 @@ export async function PATCH(request: Request, ctx: CalendarExceptionRouteContext
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canManageSchedule(session.user)) {
+    return fail("Only producers and supervisors can update calendar exceptions.", 403);
   }
 
   const body = await request.json().catch(() => null);
@@ -60,6 +65,10 @@ export async function DELETE(_: Request, ctx: CalendarExceptionRouteContext) {
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canManageSchedule(session.user)) {
+    return fail("Only producers and supervisors can delete calendar exceptions.", 403);
   }
 
   const { exceptionId } = await ctx.params;

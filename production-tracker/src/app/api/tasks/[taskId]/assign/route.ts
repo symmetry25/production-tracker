@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
+import { canManageAssignments } from "@/lib/permissions";
 import { getPrisma } from "@/lib/prisma";
 
 const assignTaskSchema = z.object({
@@ -18,6 +19,10 @@ export async function POST(request: Request, ctx: TaskRouteContext) {
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canManageAssignments(session.user)) {
+    return fail("Only producers and supervisors can assign tasks.", 403);
   }
 
   const { taskId } = await ctx.params;

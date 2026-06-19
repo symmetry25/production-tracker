@@ -3,6 +3,7 @@ import { AssetType, TaskStatus } from "@/generated/prisma/enums";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
+import { canManagePipeline } from "@/lib/permissions";
 import { getPrisma } from "@/lib/prisma";
 
 const patchAssetSchema = z.object({
@@ -22,6 +23,10 @@ export async function PATCH(request: Request, ctx: AssetRouteContext) {
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canManagePipeline(session.user)) {
+    return fail("Only producers and supervisors can update assets.", 403);
   }
 
   const { assetId } = await ctx.params;
@@ -50,6 +55,10 @@ export async function DELETE(_: Request, ctx: AssetRouteContext) {
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canManagePipeline(session.user)) {
+    return fail("Only producers and supervisors can delete assets.", 403);
   }
 
   const { assetId } = await ctx.params;

@@ -3,6 +3,7 @@ import { VersionStatus } from "@/generated/prisma/enums";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
+import { canReviewVersions } from "@/lib/permissions";
 import { getPrisma } from "@/lib/prisma";
 
 const patchVersionStatusSchema = z.object({
@@ -18,6 +19,10 @@ export async function PATCH(request: Request, ctx: VersionRouteContext) {
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canReviewVersions(session.user)) {
+    return fail("Only reviewers, supervisors, producers, and admins can update version status.", 403);
   }
 
   const { versionId } = await ctx.params;

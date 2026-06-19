@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
+import { canManageProjects } from "@/lib/permissions";
 import { getPrisma } from "@/lib/prisma";
 import { getProjectGridItems } from "@/lib/project-data";
 
@@ -41,6 +42,10 @@ export async function POST(request: Request) {
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canManageProjects(session.user)) {
+    return fail("Only admins and producers can create projects.", 403);
   }
 
   const body = await request.json().catch(() => null);

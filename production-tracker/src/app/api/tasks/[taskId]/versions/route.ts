@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
+import { canUploadVersions } from "@/lib/permissions";
 import { getPrisma } from "@/lib/prisma";
 import { getTaskReviewVersions } from "@/lib/review-data";
 import { validateUploadFile } from "@/lib/upload-validation";
@@ -40,6 +41,10 @@ export async function POST(request: Request, ctx: TaskRouteContext) {
 
   if (!userId) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canUploadVersions(session.user)) {
+    return fail("Only artists, supervisors, producers, and admins can upload versions.", 403);
   }
 
   const { taskId } = await ctx.params;

@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
+import { canDeleteVersions } from "@/lib/permissions";
 import { getPrisma } from "@/lib/prisma";
 
 type VersionRouteContext = {
@@ -11,6 +12,10 @@ export async function GET(_: Request, ctx: VersionRouteContext) {
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canDeleteVersions(session.user)) {
+    return fail("Only producers and supervisors can delete versions.", 403);
   }
 
   const { versionId } = await ctx.params;

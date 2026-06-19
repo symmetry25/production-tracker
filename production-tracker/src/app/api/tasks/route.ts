@@ -3,6 +3,7 @@ import { TaskStatus } from "@/generated/prisma/enums";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
+import { canManagePipeline } from "@/lib/permissions";
 import { getPrisma } from "@/lib/prisma";
 import { getTaskTableItems } from "@/lib/task-data";
 
@@ -64,6 +65,10 @@ export async function POST(request: Request) {
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canManagePipeline(session.user)) {
+    return fail("Only producers and supervisors can create tasks.", 403);
   }
 
   const body = await request.json().catch(() => null);

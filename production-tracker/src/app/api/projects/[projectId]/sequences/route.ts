@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
 import { shouldUseDemoData } from "@/lib/demo-data";
+import { canManagePipeline } from "@/lib/permissions";
 import { getPrisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -66,6 +67,10 @@ export async function POST(request: Request, ctx: ProjectRouteContext) {
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canManagePipeline(session.user)) {
+    return fail("Only producers and supervisors can create sequences.", 403);
   }
 
   if (shouldUseDemoData()) {

@@ -3,6 +3,7 @@ import { TaskStatus } from "@/generated/prisma/enums";
 
 import { auth } from "@/auth";
 import { fail, ok } from "@/lib/api-response";
+import { canManagePipeline } from "@/lib/permissions";
 import { getPrisma } from "@/lib/prisma";
 
 const patchShotSchema = z.object({
@@ -23,6 +24,10 @@ export async function GET(_: Request, ctx: ShotRouteContext) {
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canManagePipeline(session.user)) {
+    return fail("Only producers and supervisors can update shots.", 403);
   }
 
   const { shotId } = await ctx.params;
@@ -55,6 +60,10 @@ export async function PATCH(request: Request, ctx: ShotRouteContext) {
 
   if (!session?.user) {
     return fail("Unauthorized", 401);
+  }
+
+  if (!canManagePipeline(session.user)) {
+    return fail("Only producers and supervisors can delete shots.", 403);
   }
 
   const { shotId } = await ctx.params;
