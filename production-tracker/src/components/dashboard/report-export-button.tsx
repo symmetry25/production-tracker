@@ -1,17 +1,28 @@
 "use client";
 
 import type { DashboardStats } from "@/lib/dashboard-data";
-import { downloadCsv } from "@/lib/csv";
+import { downloadCsv, downloadXlsx } from "@/lib/csv";
 
 export function ReportExportButton({ stats, label }: { stats: DashboardStats; label: string }) {
+  const rows = buildReportRows(stats);
+
   return (
-    <button
-      type="button"
-      onClick={() => downloadCsv(`production-report-${stats.project.code}.csv`, buildReportRows(stats))}
-      className="h-10 border border-[#3f3c33] px-3 text-xs text-[#aaa599] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
-    >
-      {label}
-    </button>
+    <div className="flex items-center">
+      <button
+        type="button"
+        onClick={() => downloadCsv(`production-report-${stats.project.code}.csv`, rows)}
+        className="h-10 border border-[#3f3c33] px-3 text-xs text-[#aaa599] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
+      >
+        {label} CSV
+      </button>
+      <button
+        type="button"
+        onClick={() => downloadXlsx(`production-report-${stats.project.code}.xlsx`, rows, "Producer Report")}
+        className="h-10 border-y border-r border-[#3f3c33] px-3 text-xs text-[#aaa599] transition hover:border-[#d8b46a] hover:text-[#e8c678]"
+      >
+        XLSX
+      </button>
+    </div>
   );
 }
 
