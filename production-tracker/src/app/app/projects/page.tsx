@@ -1,7 +1,10 @@
 import { CreateProjectForm } from "./create-project-form";
 import { ProjectGrid } from "@/components/project/project-grid";
+import { ProjectPortfolioCommand } from "@/components/project/project-portfolio-command";
 import { getDictionary, getLocale } from "@/lib/i18n";
+import { buildProjectPortfolio } from "@/lib/project-portfolio";
 import { getProjectGridItems, type ProjectGridItem } from "@/lib/project-data";
+import { getResourceBudgetData } from "@/lib/resource-data";
 
 export default async function ProjectsPage() {
   const locale = await getLocale();
@@ -14,6 +17,16 @@ export default async function ProjectsPage() {
   } catch (caught) {
     error = caught instanceof Error ? caught.message : "项目数据暂时无法读取。";
   }
+
+  const resourceEntries = error
+    ? []
+    : await Promise.all(
+        projects.map(async (project) => {
+          const data = await getResourceBudgetData(project.id);
+          return [project.id, data] as const;
+        }),
+      );
+  const portfolio = buildProjectPortfolio(projects, Object.fromEntries(resourceEntries));
 
   return (
     <>
@@ -37,7 +50,10 @@ export default async function ProjectsPage() {
           </p>
         </div>
       ) : (
-        <ProjectGrid projects={projects} />
+        <>
+          <ProjectPortfolioCommand portfolio={portfolio} labels={t.portfolio} />
+          <ProjectGrid projects={projects} />
+        </>
       )}
     </>
   );
