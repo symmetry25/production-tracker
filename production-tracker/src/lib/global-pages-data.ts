@@ -27,7 +27,13 @@ export async function getMyTaskItems(projectId = "demo-mkali-mission", userId?: 
     return tasks.slice(0, 8);
   }
 
-  return tasks.filter((task) => task.assignees.some((assignee) => assignee.id === userId));
+  const assignedTasks = tasks.filter((task) => task.assignees.some((assignee) => assignee.id === userId));
+
+  if (assignedTasks.length > 0 || !shouldUseDemoData()) {
+    return assignedTasks;
+  }
+
+  return tasks.slice(0, 8);
 }
 
 export async function getInboxItems(projectId = "demo-mkali-mission"): Promise<InboxItem[]> {
