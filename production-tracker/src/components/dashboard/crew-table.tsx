@@ -1,18 +1,21 @@
 import type { CrewMemberDatum } from "@/lib/dashboard-data";
+import type { Dictionary } from "@/lib/i18n";
 
-export function CrewTable({ crew }: { crew: CrewMemberDatum[] }) {
+type CrewTableLabels = Dictionary["pages"]["overview"]["charts"]["crewTable"];
+
+export function CrewTable({ crew, labels }: { crew: CrewMemberDatum[]; labels: CrewTableLabels }) {
   if (crew.length === 0) {
-    return <div className="grid min-h-48 place-items-center p-4 text-sm text-[#8f8a7e]">暂无项目成员任务分配。</div>;
+    return <div className="grid min-h-48 place-items-center p-4 text-sm text-[#8f8a7e]">{labels.empty}</div>;
   }
 
   return (
     <div className="overflow-hidden">
       <div className="grid grid-cols-[1.2fr_120px_110px_90px_90px] border-b border-[#2a2a28] bg-[#1e1e1c] text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6e6e69]">
-        <Cell>Name</Cell>
-        <Cell>Dept</Cell>
-        <Cell>Role</Cell>
-        <Cell>Tasks</Cell>
-        <Cell>Load</Cell>
+        <Cell>{labels.columns.name}</Cell>
+        <Cell>{labels.columns.department}</Cell>
+        <Cell>{labels.columns.role}</Cell>
+        <Cell>{labels.columns.tasks}</Cell>
+        <Cell>{labels.columns.load}</Cell>
       </div>
       {crew.map((member) => (
         <div key={member.id} className="grid min-h-11 grid-cols-[1.2fr_120px_110px_90px_90px] border-b border-[#2a2a28] text-sm last:border-b-0">

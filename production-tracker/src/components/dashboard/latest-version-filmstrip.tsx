@@ -1,8 +1,11 @@
 import type { ReviewVersionItem } from "@/lib/review-data";
+import type { Dictionary } from "@/lib/i18n";
 
-export function LatestVersionFilmstrip({ versions }: { versions: ReviewVersionItem[] }) {
+type MediaLabels = Dictionary["pages"]["overview"]["charts"]["media"];
+
+export function LatestVersionFilmstrip({ versions, labels }: { versions: ReviewVersionItem[]; labels: MediaLabels }) {
   if (versions.length === 0) {
-    return <div className="grid min-h-44 place-items-center p-4 text-sm text-[#8f8a7e]">暂无最新版本。</div>;
+    return <div className="grid min-h-44 place-items-center p-4 text-sm text-[#8f8a7e]">{labels.empty}</div>;
   }
 
   return (
@@ -15,7 +18,7 @@ export function LatestVersionFilmstrip({ versions }: { versions: ReviewVersionIt
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={version.thumbnailUrl} alt="" className="h-full w-full object-cover" />
               ) : (
-                <span>{version.fileType.startsWith("video/") ? "VIDEO" : "MEDIA"}</span>
+                <span>{version.fileType.startsWith("video/") ? labels.video : labels.media}</span>
               )}
             </div>
             <p className="mt-2 truncate font-mono text-xs text-[#4a9eff]">{version.name}</p>

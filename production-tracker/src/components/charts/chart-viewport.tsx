@@ -2,20 +2,36 @@
 
 import { useState, type ReactNode, type WheelEvent } from "react";
 
+import type { Dictionary } from "@/lib/i18n";
+
 const minZoom = 0.72;
 const maxZoom = 1.9;
 const zoomStep = 0.14;
+type ChartToolLabels = Dictionary["pages"]["overview"]["charts"]["chartTools"];
+
+const defaultLabels: ChartToolLabels = {
+  expandedChart: "expanded chart",
+  zoomOut: "Zoom out",
+  resetZoom: "Reset zoom",
+  zoomIn: "Zoom in",
+  full: "Full",
+  fullLabel: "View fullscreen",
+  exit: "Exit",
+  exitLabel: "Exit fullscreen",
+};
 
 export function ChartViewport({
   title,
   children,
   minHeight = 260,
   compact = false,
+  labels = defaultLabels,
 }: {
   title: string;
   children: ReactNode;
   minHeight?: number;
   compact?: boolean;
+  labels?: ChartToolLabels;
 }) {
   const [zoom, setZoom] = useState(1);
   const [expanded, setExpanded] = useState(false);
@@ -24,6 +40,7 @@ export function ChartViewport({
       zoom={zoom}
       expanded={expanded}
       compact={compact}
+      labels={labels}
       onZoomIn={() => setZoom((value) => clampZoom(value + zoomStep))}
       onZoomOut={() => setZoom((value) => clampZoom(value - zoomStep))}
       onReset={() => setZoom(1)}
@@ -37,7 +54,7 @@ export function ChartViewport({
       <div className={expanded ? "flex min-h-12 items-center justify-between border-b border-[#34322b] bg-[#1e1e1c] px-4" : "absolute right-2 top-2 z-10"}>
         {expanded ? (
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7f7a70]">expanded chart</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7f7a70]">{labels.expandedChart}</p>
             <h2 className="truncate text-sm font-semibold text-[#f4f1e8]">{title}</h2>
           </div>
         ) : null}
@@ -66,6 +83,7 @@ function ChartViewportToolbar({
   zoom,
   expanded,
   compact,
+  labels,
   onZoomIn,
   onZoomOut,
   onReset,
@@ -74,6 +92,7 @@ function ChartViewportToolbar({
   zoom: number;
   expanded: boolean;
   compact: boolean;
+  labels: ChartToolLabels;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onReset: () => void;
@@ -81,12 +100,12 @@ function ChartViewportToolbar({
 }) {
   return (
     <div className="flex items-center border border-[#34322b] bg-[#11110f] text-[11px] shadow-[0_8px_22px_rgba(0,0,0,0.28)]">
-      <ToolButton label="缩小图表" onClick={onZoomOut}>-</ToolButton>
-      <button type="button" onClick={onReset} className={["border-l border-[#34322b] font-mono text-[#e8c678] hover:bg-[#1f1d18]", compact ? "min-w-12 px-2 py-1.5" : "min-w-16 px-3 py-2"].join(" ")} title="重置缩放">
+      <ToolButton label={labels.zoomOut} onClick={onZoomOut}>-</ToolButton>
+      <button type="button" onClick={onReset} className={["border-l border-[#34322b] font-mono text-[#e8c678] hover:bg-[#1f1d18]", compact ? "min-w-12 px-2 py-1.5" : "min-w-16 px-3 py-2"].join(" ")} title={labels.resetZoom}>
         {Math.round(zoom * 100)}%
       </button>
-      <ToolButton label="放大图表" onClick={onZoomIn}>+</ToolButton>
-      <ToolButton label={expanded ? "退出全屏" : "全屏查看"} onClick={onToggleExpanded}>{expanded ? "Exit" : "Full"}</ToolButton>
+      <ToolButton label={labels.zoomIn} onClick={onZoomIn}>+</ToolButton>
+      <ToolButton label={expanded ? labels.exitLabel : labels.fullLabel} onClick={onToggleExpanded}>{expanded ? labels.exit : labels.full}</ToolButton>
     </div>
   );
 }

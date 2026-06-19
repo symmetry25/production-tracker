@@ -20,47 +20,49 @@ export function DashboardOverview({
   stats: DashboardStats;
   tasks: TaskTableItem[];
   scheduleSummary: ScheduleSuggestionSummary;
-  labels: Dictionary["pages"]["overview"]["producerCommand"];
+  labels: Dictionary["pages"]["overview"];
 }) {
+  const chartLabels = labels.charts;
+
   return (
     <div className="space-y-5">
-      <ProducerCommandCenter projectId={projectId} stats={stats} tasks={tasks} scheduleSummary={scheduleSummary} labels={labels} />
+      <ProducerCommandCenter projectId={projectId} stats={stats} tasks={tasks} scheduleSummary={scheduleSummary} labels={labels.producerCommand} />
 
-      <CountdownWidget project={stats.project} counts={stats.counts} />
+      <CountdownWidget project={stats.project} counts={stats.counts} labels={labels.countdown} />
 
       <div className="grid grid-cols-[0.9fr_1.1fr] gap-5">
-        <DashboardPanel title="Shot Status" eyebrow="pipeline health">
-          <DonutChart data={stats.shotStatus} />
+        <DashboardPanel title={chartLabels.shotStatus.title} eyebrow={chartLabels.shotStatus.eyebrow}>
+          <DonutChart data={stats.shotStatus} labels={chartLabels} />
         </DashboardPanel>
-        <DashboardPanel title="Asset Status By Type" eyebrow="asset matrix">
-          <StackedBarChart data={stats.assetStatus} />
+        <DashboardPanel title={chartLabels.assetStatus.title} eyebrow={chartLabels.assetStatus.eyebrow}>
+          <StackedBarChart data={stats.assetStatus} labels={chartLabels} />
         </DashboardPanel>
       </div>
 
       <div className="grid grid-cols-[1.25fr_0.75fr] gap-5">
-        <DashboardPanel title="Task Status By Department" eyebrow="department load">
-          <StackedAreaChart data={stats.taskStatus} />
+        <DashboardPanel title={chartLabels.taskStatus.title} eyebrow={chartLabels.taskStatus.eyebrow}>
+          <StackedAreaChart data={stats.taskStatus} labels={chartLabels} />
         </DashboardPanel>
-        <DashboardPanel title="% Final By Department" eyebrow="delivery confidence">
-          <HorizontalBars data={stats.pctFinalByDept} />
+        <DashboardPanel title={chartLabels.pctFinalByDept.title} eyebrow={chartLabels.pctFinalByDept.eyebrow}>
+          <HorizontalBars data={stats.pctFinalByDept} labels={chartLabels} />
         </DashboardPanel>
       </div>
 
       <div className="grid grid-cols-[1fr_1fr] gap-5">
-        <DashboardPanel title="Velocity" eyebrow="approved and final">
-          <VelocityChart data={stats.velocity} />
+        <DashboardPanel title={chartLabels.velocity.title} eyebrow={chartLabels.velocity.eyebrow}>
+          <VelocityChart data={stats.velocity} labels={chartLabels} />
         </DashboardPanel>
-        <DashboardPanel title="Version Review Status" eyebrow="review queue">
-          <VersionStatusBars data={stats.versionStatus} />
+        <DashboardPanel title={chartLabels.versionStatus.title} eyebrow={chartLabels.versionStatus.eyebrow}>
+          <VersionStatusBars data={stats.versionStatus} labels={chartLabels} />
         </DashboardPanel>
       </div>
 
-      <DashboardPanel title="Latest Versions" eyebrow="filmstrip">
-        <LatestVersionFilmstrip versions={stats.latestVersions} />
+      <DashboardPanel title={chartLabels.latestVersions.title} eyebrow={chartLabels.latestVersions.eyebrow}>
+        <LatestVersionFilmstrip versions={stats.latestVersions} labels={chartLabels.media} />
       </DashboardPanel>
 
-      <DashboardPanel title="Crew Table" eyebrow="project members">
-        <CrewTable crew={stats.crew} />
+      <DashboardPanel title={chartLabels.crew.title} eyebrow={chartLabels.crew.eyebrow}>
+        <CrewTable crew={stats.crew} labels={chartLabels.crewTable} />
       </DashboardPanel>
     </div>
   );

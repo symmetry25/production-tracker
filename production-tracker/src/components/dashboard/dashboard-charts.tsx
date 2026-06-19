@@ -18,19 +18,24 @@ import {
 } from "recharts";
 
 import { ChartViewport } from "@/components/charts/chart-viewport";
+import type { TaskStatus } from "@/generated/prisma/enums";
 import { STATUS_COLORS } from "@/lib/status-colors";
 import type { AssetStatusDatum, ChartDatum, PercentFinalDatum, TaskStatusTrendDatum, VelocityDatum, VersionStatusDatum } from "@/lib/dashboard-data";
+import type { Dictionary } from "@/lib/i18n";
 
 const taskStatuses = ["WAITING_TO_START", "READY_TO_START", "IN_PROGRESS", "PENDING_REVIEW", "APPROVED", "FINAL", "ON_HOLD", "OMIT"] as const;
+type ChartLabels = Dictionary["pages"]["overview"]["charts"];
 
-export function DonutChart({ data }: { data: ChartDatum[] }) {
+export function DonutChart({ data, labels }: { data: ChartDatum[]; labels: ChartLabels }) {
+  const localizedData = data.map((item) => ({ ...item, name: localizeTaskStatusLabel(item.name, labels) }));
+
   return (
-    <ChartShell title="Shot Status" empty={data.length === 0} minHeight={300}>
-      <ChartViewport title="Shot Status" minHeight={240}>
+    <ChartShell empty={data.length === 0} minHeight={300} emptyLabel={labels.empty}>
+      <ChartViewport title={labels.shotStatus.title} minHeight={240} labels={labels.chartTools}>
         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <PieChart>
-            <Pie data={data} dataKey="value" nameKey="name" innerRadius={58} outerRadius={92} paddingAngle={2}>
-              {data.map((item) => (
+            <Pie data={localizedData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={92} paddingAngle={2}>
+              {localizedData.map((item) => (
                 <Cell key={item.name} fill={item.color} />
               ))}
             </Pie>
@@ -38,21 +43,23 @@ export function DonutChart({ data }: { data: ChartDatum[] }) {
           </PieChart>
         </ResponsiveContainer>
       </ChartViewport>
-      <Legend rows={data.map((item) => ({ label: item.name, value: item.value, color: item.color }))} />
+      <Legend rows={localizedData.map((item) => ({ label: item.name, value: item.value, color: item.color }))} />
     </ChartShell>
   );
 }
 
-export function StackedBarChart({ data }: { data: AssetStatusDatum[] }) {
+export function StackedBarChart({ data, labels }: { data: AssetStatusDatum[]; labels: ChartLabels }) {
+  const localizedData = data.map((item) => ({ ...item, type: labels.assetTypes[item.type as keyof ChartLabels["assetTypes"]] ?? item.type }));
+
   return (
-    <ChartShell title="Asset Status By Type" empty={data.length === 0}>
-      <ChartViewport title="Asset Status By Type" minHeight={260}>
+    <ChartShell empty={data.length === 0} emptyLabel={labels.empty}>
+      <ChartViewport title={labels.assetStatus.title} minHeight={260} labels={labels.chartTools}>
         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-          <BarChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+          <BarChart data={localizedData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
             <CartesianGrid stroke="#2a2a28" vertical={false} />
             <XAxis dataKey="type" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip contentStyle={tooltipStyle} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [value, labels.taskStatuses[name as TaskStatus] ?? name]} />
             {taskStatuses.map((status) => (
               <Bar key={status} dataKey={status} stackId="status" fill={STATUS_COLORS[status].dot} />
             ))}
@@ -63,16 +70,16 @@ export function StackedBarChart({ data }: { data: AssetStatusDatum[] }) {
   );
 }
 
-export function StackedAreaChart({ data }: { data: TaskStatusTrendDatum[] }) {
+export function StackedAreaChart({ data, labels }: { data: TaskStatusTrendDatum[]; labels: ChartLabels }) {
   return (
-    <ChartShell title="Task Status By Department" empty={data.length === 0}>
-      <ChartViewport title="Task Status By Department" minHeight={260}>
+    <ChartShell empty={data.length === 0} emptyLabel={labels.empty}>
+      <ChartViewport title={labels.taskStatus.title} minHeight={260} labels={labels.chartTools}>
         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <AreaChart data={data} margin={{ top: 10, right: 12, bottom: 0, left: -20 }}>
             <CartesianGrid stroke="#2a2a28" vertical={false} />
             <XAxis dataKey="department" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip contentStyle={tooltipStyle} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [value, labels.taskStatuses[name as TaskStatus] ?? name]} />
             {taskStatuses.map((status) => (
               <Area key={status} dataKey={status} stackId="status" stroke={STATUS_COLORS[status].dot} fill={STATUS_COLORS[status].dot} fillOpacity={0.7} />
             ))}
@@ -83,18 +90,18 @@ export function StackedAreaChart({ data }: { data: TaskStatusTrendDatum[] }) {
   );
 }
 
-export function VelocityChart({ data }: { data: VelocityDatum[] }) {
+export function VelocityChart({ data, labels }: { data: VelocityDatum[]; labels: ChartLabels }) {
   return (
-    <ChartShell title="Velocity" empty={data.length === 0} minHeight={240}>
-      <ChartViewport title="Velocity" minHeight={220}>
+    <ChartShell empty={data.length === 0} minHeight={240} emptyLabel={labels.empty}>
+      <ChartViewport title={labels.velocity.title} minHeight={220} labels={labels.chartTools}>
         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <LineChart data={data} margin={{ top: 10, right: 12, bottom: 0, left: -20 }}>
             <CartesianGrid stroke="#2a2a28" vertical={false} />
             <XAxis dataKey="week" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip contentStyle={tooltipStyle} />
-            <Line type="monotone" dataKey="approved" stroke="#1d9e75" strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="final" stroke="#d8b46a" strokeWidth={2} dot={false} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [value, labels.taskStatuses[String(name).toUpperCase() as TaskStatus] ?? name]} />
+            <Line type="monotone" dataKey="approved" name={labels.taskStatuses.APPROVED} stroke="#1d9e75" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="final" name={labels.taskStatuses.FINAL} stroke="#d8b46a" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       </ChartViewport>
@@ -102,17 +109,17 @@ export function VelocityChart({ data }: { data: VelocityDatum[] }) {
   );
 }
 
-export function VersionStatusBars({ data }: { data: VersionStatusDatum[] }) {
+export function VersionStatusBars({ data, labels }: { data: VersionStatusDatum[]; labels: ChartLabels }) {
   const max = Math.max(1, ...data.map((item) => item.value));
 
   return (
-    <ChartShell title="Version Review Status" empty={data.length === 0} minHeight={230}>
-      <ChartViewport title="Version Review Status" minHeight={190}>
+    <ChartShell empty={data.length === 0} minHeight={230} emptyLabel={labels.empty}>
+      <ChartViewport title={labels.versionStatus.title} minHeight={190} labels={labels.chartTools}>
         <div className="space-y-3 p-4">
           {data.map((item) => (
             <div key={item.status}>
               <div className="mb-1 flex items-center justify-between text-xs">
-                <span className="text-[#c9c3b5]">{item.label}</span>
+                <span className="text-[#c9c3b5]">{labels.versionStatuses[item.status]}</span>
                 <span className="font-mono text-[#8f8a7e]">{item.value}</span>
               </div>
               <div className="h-2 bg-[#2a2a28]">
@@ -126,10 +133,10 @@ export function VersionStatusBars({ data }: { data: VersionStatusDatum[] }) {
   );
 }
 
-export function HorizontalBars({ data }: { data: PercentFinalDatum[] }) {
+export function HorizontalBars({ data, labels }: { data: PercentFinalDatum[]; labels: ChartLabels }) {
   return (
-    <ChartShell title="% Final By Department" empty={data.length === 0} minHeight={260}>
-      <ChartViewport title="% Final By Department" minHeight={220}>
+    <ChartShell empty={data.length === 0} minHeight={260} emptyLabel={labels.empty}>
+      <ChartViewport title={labels.pctFinalByDept.title} minHeight={220} labels={labels.chartTools}>
         <div className="space-y-3 p-4">
           {data.map((item) => (
             <div key={item.department}>
@@ -148,16 +155,16 @@ export function HorizontalBars({ data }: { data: PercentFinalDatum[] }) {
   );
 }
 
-function ChartShell({ empty, children, minHeight = 260 }: { title: string; empty: boolean; children: React.ReactNode; minHeight?: number }) {
+function ChartShell({ empty, children, emptyLabel, minHeight = 260 }: { empty: boolean; children: React.ReactNode; emptyLabel: string; minHeight?: number }) {
   if (empty) {
-    return <EmptyChart />;
+    return <EmptyChart label={emptyLabel} />;
   }
 
   return <div className="p-4" style={{ minHeight }}>{children}</div>;
 }
 
-function EmptyChart() {
-  return <div className="grid min-h-48 place-items-center p-4 text-sm text-[#8f8a7e]">暂无可视化数据。</div>;
+function EmptyChart({ label }: { label: string }) {
+  return <div className="grid min-h-48 place-items-center p-4 text-sm text-[#8f8a7e]">{label}</div>;
 }
 
 function Legend({ rows }: { rows: { label: string; value: number; color: string }[] }) {
@@ -182,3 +189,8 @@ const tooltipStyle = {
   color: "#f4f1e8",
   fontSize: 12,
 };
+
+function localizeTaskStatusLabel(label: string, labels: ChartLabels) {
+  const entry = Object.entries(STATUS_COLORS).find(([, value]) => value.label === label);
+  return entry ? labels.taskStatuses[entry[0] as TaskStatus] : label;
+}

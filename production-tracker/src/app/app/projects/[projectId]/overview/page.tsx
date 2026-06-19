@@ -45,7 +45,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
         <ReportExportButton stats={stats} label={t.report} />
       </div>
 
-      <DashboardOverview projectId={projectId} stats={stats} tasks={tasks} scheduleSummary={scheduleSummary} labels={t.producerCommand} />
+      <DashboardOverview projectId={projectId} stats={stats} tasks={tasks} scheduleSummary={scheduleSummary} labels={t} />
     </>
   );
 }
