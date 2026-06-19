@@ -66,7 +66,11 @@ export function TaskWorkspace({
 
       {showSuggestions ? <ScheduleSuggestionPanel summary={currentScheduleSuggestions} /> : null}
 
-      {view === "table" ? <TaskTable projectId={projectId} tasks={taskItems} options={options} onTasksChange={setTaskItems} /> : <GanttPanel tasks={taskItems} />}
+      {view === "table" ? (
+        <TaskTable projectId={projectId} tasks={taskItems} options={options} onTasksChange={setTaskItems} />
+      ) : (
+        <GanttPanel projectId={projectId} tasks={taskItems} onTasksChange={setTaskItems} />
+      )}
     </div>
   );
 }

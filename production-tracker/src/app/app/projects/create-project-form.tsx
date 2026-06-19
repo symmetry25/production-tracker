@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import { createProjectAction, type CreateProjectState } from "./actions";
 
@@ -8,7 +8,15 @@ const initialState: CreateProjectState = {};
 
 export function CreateProjectForm() {
   const [open, setOpen] = useState(false);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [thumbnailName, setThumbnailName] = useState("");
   const [state, formAction, pending] = useActionState(createProjectAction, initialState);
+
+  useEffect(() => {
+    return () => {
+      if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview);
+    };
+  }, [thumbnailPreview]);
 
   return (
     <div>
@@ -34,6 +42,31 @@ export function CreateProjectForm() {
             </div>
 
             <form action={formAction} className="grid grid-cols-2 gap-4 p-5">
+              <label className="col-span-2 grid gap-3 border border-[#34322b] bg-[#11110f] p-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+                <span className="relative block h-28 overflow-hidden border border-[#34322b] bg-[linear-gradient(135deg,#2c2a23,#11110f_62%)]">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- Local blob preview cannot be optimized by next/image. */}
+                  {thumbnailPreview ? <img src={thumbnailPreview} alt="" className="h-full w-full object-cover" /> : null}
+                  <span className="absolute inset-x-0 bottom-0 bg-black/55 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-[#c9c3b5]">
+                    Project cover
+                  </span>
+                </span>
+                <span className="flex min-w-0 flex-col justify-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">项目封面</span>
+                  <input
+                    name="thumbnail"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview);
+                      setThumbnailName(file?.name ?? "");
+                      setThumbnailPreview(file ? URL.createObjectURL(file) : null);
+                    }}
+                    className="block w-full text-xs text-[#aaa599] file:mr-3 file:h-9 file:border-0 file:bg-[#2b2924] file:px-3 file:text-xs file:font-semibold file:text-[#f4f1e8] hover:file:bg-[#343027]"
+                  />
+                  <span className="truncate text-xs text-[#7f7a70]">{thumbnailName || "可选，支持 jpg / png / webp。项目卡片会优先显示封面。"}</span>
+                </span>
+              </label>
               <label className="space-y-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">项目名称</span>
                 <input name="name" required className="h-11 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm outline-none focus:border-[#d8b46a]" />

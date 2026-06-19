@@ -1,7 +1,7 @@
 "use client";
 
 import { gantt } from "dhtmlx-gantt";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Task } from "dhtmlx-gantt";
 
 import { STATUS_COLORS } from "@/lib/status-colors";
@@ -21,7 +21,18 @@ const ganttTypeToDependency: Record<string, string> = {
   "3": "SF",
 };
 
-export function GanttPanel({ tasks }: { tasks: TaskTableItem[] }) {
+const demoProjectId = "demo-mkali-mission";
+const demoIdPrefix = "demo-";
+
+export function GanttPanel({
+  projectId,
+  tasks,
+  onTasksChange,
+}: {
+  projectId: string;
+  tasks: TaskTableItem[];
+  onTasksChange: Dispatch<SetStateAction<TaskTableItem[]>>;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -72,8 +83,26 @@ export function GanttPanel({ tasks }: { tasks: TaskTableItem[] }) {
 
       const startDate = toIsoDate(item.start_date);
       const dueDate = toIsoDate(item.end_date);
+      const duration = typeof item.duration === "number" ? item.duration : null;
 
-      void patchTaskDates(String(id), startDate, dueDate, item.duration ?? null).then((ok) => {
+      if (isDemoTask(projectId, String(id))) {
+        onTasksChange((current) =>
+          current.map((task) =>
+            task.id === String(id)
+              ? {
+                  ...task,
+                  startDate: startDate ? `${startDate}T00:00:00.000Z` : null,
+                  dueDate: dueDate ? `${dueDate}T00:00:00.000Z` : null,
+                  duration,
+                }
+              : task,
+          ),
+        );
+        setMessage("演示甘特图日期已更新。");
+        return;
+      }
+
+      void patchTaskDates(String(id), startDate, dueDate, duration).then((ok) => {
         if (!ok) {
           setMessage("甘特图日期保存失败。");
           return;
@@ -84,6 +113,12 @@ export function GanttPanel({ tasks }: { tasks: TaskTableItem[] }) {
     });
 
     const linkAddHandlerId = gantt.attachEvent("onAfterLinkAdd", (id, link) => {
+      if (isDemoTask(projectId, String(link.target))) {
+        onTasksChange((current) => addLocalGanttDependency(current, String(id), String(link.source), String(link.target), ganttTypeToDependency[link.type] ?? "FS", link.lag ?? 0));
+        setMessage("演示甘特图依赖已添加。");
+        return;
+      }
+
       void fetch(`/api/tasks/${link.target}/dependencies`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -108,7 +143,7 @@ export function GanttPanel({ tasks }: { tasks: TaskTableItem[] }) {
       gantt.detachEvent(linkAddHandlerId);
       gantt.clearAll();
     };
-  }, [ganttData, startTransition]);
+  }, [ganttData, onTasksChange, projectId, startTransition]);
 
   if (tasks.length === 0) {
     return (
@@ -232,4 +267,55 @@ async function patchTaskDates(taskId: string, startDate: string | null, dueDate:
   });
 
   return response.ok;
+}
+
+function isDemoTask(projectId: string, taskId: string) {
+  return projectId === demoProjectId || taskId.startsWith(demoIdPrefix);
+}
+
+function addLocalGanttDependency(tasks: TaskTableItem[], dependencyId: string, predecessorId: string, taskId: string, type: string, lagDays: number): TaskTableItem[] {
+  const predecessor = tasks.find((task) => task.id === predecessorId);
+  const target = tasks.find((task) => task.id === taskId);
+
+  if (!predecessor || !target) {
+    return tasks;
+  }
+
+  return tasks.map((task) => {
+    if (task.id === taskId && !task.predecessors.some((dependency) => dependency.taskId === predecessorId)) {
+      return {
+        ...task,
+        predecessors: [
+          ...task.predecessors,
+          {
+            id: dependencyId,
+            type: type as TaskTableItem["predecessors"][number]["type"],
+            lagDays,
+            taskId: predecessor.id,
+            taskName: predecessor.name,
+            contextLabel: predecessor.context.label,
+          },
+        ],
+      };
+    }
+
+    if (task.id === predecessorId && !task.successors.some((dependency) => dependency.taskId === taskId)) {
+      return {
+        ...task,
+        successors: [
+          ...task.successors,
+          {
+            id: dependencyId,
+            type: type as TaskTableItem["successors"][number]["type"],
+            lagDays,
+            taskId: target.id,
+            taskName: target.name,
+            contextLabel: target.context.label,
+          },
+        ],
+      };
+    }
+
+    return task;
+  });
 }

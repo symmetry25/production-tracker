@@ -8,6 +8,8 @@ import { auth } from "@/auth";
 import { canManageProjects } from "@/lib/permissions";
 import { bootstrapProjectWorkspace } from "@/lib/project-bootstrap";
 import { getPrisma } from "@/lib/prisma";
+import { storeUploadedFile } from "@/lib/storage";
+import { validateUploadFile } from "@/lib/upload-validation";
 
 export type CreateProjectState = {
   error?: string;
@@ -63,11 +65,29 @@ export async function createProjectAction(_: CreateProjectState, formData: FormD
       return { error: "这个项目代号已经存在，请换一个。" };
     }
 
+    const thumbnail = formData.get("thumbnail");
+    let thumbnailUrl: string | null = null;
+
+    if (thumbnail instanceof File && thumbnail.size > 0) {
+      const fileValidation = validateUploadFile(thumbnail, "project-thumbnail");
+      if (!fileValidation.valid) {
+        return { error: fileValidation.message };
+      }
+
+      const storedThumbnail = await storeUploadedFile({
+        file: thumbnail,
+        keyPrefix: `projects/${parsed.data.code}/thumbnail`,
+        fileName: thumbnail.name || `${parsed.data.code}-thumbnail`,
+      });
+      thumbnailUrl = storedThumbnail.publicUrl;
+    }
+
     const project = await prisma.project.create({
       data: {
         name: parsed.data.name,
         code: parsed.data.code,
         description: parsed.data.description || null,
+        thumbnailUrl,
         startDate: new Date(parsed.data.startDate),
         dueDate: new Date(parsed.data.dueDate),
         milestone: parsed.data.milestone || null,

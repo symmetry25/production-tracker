@@ -36,6 +36,7 @@ export function TaskTable({
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
   const [assigneeFilter, setAssigneeFilter] = useState("ALL");
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [, startTransition] = useTransition();
 
   const summary = useMemo(() => {
@@ -47,6 +48,12 @@ export function TaskTable({
   }, [tasks]);
   const filteredTasks = useMemo(() => filterTasks(tasks, { query, statusFilter, assigneeFilter }), [assigneeFilter, query, statusFilter, tasks]);
   const activeFilterCount = [query.trim(), statusFilter !== "ALL", assigneeFilter !== "ALL"].filter(Boolean).length;
+  const selectedTaskIdSet = useMemo(() => new Set(selectedTaskIds), [selectedTaskIds]);
+  const selectedTasks = useMemo(() => tasks.filter((task) => selectedTaskIdSet.has(task.id)), [selectedTaskIdSet, tasks]);
+  const filteredTaskIds = useMemo(() => filteredTasks.map((task) => task.id), [filteredTasks]);
+  const allFilteredSelected = filteredTaskIds.length > 0 && filteredTaskIds.every((id) => selectedTaskIdSet.has(id));
+  const selectedBudget = selectedTasks.reduce((sum, task) => sum + (task.estimatedCost ?? 0), 0);
+  const selectedActual = selectedTasks.reduce((sum, task) => sum + task.calculatedCost, 0);
 
   function patchLocalTask(taskId: string, payload: Record<string, unknown>) {
     onTasksChange((current) => current.map((task) => (task.id === taskId ? applyTaskPatch(task, payload) : task)));
@@ -98,6 +105,59 @@ export function TaskTable({
 
     startTransition(() => router.refresh());
     return true;
+  }
+
+  function toggleTaskSelection(taskId: string, selected: boolean) {
+    setSelectedTaskIds((current) => {
+      if (selected) return current.includes(taskId) ? current : [...current, taskId];
+      return current.filter((id) => id !== taskId);
+    });
+  }
+
+  function toggleFilteredSelection(selected: boolean) {
+    setSelectedTaskIds((current) => {
+      if (!selected) return current.filter((id) => !filteredTaskIds.includes(id));
+      const next = new Set(current);
+      for (const id of filteredTaskIds) next.add(id);
+      return Array.from(next);
+    });
+  }
+
+  async function bulkSetStatus(status: TaskStatus) {
+    if (selectedTaskIds.length === 0) return;
+
+    const taskIds = [...selectedTaskIds];
+    setPendingId("bulk-status");
+    setMessage(null);
+
+    if (taskIds.every((taskId) => isDemoTask(projectId, taskId))) {
+      onTasksChange((current) => current.map((task) => (taskIds.includes(task.id) ? applyTaskPatch(task, { status }) : task)));
+      setPendingId(null);
+      setSelectedTaskIds([]);
+      setMessage(`已更新 ${taskIds.length} 个演示任务。`);
+      return;
+    }
+
+    const responses = await Promise.all(
+      taskIds.map((taskId) =>
+        fetch(`/api/tasks/${taskId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        }),
+      ),
+    );
+
+    setPendingId(null);
+
+    if (responses.some((response) => !response.ok)) {
+      setMessage("批量更新任务状态失败，请检查权限或任务状态。");
+      return;
+    }
+
+    setSelectedTaskIds([]);
+    setMessage(`已更新 ${taskIds.length} 个任务。`);
+    startTransition(() => router.refresh());
   }
 
   async function deleteTask(taskId: string) {
@@ -341,8 +401,61 @@ export function TaskTable({
         </button>
       </div>
 
+      {selectedTasks.length ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border border-[#4b432f] bg-[#1f1b12] px-3 py-2 text-sm">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-[#c9c3b5]">
+            <span className="font-semibold uppercase tracking-[0.16em] text-[#e8c678]">{selectedTasks.length} selected</span>
+            <span className="font-mono">Budget ${selectedBudget.toLocaleString()}</span>
+            <span className={["font-mono", selectedActual > selectedBudget && selectedBudget > 0 ? "text-[#ff9a8f]" : "text-[#aaa599]"].join(" ")}>
+              Logged ${selectedActual.toLocaleString()}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value=""
+              disabled={pendingId === "bulk-status"}
+              onChange={(event) => {
+                if (event.target.value) void bulkSetStatus(event.target.value as TaskStatus);
+                event.currentTarget.value = "";
+              }}
+              className="h-8 border border-[#4b432f] bg-[#11110f] px-2 text-xs text-[#f4f1e8] outline-none focus:border-[#d8b46a]"
+            >
+              <option value="">批量改状态</option>
+              {taskMenuStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {STATUS_COLORS[status].label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => downloadCsv("selected-task-status-report.csv", buildTaskCsvRows(selectedTasks))}
+              className="h-8 border border-[#4b432f] px-3 text-xs font-semibold text-[#c9c3b5] hover:border-[#d8b46a] hover:text-[#e8c678]"
+            >
+              Export selected
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedTaskIds([])}
+              className="h-8 border border-[#4b432f] px-3 text-xs text-[#aaa599] hover:border-[#d8b46a] hover:text-[#f4f1e8]"
+            >
+              清空选择
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="overflow-hidden border border-[#34322b] bg-[#181713]">
-        <div className="grid grid-cols-[110px_1.2fr_120px_160px_120px_120px_120px_120px_1fr_170px] border-b border-[#2a2a28] bg-[#1e1e1c] text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]">
+        <div className="grid grid-cols-[44px_110px_1.2fr_120px_160px_120px_120px_120px_120px_1fr_170px] border-b border-[#2a2a28] bg-[#1e1e1c] text-[11px] font-medium uppercase tracking-[0.12em] text-[#6e6e69]">
+          <div className="flex h-9 items-center justify-center px-2">
+            <input
+              type="checkbox"
+              aria-label="选择当前筛选的任务"
+              checked={allFilteredSelected}
+              onChange={(event) => toggleFilteredSelection(event.target.checked)}
+              className="size-4 accent-[#d8b46a]"
+            />
+          </div>
           <HeaderCell>Source</HeaderCell>
           <HeaderCell>Task</HeaderCell>
           <HeaderCell>Status</HeaderCell>
@@ -360,10 +473,21 @@ export function TaskTable({
             <ContextMenu.Trigger asChild>
               <div
                 className={[
-                  "grid min-h-14 grid-cols-[110px_1.2fr_120px_160px_120px_120px_120px_120px_1fr_170px] border-b border-[#2a2a28] text-sm hover:bg-[#252523]",
+                  "grid min-h-14 grid-cols-[44px_110px_1.2fr_120px_160px_120px_120px_120px_120px_1fr_170px] border-b border-[#2a2a28] text-sm hover:bg-[#252523]",
                   task.overBudget ? "bg-[#211717]" : "",
+                  selectedTaskIdSet.has(task.id) ? "outline outline-1 -outline-offset-1 outline-[#d8b46a]/45" : "",
                 ].join(" ")}
               >
+                <div className="flex items-center justify-center px-2">
+                  <input
+                    type="checkbox"
+                    aria-label={`选择任务 ${task.name}`}
+                    checked={selectedTaskIdSet.has(task.id)}
+                    onChange={(event) => toggleTaskSelection(task.id, event.target.checked)}
+                    onClick={(event) => event.stopPropagation()}
+                    className="size-4 accent-[#d8b46a]"
+                  />
+                </div>
                 <div className="flex flex-col justify-center px-3">
                   <span className="font-mono text-[11px] uppercase text-[#8f8a7e]">{task.context.kind}</span>
                   <span className="truncate text-xs text-[#c9c3b5]">{task.context.label}</span>

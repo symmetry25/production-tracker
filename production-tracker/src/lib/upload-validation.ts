@@ -1,6 +1,7 @@
 export const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 
 export const reviewVersionMimeTypes = ["video/mp4", "video/quicktime", "image/jpeg", "image/png", "image/webp"] as const;
+export const projectThumbnailMimeTypes = ["image/jpeg", "image/png", "image/webp"] as const;
 export const recordAttachmentMimeTypes = [
   ...reviewVersionMimeTypes,
   "application/pdf",
@@ -17,10 +18,11 @@ export const workbookMimeTypes = [
 ] as const;
 
 const reviewVersionMimeTypeSet = new Set<string>(reviewVersionMimeTypes);
+const projectThumbnailMimeTypeSet = new Set<string>(projectThumbnailMimeTypes);
 const recordAttachmentMimeTypeSet = new Set<string>(recordAttachmentMimeTypes);
 const workbookMimeTypeSet = new Set<string>(workbookMimeTypes);
 
-export type UploadValidationKind = "review-version" | "record-attachment" | "workbook";
+export type UploadValidationKind = "review-version" | "record-attachment" | "workbook" | "project-thumbnail";
 
 export function validateUploadFile(file: File, kind: UploadValidationKind) {
   const allowedMimeTypes = getAllowedMimeTypes(kind);
@@ -42,12 +44,14 @@ export function isAllowedRecordAttachmentMimeType(type: string) {
 
 function getAllowedMimeTypes(kind: UploadValidationKind) {
   if (kind === "review-version") return reviewVersionMimeTypeSet;
+  if (kind === "project-thumbnail") return projectThumbnailMimeTypeSet;
   if (kind === "workbook") return workbookMimeTypeSet;
   return recordAttachmentMimeTypeSet;
 }
 
 function unsupportedMessage(kind: UploadValidationKind) {
   if (kind === "review-version") return "只支持 mp4、mov、jpg、png、webp。";
+  if (kind === "project-thumbnail") return "项目封面只支持 jpg、png、webp 图片。";
   if (kind === "workbook") return "只支持 xlsx、xls、csv 表格文件。";
   return "只支持视频、图片、PDF、Word、Excel、CSV 附件。";
 }
