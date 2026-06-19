@@ -6,6 +6,8 @@ import { fail, ok } from "@/lib/api-response";
 import { getPrisma } from "@/lib/prisma";
 
 const patchShotSchema = z.object({
+  code: z.string().trim().min(2).max(40).optional(),
+  sequenceCode: z.string().trim().min(1).max(24).optional(),
   status: z.enum(TaskStatus).optional(),
   description: z.string().trim().optional().nullable(),
   cutIn: z.number().int().optional().nullable(),
@@ -69,10 +71,30 @@ export async function PATCH(request: Request, ctx: ShotRouteContext) {
       typeof parsed.data.cutIn === "number" && typeof parsed.data.cutOut === "number"
         ? Math.max(0, parsed.data.cutOut - parsed.data.cutIn)
         : undefined;
+    const currentShot = parsed.data.sequenceCode
+      ? await prisma.shot.findUnique({
+          where: { id: shotId },
+          select: { projectId: true },
+        })
+      : null;
+
+    if (parsed.data.sequenceCode && !currentShot) {
+      return fail("Shot not found.", 404);
+    }
+
+    const sequence = parsed.data.sequenceCode
+      ? await prisma.sequence.upsert({
+          where: { projectId_code: { projectId: currentShot!.projectId, code: parsed.data.sequenceCode.toUpperCase() } },
+          update: {},
+          create: { projectId: currentShot!.projectId, code: parsed.data.sequenceCode.toUpperCase() },
+        })
+      : null;
 
     const shot = await prisma.shot.update({
       where: { id: shotId },
       data: {
+        code: parsed.data.code?.toUpperCase(),
+        sequenceId: sequence?.id,
         status: parsed.data.status,
         description: parsed.data.description,
         cutIn: parsed.data.cutIn,

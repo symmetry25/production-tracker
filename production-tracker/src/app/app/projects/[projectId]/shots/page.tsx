@@ -1,4 +1,3 @@
-import { CreateShotForm } from "@/components/shot/create-shot-form";
 import { ShotTable } from "@/components/shot/shot-table";
 import { getDictionary, getLocale } from "@/lib/i18n";
 import { getShotTableItems, type ShotTableItem } from "@/lib/shot-data";
@@ -24,13 +23,6 @@ export default async function ProjectShotsPage({ params }: { params: Promise<{ p
           <h1 className="mt-2 text-3xl font-semibold">{t.title}</h1>
           <p className="mt-2 text-sm text-[#aaa599]">{t.description}</p>
         </div>
-        <div className="flex h-10 items-center gap-2 text-xs text-[#aaa599]">
-          <CreateShotForm projectId={projectId} />
-          <button className="h-10 border border-[#3f3c33] px-3">Sort</button>
-          <button className="h-10 border border-[#3f3c33] px-3">Group</button>
-          <button className="h-10 border border-[#3f3c33] px-3">Fields</button>
-          <button className="h-10 border border-[#3f3c33] px-3">Filter</button>
-        </div>
       </div>
 
       {error ? (
@@ -40,7 +32,7 @@ export default async function ProjectShotsPage({ params }: { params: Promise<{ p
           <p className="mt-3 max-w-3xl text-sm leading-6 text-[#c9c3b5]">{error}</p>
         </div>
       ) : (
-        <ShotTable shots={shots} />
+        <ShotTable projectId={projectId} shots={shots} />
       )}
     </>
   );
