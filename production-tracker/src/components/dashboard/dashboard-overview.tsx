@@ -3,11 +3,29 @@ import { CrewTable } from "@/components/dashboard/crew-table";
 import { DashboardPanel } from "@/components/dashboard/dashboard-panel";
 import { DonutChart, HorizontalBars, StackedAreaChart, StackedBarChart, VelocityChart, VersionStatusBars } from "@/components/dashboard/dashboard-charts";
 import { LatestVersionFilmstrip } from "@/components/dashboard/latest-version-filmstrip";
+import { ProducerCommandCenter } from "@/components/dashboard/producer-command-center";
 import type { DashboardStats } from "@/lib/dashboard-data";
+import type { Dictionary } from "@/lib/i18n";
+import type { ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
+import type { TaskTableItem } from "@/lib/task-data";
 
-export function DashboardOverview({ stats }: { stats: DashboardStats }) {
+export function DashboardOverview({
+  projectId,
+  stats,
+  tasks,
+  scheduleSummary,
+  labels,
+}: {
+  projectId: string;
+  stats: DashboardStats;
+  tasks: TaskTableItem[];
+  scheduleSummary: ScheduleSuggestionSummary;
+  labels: Dictionary["pages"]["overview"]["producerCommand"];
+}) {
   return (
     <div className="space-y-5">
+      <ProducerCommandCenter projectId={projectId} stats={stats} tasks={tasks} scheduleSummary={scheduleSummary} labels={labels} />
+
       <CountdownWidget project={stats.project} counts={stats.counts} />
 
       <div className="grid grid-cols-[0.9fr_1.1fr] gap-5">
