@@ -5,11 +5,25 @@ import { useState } from "react";
 import type { AiRecognitionMode } from "@/lib/ai-recognition";
 
 const modes: AiRecognitionMode[] = ["invoice", "table", "document", "card", "custom"];
+type BatchRecognitionItem = {
+  current: number;
+  total: number;
+  name: string;
+  result: {
+    result?: Record<string, unknown>;
+    provider?: string;
+    note?: string;
+  };
+};
 
 export function AiRecognizerPanel({ entityTypeId = "retail-purchase-order" }: { entityTypeId?: string }) {
   const [mode, setMode] = useState<AiRecognitionMode>("invoice");
   const [loading, setLoading] = useState(false);
+  const [batchLoading, setBatchLoading] = useState(false);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [batchFiles, setBatchFiles] = useState<File[]>([]);
+  const [batchResults, setBatchResults] = useState<BatchRecognitionItem[]>([]);
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [note, setNote] = useState("");
   const [applyStatus, setApplyStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
 
@@ -39,13 +53,69 @@ export function AiRecognizerPanel({ entityTypeId = "retail-purchase-order" }: { 
     setApplyStatus(response.ok ? "done" : "error");
   }
 
+  async function runBatchRecognition() {
+    setBatchLoading(true);
+    setBatchResults([]);
+    setBatchProgress({ current: 0, total: batchFiles.length || 1 });
+    setNote("");
+
+    const files = batchFiles.length
+      ? await Promise.all(
+          batchFiles.map(async (file) => {
+            const dataUrl = await readFileAsDataUrl(file);
+            return {
+              name: file.name,
+              imageType: file.type,
+              imageBase64: dataUrl.split(",")[1] ?? "",
+            };
+          }),
+        )
+      : [{ name: "mock-document" }];
+
+    const response = await fetch("/api/ai/recognize/batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ files, mode, entityTypeId }),
+    });
+
+    if (!response.ok || !response.body) {
+      const payload = await response.json().catch(() => null);
+      setBatchLoading(false);
+      setNote(payload?.error ?? "批量识别失败。");
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+
+      for (const eventText of events) {
+        const item = parseSseRecognitionItem(eventText);
+        if (!item) continue;
+        setBatchProgress({ current: item.current, total: item.total });
+        setBatchResults((current) => [...current, item]);
+        setResult(item.result.result ?? null);
+        setNote(item.result.note ?? "");
+      }
+    }
+
+    setBatchLoading(false);
+  }
+
   return (
     <section className="grid gap-4 xl:grid-cols-[1fr_360px]">
       <div className="border border-dashed border-[#4a463d] bg-[#181713] p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-lg font-semibold">AI 识别测试台</p>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#aaa599]">选择识别模式后直接调用接口；配置真实 API Key 前会返回稳定 mock，适合演示和联调。</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#aaa599]">选择识别模式后可以单张测试，也可以批量上传发票、手写表格或采购单。配置真实 API Key 前会返回稳定 mock，适合演示和联调。</p>
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={runRecognition} disabled={loading} className="h-9 border border-[#d8b46a]/55 bg-[#d8b46a]/10 px-4 text-xs font-semibold text-[#e8c678] disabled:opacity-50">
@@ -68,6 +138,36 @@ export function AiRecognizerPanel({ entityTypeId = "retail-purchase-order" }: { 
             </button>
           ))}
         </div>
+        <div className="mt-5 border border-[#2f2d27] bg-[#11110f] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-[#f4f1e8]">批量识别队列</p>
+              <p className="mt-1 text-xs text-[#8f8a7e]">支持多张图片或 PDF 截图，接口用 SSE 流式返回每张单据结果。</p>
+            </div>
+            <button
+              type="button"
+              onClick={runBatchRecognition}
+              disabled={batchLoading}
+              className="h-9 border border-[#27422e] bg-[#132016] px-4 text-xs font-semibold text-[#83d6ae] disabled:opacity-50"
+            >
+              {batchLoading ? "批量识别中" : "运行批量识别"}
+            </button>
+          </div>
+          <input
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/webp,application/pdf"
+            onChange={(event) => setBatchFiles(Array.from(event.target.files ?? []))}
+            className="mt-4 block w-full text-xs text-[#aaa599] file:mr-3 file:h-9 file:border-0 file:bg-[#2b2924] file:px-3 file:text-xs file:font-semibold file:text-[#f4f1e8] hover:file:bg-[#343027]"
+          />
+          <div className="mt-3 flex items-center justify-between text-xs text-[#8f8a7e]">
+            <span>{batchFiles.length ? `${batchFiles.length} 个文件已选择` : "未选择文件时会运行 mock 批量样例"}</span>
+            <span className="font-mono">{batchProgress.current}/{batchProgress.total}</span>
+          </div>
+          <div className="mt-2 h-1.5 bg-[#24231f]">
+            <div className="h-full bg-[#83d6ae] transition-all" style={{ width: `${batchProgress.total ? (batchProgress.current / batchProgress.total) * 100 : 0}%` }} />
+          </div>
+        </div>
         {note ? <p className="mt-4 text-xs text-[#8f8a7e]">{note}</p> : null}
         {applyStatus === "done" ? <p className="mt-3 text-xs text-[#83d6ae]">识别结果已写入采购单记录。</p> : null}
         {applyStatus === "error" ? <p className="mt-3 text-xs text-[#ff9c8c]">应用失败，请检查字段映射。</p> : null}
@@ -75,6 +175,27 @@ export function AiRecognizerPanel({ entityTypeId = "retail-purchase-order" }: { 
       <aside className="border border-[#34322b] bg-[#181713] p-4">
         <p className="text-sm font-semibold">识别结果</p>
         <pre className="mt-3 max-h-80 overflow-auto bg-[#11110f] p-3 text-xs leading-5 text-[#c9c3b5]">{JSON.stringify(result ?? { waiting: "点击开始识别" }, null, 2)}</pre>
+        {batchResults.length ? (
+          <div className="mt-4 border-t border-[#2a2a28] pt-4">
+            <p className="text-sm font-semibold">批量结果</p>
+            <div className="mt-3 max-h-72 space-y-2 overflow-auto">
+              {batchResults.map((item) => (
+                <button
+                  key={`${item.current}-${item.name}`}
+                  type="button"
+                  onClick={() => setResult(item.result.result ?? null)}
+                  className="block w-full border border-[#2f2d27] bg-[#11110f] px-3 py-2 text-left hover:border-[#d8b46a]"
+                >
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="truncate text-xs font-semibold text-[#f4f1e8]">{item.name}</span>
+                    <span className="font-mono text-[11px] text-[#83d6ae]">{item.current}/{item.total}</span>
+                  </span>
+                  <span className="mt-1 block truncate font-mono text-[11px] text-[#8f8a7e]">{JSON.stringify(item.result.result ?? {})}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </aside>
     </section>
   );
@@ -94,4 +215,29 @@ function normalizeRecognizedRecord(result: Record<string, unknown>) {
     status: "pending",
     vendor_score: Math.round(Number(result.confidence ?? 0.85) * 100),
   };
+}
+
+function parseSseRecognitionItem(eventText: string): BatchRecognitionItem | null {
+  const dataLine = eventText.split("\n").find((line) => line.startsWith("data:"));
+  if (!dataLine) return null;
+
+  try {
+    const payload = JSON.parse(dataLine.slice(5).trim()) as BatchRecognitionItem;
+    if (typeof payload.current === "number" && typeof payload.total === "number" && typeof payload.name === "string") {
+      return payload;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Unable to read file."));
+    reader.readAsDataURL(file);
+  });
 }

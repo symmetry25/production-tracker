@@ -1,6 +1,7 @@
 "use client";
 
 import { DashboardLayoutEditor } from "@/components/dashboard-builder/dashboard-layout-editor";
+import { DashboardRefreshControls } from "@/components/dashboard-builder/dashboard-refresh-controls";
 import { DashboardWidgetContent, normalizeDashboardRows, type DashboardWidgetData } from "@/components/dashboard-builder/dashboard-widget-renderer";
 import { WidgetAddPanel } from "@/components/dashboard-builder/widget-add-panel";
 import { PageHeader, Metric } from "@/components/extensions/entity-type-pages";
@@ -36,7 +37,17 @@ export function DashboardsIndex({ dashboards }: { dashboards: DashboardItem[] })
 export function DashboardView({ dashboard, widgetData }: { dashboard: DashboardItem; widgetData: Record<string, DashboardWidgetData> }) {
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow="Dashboard view" title={dashboard.name} description={dashboard.description} action={<a href={`/app/dashboards/${dashboard.id}/edit`} className="h-9 border border-[#3f3c33] px-4 py-2 text-xs text-[#c9c3b5] hover:border-[#d8b46a]">编辑构建器</a>} />
+      <PageHeader
+        eyebrow="Dashboard view"
+        title={dashboard.name}
+        description={dashboard.description}
+        action={
+          <div className="flex items-center gap-2">
+            <DashboardRefreshControls updatedAt={dashboard.updatedAt} />
+            <a href={`/app/dashboards/${dashboard.id}/edit`} className="h-9 border border-[#3f3c33] px-4 py-2 text-xs text-[#c9c3b5] hover:border-[#d8b46a]">编辑构建器</a>
+          </div>
+        }
+      />
       <div className="grid auto-rows-[72px] grid-cols-12 gap-3">
         {dashboard.widgets.map((widget) => (
           <WidgetCard key={widget.id} config={widget.config} data={widgetData[widget.id]} />
