@@ -2,6 +2,14 @@ import Link from "next/link";
 
 import { buildProductionReadinessReport, type ReadinessStatus } from "@/lib/production-readiness";
 import { getCurrentProjectId } from "@/lib/current-project";
+import {
+  buildTrialFeedbackSummary,
+  demoTrialFeedbackResponses,
+  type TrialCommercialSignal,
+  type TrialFeedbackResponse,
+  type TrialFeedbackSummary,
+  type TrialFeedbackTheme,
+} from "@/lib/trial-feedback";
 import { buildTrialHandoffPack, type TrialChecklistItem, type TrialDeploymentTrack } from "@/lib/trial-handoff";
 
 export default async function TrialHandoffPage() {
@@ -12,6 +20,7 @@ export default async function TrialHandoffPage() {
     appUrl: process.env.NEXT_PUBLIC_APP_URL ?? process.env.AUTH_URL ?? process.env.NEXTAUTH_URL,
     projectId: currentProjectId,
   });
+  const feedback = buildTrialFeedbackSummary(demoTrialFeedbackResponses);
 
   return (
     <>
@@ -96,6 +105,8 @@ export default async function TrialHandoffPage() {
         </div>
       </section>
 
+      <TrialFeedbackPanel summary={feedback} />
+
       <section className="mt-5 grid gap-5 xl:grid-cols-2">
         <ActionList title="仍需处理" eyebrow="Blockers / Warnings" items={[...pack.blockedItems, ...pack.warningItems]} />
         <div className="border border-[#34322b] bg-[#151410]">
@@ -119,6 +130,109 @@ export default async function TrialHandoffPage() {
         </div>
       </section>
     </>
+  );
+}
+
+function TrialFeedbackPanel({ summary }: { summary: TrialFeedbackSummary }) {
+  return (
+    <section className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <div className={["border p-4", signalPanelClass(summary.commercialSignal)].join(" ")}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7f7a70]">Trial feedback loop</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#f4f1e8]">试用反馈闭环</h2>
+          </div>
+          <SignalBadge signal={summary.commercialSignal} />
+        </div>
+        <p className="mt-4 text-sm leading-6 text-[#c9c3b5]">{summary.recommendation}</p>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <Metric label="反馈数" value={summary.totalResponses} />
+          <Metric label="有效线索" value={summary.qualifiedLeadCount} />
+          <Metric label="价值评分" value={`${summary.averageValueScore}/5`} />
+          <Metric label="流程匹配" value={`${summary.averageWorkflowFitScore}/5`} />
+        </div>
+        <div className="mt-4 border-t border-[#2f2d27] pt-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">Next actions</p>
+          <div className="mt-3 space-y-2">
+            {summary.nextActions.map((action) => (
+              <p key={action} className="border border-[#2f2d27] bg-[#11110f] px-3 py-2 text-xs leading-5 text-[#c9c3b5]">{action}</p>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="min-w-0 border border-[#34322b] bg-[#151410]">
+        <SectionHeader eyebrow="Themes and testers" title="最高频需求与测试者反馈" />
+        <div className="grid min-w-0 gap-4 border-b border-[#2f2d27] p-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">Top themes</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {summary.topThemes.map((theme) => (
+                <ThemeChip key={`${theme.kind}-${theme.label}`} theme={theme} />
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            {summary.responses.slice(0, 3).map((response) => (
+              <FeedbackQuote key={response.id} response={response} />
+            ))}
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <div className="grid min-w-[860px] grid-cols-[160px_150px_100px_100px_1fr_110px] border-b border-[#2f2d27] bg-[#1e1d19] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7f7a70]">
+            <span>测试者</span>
+            <span>组织/角色</span>
+            <span>价值</span>
+            <span>付费意愿</span>
+            <span>主要反馈</span>
+            <span>负责人</span>
+          </div>
+          {summary.responses.map((response) => (
+            <FeedbackRow key={response.id} response={response} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ThemeChip({ theme }: { theme: TrialFeedbackTheme }) {
+  const className = theme.kind === "feature"
+    ? "border-[#294838] bg-[#13221b] text-[#9cccae]"
+    : "border-[#6f5631] bg-[#211b12] text-[#e8c678]";
+
+  return (
+    <span className={["border px-2 py-1 text-xs", className].join(" ")}>
+      {theme.label} · {theme.count}
+    </span>
+  );
+}
+
+function FeedbackQuote({ response }: { response: TrialFeedbackResponse }) {
+  return (
+    <article className="border border-[#2f2d27] bg-[#11110f] p-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-[#f4f1e8]">{response.testerName}</p>
+        <span className={["border px-2 py-1 text-[10px]", severityClass(response.blockerSeverity)].join(" ")}>{severityLabel(response.blockerSeverity)}</span>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-[#aaa599]">{response.quote}</p>
+    </article>
+  );
+}
+
+function FeedbackRow({ response }: { response: TrialFeedbackResponse }) {
+  return (
+    <div className="grid min-w-[860px] grid-cols-[160px_150px_100px_100px_1fr_110px] border-b border-[#2f2d27] px-4 py-3 text-sm">
+      <span className="font-semibold text-[#f4f1e8]">{response.testerName}</span>
+      <span className="text-[#aaa599]">{response.organization}<br /><span className="text-[#7f7a70]">{response.role}</span></span>
+      <span className="font-mono text-[#e8c678]">{response.valueScore}/5</span>
+      <span className={["w-fit border px-2 py-1 text-xs", willingnessClass(response.willingnessToPay)].join(" ")}>{willingnessLabel(response.willingnessToPay)}</span>
+      <span className="leading-6 text-[#c9c3b5]">
+        {response.requestedFeatures.slice(0, 2).join(" / ")}
+        {response.blockers.length ? <span className="block text-[#8f8a7e]">阻断：{response.blockers.slice(0, 2).join(" / ")}</span> : null}
+      </span>
+      <span className="text-[#aaa599]">{response.nextStepOwner}</span>
+    </div>
   );
 }
 
@@ -228,4 +342,55 @@ function modeLabel(mode: "demo" | "trial" | "production") {
   if (mode === "demo") return "演示";
   if (mode === "trial") return "试用";
   return "生产";
+}
+
+function SignalBadge({ signal }: { signal: TrialCommercialSignal }) {
+  return <span className={["border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]", signalBadgeClass(signal)].join(" ")}>{signalLabel(signal)}</span>;
+}
+
+function signalPanelClass(signal: TrialCommercialSignal) {
+  if (signal === "blocked") return "border-[#6f2f2f] bg-[#221515]";
+  if (signal === "strong") return "border-[#294838] bg-[#13221b]";
+  if (signal === "promising") return "border-[#6f5631] bg-[#211b12]";
+  return "border-[#34322b] bg-[#151410]";
+}
+
+function signalBadgeClass(signal: TrialCommercialSignal) {
+  if (signal === "blocked") return "border-[#6f2f2f] bg-[#2b1717] text-[#ff9a8f]";
+  if (signal === "strong") return "border-[#294838] bg-[#13221b] text-[#9cccae]";
+  if (signal === "promising") return "border-[#6f5631] bg-[#211b12] text-[#e8c678]";
+  return "border-[#34322b] bg-[#11110f] text-[#aaa599]";
+}
+
+function signalLabel(signal: TrialCommercialSignal) {
+  if (signal === "blocked") return "先修阻断";
+  if (signal === "strong") return "强信号";
+  if (signal === "promising") return "可跟进";
+  return "信号弱";
+}
+
+function severityClass(severity: TrialFeedbackResponse["blockerSeverity"]) {
+  if (severity === "critical") return "border-[#6f2f2f] bg-[#2b1717] text-[#ff9a8f]";
+  if (severity === "major") return "border-[#6f5631] bg-[#211b12] text-[#e8c678]";
+  if (severity === "minor") return "border-[#34322b] bg-[#11110f] text-[#aaa599]";
+  return "border-[#294838] bg-[#13221b] text-[#9cccae]";
+}
+
+function severityLabel(severity: TrialFeedbackResponse["blockerSeverity"]) {
+  if (severity === "critical") return "Critical";
+  if (severity === "major") return "Major";
+  if (severity === "minor") return "Minor";
+  return "Clear";
+}
+
+function willingnessClass(willingness: TrialFeedbackResponse["willingnessToPay"]) {
+  if (willingness === "yes") return "border-[#294838] bg-[#13221b] text-[#9cccae]";
+  if (willingness === "maybe") return "border-[#6f5631] bg-[#211b12] text-[#e8c678]";
+  return "border-[#6f2f2f] bg-[#2b1717] text-[#ff9a8f]";
+}
+
+function willingnessLabel(willingness: TrialFeedbackResponse["willingnessToPay"]) {
+  if (willingness === "yes") return "愿意";
+  if (willingness === "maybe") return "待确认";
+  return "不愿意";
 }
