@@ -54,6 +54,7 @@ export async function AppShell({ session, locale, dictionary, children }: AppShe
     { key: "aiRecognition", href: "/app/ai/recognize" },
     { key: "scorecard", href: "/app/users/demo-user-vfx/scorecard" },
     { key: "readiness", href: "/app/admin/readiness" },
+    { key: "trialHandoff", href: "/app/admin/trial" },
     { key: "calendar", href: "/app" },
   ];
   const commandItems: CommandItem[] = [
@@ -68,6 +69,7 @@ export async function AppShell({ session, locale, dictionary, children }: AppShe
     { title: t.topNav.people, subtitle: "Users and departments / 人员管理", href: "/app/admin/users", keywords: ["people", "users", "crew", "人员", "部门"], shortcut: "g u" },
     { title: "人员评分卡", subtitle: "Grade, trust score, skill matrix / 等级信任评分技能矩阵", href: "/app/users/demo-user-vfx/scorecard", keywords: ["score", "grade", "skill", "评分", "等级", "技能"], shortcut: "g l" },
     { title: t.sideNav.readiness, subtitle: "Production readiness / 上线前检查", href: "/app/admin/readiness", keywords: ["readiness", "deploy", "database", "auth", "上线", "部署", "数据库", "认证"], shortcut: "g y" },
+    { title: t.sideNav.trialHandoff, subtitle: "External trial pack / 外部试用交付包", href: "/app/admin/trial", keywords: ["trial", "handoff", "tester", "试用", "交付", "测试"], shortcut: "g q" },
     { title: t.topNav.resources, subtitle: "Resource planning / 人天资源规划", href: `/app/resource-planning${projectQuery}`, keywords: ["resource", "planning", "capacity", "资源", "排期", "人天"], shortcut: "g r" },
     { title: t.sideNav.overview, subtitle: "Project overview / 项目总览", href: projectPageHref("overview"), keywords: ["overview", "dashboard", "总览", "看板"], shortcut: "g o" },
     { title: t.topNav.shots, subtitle: "Shot pipeline / 镜头流水线", href: projectPageHref("shots"), keywords: ["shot", "sequence", "镜头", "序列"], shortcut: "g s" },
@@ -100,6 +102,7 @@ export async function AppShell({ session, locale, dictionary, children }: AppShe
           "g u": "/app/admin/users",
           "g r": `/app/resource-planning${projectQuery}`,
           "g y": "/app/admin/readiness",
+          "g q": "/app/admin/trial",
           "g o": projectPageHref("overview"),
           "g s": projectPageHref("shots"),
           "g a": projectPageHref("assets"),

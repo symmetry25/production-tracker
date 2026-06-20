@@ -41,6 +41,7 @@ export const dictionaries = {
         aiRecognition: "AI识别",
         scorecard: "评分卡",
         readiness: "上线检查",
+        trialHandoff: "试用交付",
         calendar: "日历例外",
       },
       projectTabs: {
@@ -514,6 +515,7 @@ export const dictionaries = {
         aiRecognition: "AI recognition",
         scorecard: "Scorecard",
         readiness: "Readiness",
+        trialHandoff: "Trial handoff",
         calendar: "Calendar exceptions",
       },
       projectTabs: {
