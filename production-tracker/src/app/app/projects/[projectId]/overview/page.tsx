@@ -4,6 +4,7 @@ import { ProjectSettingsButton } from "@/components/project/project-settings-but
 import { getDashboardStats, type DashboardStats } from "@/lib/dashboard-data";
 import { getDictionary, getLocale } from "@/lib/i18n";
 import { buildOverviewResourcePulse, type OverviewResourcePulse } from "@/lib/overview-resource-pulse";
+import { buildProducerDecisionBrief, type ProducerDecisionBrief } from "@/lib/producer-decision-brief";
 import { getResourceBudgetData } from "@/lib/resource-data";
 import { buildScheduleSuggestions, type ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
 import { getTaskTableItems, type TaskTableItem } from "@/lib/task-data";
@@ -16,6 +17,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
   let tasks: TaskTableItem[] = [];
   let scheduleSummary: ScheduleSuggestionSummary | null = null;
   let resourcePulse: OverviewResourcePulse | null = null;
+  let decisionBrief: ProducerDecisionBrief | null = null;
   let error: string | null = null;
   const analysisDate = new Date();
 
@@ -25,11 +27,12 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
     tasks = taskData;
     scheduleSummary = buildScheduleSuggestions({ projectId, tasks, now: analysisDate });
     resourcePulse = buildOverviewResourcePulse(resourceData, analysisDate.toISOString().slice(0, 10));
+    decisionBrief = buildProducerDecisionBrief({ projectId, resourcePulse, scheduleSummary });
   } catch (caught) {
     error = caught instanceof Error ? caught.message : "项目详情暂时无法读取。";
   }
 
-  if (error || !stats || !scheduleSummary || !resourcePulse) {
+  if (error || !stats || !scheduleSummary || !resourcePulse || !decisionBrief) {
     return (
       <div className="border border-[#6f5631] bg-[#211b12] p-5">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d8b46a]">Database pending</p>
@@ -55,7 +58,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
         </div>
       </div>
 
-      <DashboardOverview projectId={projectId} stats={stats} tasks={tasks} scheduleSummary={scheduleSummary} resourcePulse={resourcePulse} labels={t} />
+      <DashboardOverview projectId={projectId} stats={stats} tasks={tasks} scheduleSummary={scheduleSummary} resourcePulse={resourcePulse} decisionBrief={decisionBrief} labels={t} />
     </>
   );
 }

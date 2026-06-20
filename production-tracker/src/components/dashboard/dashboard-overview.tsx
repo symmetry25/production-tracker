@@ -4,10 +4,12 @@ import { DashboardPanel } from "@/components/dashboard/dashboard-panel";
 import { DonutChart, HorizontalBars, StackedAreaChart, StackedBarChart, VelocityChart, VersionStatusBars } from "@/components/dashboard/dashboard-charts";
 import { LatestVersionFilmstrip } from "@/components/dashboard/latest-version-filmstrip";
 import { ProducerCommandCenter } from "@/components/dashboard/producer-command-center";
+import { ProducerDecisionBriefCard } from "@/components/dashboard/producer-decision-brief-card";
 import { ResourcePulseCard } from "@/components/dashboard/resource-pulse-card";
 import type { DashboardStats } from "@/lib/dashboard-data";
 import type { Dictionary } from "@/lib/i18n";
 import type { OverviewResourcePulse } from "@/lib/overview-resource-pulse";
+import type { ProducerDecisionBrief } from "@/lib/producer-decision-brief";
 import type { ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
 import type { TaskTableItem } from "@/lib/task-data";
 
@@ -17,6 +19,7 @@ export function DashboardOverview({
   tasks,
   scheduleSummary,
   resourcePulse,
+  decisionBrief,
   labels,
 }: {
   projectId: string;
@@ -24,6 +27,7 @@ export function DashboardOverview({
   tasks: TaskTableItem[];
   scheduleSummary: ScheduleSuggestionSummary;
   resourcePulse: OverviewResourcePulse;
+  decisionBrief: ProducerDecisionBrief;
   labels: Dictionary["pages"]["overview"];
 }) {
   const chartLabels = labels.charts;
@@ -31,6 +35,8 @@ export function DashboardOverview({
   return (
     <div className="space-y-5">
       <ProducerCommandCenter projectId={projectId} stats={stats} tasks={tasks} scheduleSummary={scheduleSummary} labels={labels.producerCommand} />
+
+      <ProducerDecisionBriefCard brief={decisionBrief} labels={labels.decisionBrief} />
 
       <ResourcePulseCard pulse={resourcePulse} labels={labels.resourcePulse} />
 
