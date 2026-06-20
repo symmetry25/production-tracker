@@ -79,7 +79,7 @@ export async function AppShell({ session, locale, dictionary, children }: AppShe
     { title: "制片资源报告", subtitle: "Printable producer report / 可打印制片报告", href: projectPageHref("resources/report"), keywords: ["report", "pdf", "print", "budget", "报告", "打印", "预算", "审计"] },
     { title: t.projectTabs.phases, subtitle: "Production phases / 制片阶段", href: projectPageHref("phases"), keywords: ["phase", "schedule", "阶段", "节点"] },
     { title: t.projectTabs.workOrders, subtitle: "Work orders / 制作工单", href: projectPageHref("work-orders"), keywords: ["work order", "order", "工单", "制片"] },
-    ...["DIT组", "调色/VFX组", "摄影组", "灯光电工组", "场地运输组", "后期统筹组"].map((department) => ({
+    ...["DIT组", "调色/VFX组", "摄影组", "灯光电工组", "场地管理组", "酒店住宿组", "车辆运输组", "财务审计组", "后期统筹组"].map((department) => ({
       title: `${department} 资源下钻`,
       subtitle: "Department capacity drill-down / 部门资源明细",
       href: `/app/resource-planning/${encodeURIComponent(department)}${projectQuery}`,

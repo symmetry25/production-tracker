@@ -15,7 +15,7 @@ const dueDate = new Date("2026-08-28T00:00:00.000Z");
 const milestoneDate = new Date("2026-07-18T00:00:00.000Z");
 const createdAt = new Date("2026-05-20T09:00:00.000Z");
 
-type DemoCrewMember = TaskAssignee & {
+export type DemoCrewMember = TaskAssignee & {
   capacity: number;
 };
 
@@ -55,15 +55,35 @@ type DemoTaskSeed = {
 
 const crew: DemoCrewMember[] = [
   { id: "demo-user-producer", name: "林一凡", department: "制片组", role: "PRODUCER", capacity: 5 },
+  { id: "demo-user-line-producer", name: "何越", department: "制片组", role: "PRODUCER", capacity: 5 },
+  { id: "demo-user-pm", name: "孟然", department: "制片组", role: "SUPERVISOR", capacity: 5 },
+  { id: "demo-user-director", name: "赵宁", department: "导演组", role: "SUPERVISOR", capacity: 4 },
   { id: "demo-user-ad", name: "周岚", department: "导演组", role: "SUPERVISOR", capacity: 5 },
+  { id: "demo-user-script", name: "唐婧", department: "编剧/场记组", role: "ARTIST", capacity: 5 },
+  { id: "demo-user-actor-lead", name: "沈知夏", department: "演员/选角组", role: "ARTIST", capacity: 4 },
+  { id: "demo-user-actor-support", name: "Leo Tan", department: "演员/选角组", role: "ARTIST", capacity: 4 },
+  { id: "demo-user-casting", name: "陈茜", department: "演员/选角组", role: "SUPERVISOR", capacity: 4 },
   { id: "demo-user-dp", name: "Marcus Chen", department: "摄影组", role: "SUPERVISOR", capacity: 4 },
+  { id: "demo-user-camera-op", name: "吴柏", department: "摄影组", role: "ARTIST", capacity: 4 },
+  { id: "demo-user-ac1", name: "Evan Xu", department: "摄影助理组", role: "ARTIST", capacity: 5 },
+  { id: "demo-user-ac2", name: "宋雨", department: "摄影助理组", role: "ARTIST", capacity: 5 },
   { id: "demo-user-dit", name: "Ava Wong", department: "DIT组", role: "ARTIST", capacity: 4 },
+  { id: "demo-user-data-wrangler", name: "梁译", department: "DIT组", role: "ARTIST", capacity: 5 },
   { id: "demo-user-gaffer", name: "陈昊", department: "灯光电工组", role: "SUPERVISOR", capacity: 4 },
+  { id: "demo-user-electrician", name: "韩立", department: "灯光电工组", role: "ARTIST", capacity: 5 },
+  { id: "demo-user-key-grip", name: "高峰", department: "器械/Grip组", role: "SUPERVISOR", capacity: 4 },
   { id: "demo-user-art", name: "许珂", department: "美术组", role: "SUPERVISOR", capacity: 4 },
+  { id: "demo-user-costume", name: "叶青", department: "服化/造型组", role: "SUPERVISOR", capacity: 4 },
+  { id: "demo-user-prop-master", name: "李策", department: "道具组", role: "ARTIST", capacity: 5 },
   { id: "demo-user-sound", name: "梁森", department: "现场录音组", role: "ARTIST", capacity: 5 },
+  { id: "demo-user-location", name: "陆遥", department: "场地管理组", role: "SUPERVISOR", capacity: 5 },
+  { id: "demo-user-hotel", name: "苏敏", department: "酒店住宿组", role: "ARTIST", capacity: 5 },
   { id: "demo-user-vfx", name: "Nora Li", department: "调色/VFX组", role: "REVIEWER", capacity: 4 },
-  { id: "demo-user-transport", name: "高远", department: "场地运输组", role: "ARTIST", capacity: 5 },
+  { id: "demo-user-transport", name: "高远", department: "车辆运输组", role: "ARTIST", capacity: 5 },
+  { id: "demo-user-catering", name: "Mina Zhao", department: "后勤餐饮组", role: "ARTIST", capacity: 5 },
+  { id: "demo-user-stunt", name: "雷鹏", department: "特技/安全组", role: "SUPERVISOR", capacity: 3 },
   { id: "demo-user-post", name: "Milo Grant", department: "后期统筹组", role: "SUPERVISOR", capacity: 4 },
+  { id: "demo-user-accountant", name: "林会计", department: "财务审计组", role: "PRODUCER", capacity: 4 },
 ];
 
 const shotSeeds: DemoShotSeed[] = [
@@ -398,6 +418,14 @@ export function isDemoProjectId(projectId: string) {
 
 export function shouldUseDemoData() {
   return !process.env.DATABASE_URL;
+}
+
+export function getDemoCrewMembers(projectId: string): DemoCrewMember[] {
+  if (!isDemoProjectId(projectId)) {
+    return [];
+  }
+
+  return crew;
 }
 
 export function getDemoProjectGridItems(): ProjectGridItem[] {

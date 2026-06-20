@@ -1,6 +1,6 @@
 import { addDays, differenceInCalendarDays, eachWeekOfInterval, endOfWeek, format, isWithinInterval, max, min, parseISO } from "date-fns";
 
-import { getDemoTaskTableItems, shouldUseDemoData } from "@/lib/demo-data";
+import { getDemoCrewMembers, getDemoTaskTableItems, shouldUseDemoData } from "@/lib/demo-data";
 import { getPrisma } from "@/lib/prisma";
 export { rebuildResourcePlanningWithCalendarExceptions } from "@/lib/resource-planning-calendar";
 import type { TaskTableItem } from "@/lib/task-data";
@@ -435,6 +435,19 @@ function taskTableItemToPlanningTask(task: TaskTableItem): PlanningTask {
 }
 
 function getDemoPlanningPeople(projectId: string): PlanningPerson[] {
+  const crew = getDemoCrewMembers(projectId);
+
+  if (crew.length > 0) {
+    return crew
+      .map((member) => ({
+        id: member.id,
+        name: member.name,
+        department: member.department ?? "Unassigned",
+        capacity: member.capacity,
+      }))
+      .sort((a, b) => a.department.localeCompare(b.department) || a.name.localeCompare(b.name));
+  }
+
   const seen = new Map<string, PlanningPerson>();
   for (const task of getDemoTaskTableItems(projectId)) {
     for (const assignee of task.assignees) {

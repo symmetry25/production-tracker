@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildResourcePlanningData,
   filterResourcePlanningByDepartment,
+  getResourcePlanningData,
   type PlanningCalendarException,
   type PlanningPerson,
   type PlanningTask,
@@ -182,5 +183,33 @@ describe("buildResourcePlanningData", () => {
     expect(data.capacity.map((week) => week.workload)).toEqual([5, 5]);
     expect(withException.capacity.map((week) => week.workload)).toEqual([5, 5]);
     expect(withException.users[0]?.weeks.map((week) => week.tasks.length)).toEqual([1, 1]);
+  });
+
+  it("uses the full film-crew roster for demo resource planning", async () => {
+    const originalDatabaseUrl = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
+
+    try {
+      const data = await getResourcePlanningData("demo-mkali-mission", "2026-05-01", "2026-06-30");
+
+      expect(data.users.length).toBeGreaterThanOrEqual(24);
+      expect(data.users.map((user) => user.department)).toEqual(
+        expect.arrayContaining([
+          "演员/选角组",
+          "摄影助理组",
+          "酒店住宿组",
+          "车辆运输组",
+          "财务审计组",
+        ]),
+      );
+      expect(data.users.map((user) => user.name)).toEqual(expect.arrayContaining(["沈知夏", "林会计", "苏敏"]));
+      expect(data.departments.map((department) => department.department)).toEqual(expect.arrayContaining(["摄影组", "DIT组", "调色/VFX组"]));
+    } finally {
+      if (originalDatabaseUrl === undefined) {
+        delete process.env.DATABASE_URL;
+      } else {
+        process.env.DATABASE_URL = originalDatabaseUrl;
+      }
+    }
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildResourceBudgetDataFromProject, type ResourceProjectSnapshot } from "@/lib/resource-data";
+import { buildResourceBudgetDataFromProject, getResourceBudgetData, type ResourceProjectSnapshot } from "@/lib/resource-data";
 
 describe("buildResourceBudgetDataFromProject", () => {
   it("derives department, people, vendor and fund-flow data from live project tasks", () => {
@@ -99,5 +99,49 @@ describe("buildResourceBudgetDataFromProject", () => {
         { from: "车辆组", to: "车辆供应商", amount: 200 },
       ]),
     );
+  });
+});
+
+describe("demo resource budget data", () => {
+  it("ships a complete film-crew demo package with departments, vendors, audit gates and fund flow", async () => {
+    const originalDatabaseUrl = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
+
+    try {
+      const data = await getResourceBudgetData("demo-mkali-mission");
+
+      expect(data.departments).toHaveLength(21);
+      expect(data.departments.map((department) => department.name)).toEqual(
+        expect.arrayContaining([
+          "制片组",
+          "导演组",
+          "演员/选角组",
+          "摄影组",
+          "DIT组",
+          "灯光电工组",
+          "器械/Grip组",
+          "酒店住宿组",
+          "车辆运输组",
+          "财务审计组",
+        ]),
+      );
+      expect(data.people.length).toBeGreaterThanOrEqual(24);
+      expect(data.people.map((person) => person.role)).toEqual(
+        expect.arrayContaining(["Producer", "1st AD", "Director of Photography", "Digital Imaging Technician", "Lead Actor", "Production Accountant"]),
+      );
+      expect(new Set(data.vendors.map((vendor) => vendor.category))).toEqual(new Set(["equipment", "vehicle", "hotel", "location", "vfx", "production"]));
+      expect(data.vendors.length).toBeGreaterThanOrEqual(12);
+      expect(data.payments.some((payment) => payment.status === "blocked" && payment.vendorName.includes("VFX"))).toBe(true);
+      expect(data.documents.some((document) => document.category === "酒店住宿" && document.missing.length > 0)).toBe(true);
+      expect(data.fundFlow).toEqual(expect.arrayContaining([{ from: "总预算", to: "未分配/预备金", amount: 210000 }]));
+      expect(data.project.totalBudget).toBe(5_200_000);
+      expect(data.project.committedTotal).toBeLessThan(data.project.totalBudget);
+    } finally {
+      if (originalDatabaseUrl === undefined) {
+        delete process.env.DATABASE_URL;
+      } else {
+        process.env.DATABASE_URL = originalDatabaseUrl;
+      }
+    }
   });
 });
