@@ -3,6 +3,8 @@ import { ReportExportButton } from "@/components/dashboard/report-export-button"
 import { ProjectSettingsButton } from "@/components/project/project-settings-button";
 import { getDashboardStats, type DashboardStats } from "@/lib/dashboard-data";
 import { getDictionary, getLocale } from "@/lib/i18n";
+import { buildOverviewResourcePulse, type OverviewResourcePulse } from "@/lib/overview-resource-pulse";
+import { getResourceBudgetData } from "@/lib/resource-data";
 import { buildScheduleSuggestions, type ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
 import { getTaskTableItems, type TaskTableItem } from "@/lib/task-data";
 
@@ -13,17 +15,21 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
   let stats: DashboardStats | null = null;
   let tasks: TaskTableItem[] = [];
   let scheduleSummary: ScheduleSuggestionSummary | null = null;
+  let resourcePulse: OverviewResourcePulse | null = null;
   let error: string | null = null;
   const analysisDate = new Date();
 
   try {
-    [stats, tasks] = await Promise.all([getDashboardStats(projectId), getTaskTableItems({ projectId })]);
+    const [statsData, taskData, resourceData] = await Promise.all([getDashboardStats(projectId), getTaskTableItems({ projectId }), getResourceBudgetData(projectId)]);
+    stats = statsData;
+    tasks = taskData;
     scheduleSummary = buildScheduleSuggestions({ projectId, tasks, now: analysisDate });
+    resourcePulse = buildOverviewResourcePulse(resourceData, analysisDate.toISOString().slice(0, 10));
   } catch (caught) {
     error = caught instanceof Error ? caught.message : "项目详情暂时无法读取。";
   }
 
-  if (error || !stats || !scheduleSummary) {
+  if (error || !stats || !scheduleSummary || !resourcePulse) {
     return (
       <div className="border border-[#6f5631] bg-[#211b12] p-5">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d8b46a]">Database pending</p>
@@ -49,7 +55,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
         </div>
       </div>
 
-      <DashboardOverview projectId={projectId} stats={stats} tasks={tasks} scheduleSummary={scheduleSummary} labels={t} />
+      <DashboardOverview projectId={projectId} stats={stats} tasks={tasks} scheduleSummary={scheduleSummary} resourcePulse={resourcePulse} labels={t} />
     </>
   );
 }

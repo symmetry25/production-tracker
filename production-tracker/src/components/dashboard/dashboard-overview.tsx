@@ -4,8 +4,10 @@ import { DashboardPanel } from "@/components/dashboard/dashboard-panel";
 import { DonutChart, HorizontalBars, StackedAreaChart, StackedBarChart, VelocityChart, VersionStatusBars } from "@/components/dashboard/dashboard-charts";
 import { LatestVersionFilmstrip } from "@/components/dashboard/latest-version-filmstrip";
 import { ProducerCommandCenter } from "@/components/dashboard/producer-command-center";
+import { ResourcePulseCard } from "@/components/dashboard/resource-pulse-card";
 import type { DashboardStats } from "@/lib/dashboard-data";
 import type { Dictionary } from "@/lib/i18n";
+import type { OverviewResourcePulse } from "@/lib/overview-resource-pulse";
 import type { ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
 import type { TaskTableItem } from "@/lib/task-data";
 
@@ -14,12 +16,14 @@ export function DashboardOverview({
   stats,
   tasks,
   scheduleSummary,
+  resourcePulse,
   labels,
 }: {
   projectId: string;
   stats: DashboardStats;
   tasks: TaskTableItem[];
   scheduleSummary: ScheduleSuggestionSummary;
+  resourcePulse: OverviewResourcePulse;
   labels: Dictionary["pages"]["overview"];
 }) {
   const chartLabels = labels.charts;
@@ -27,6 +31,8 @@ export function DashboardOverview({
   return (
     <div className="space-y-5">
       <ProducerCommandCenter projectId={projectId} stats={stats} tasks={tasks} scheduleSummary={scheduleSummary} labels={labels.producerCommand} />
+
+      <ResourcePulseCard pulse={resourcePulse} labels={labels.resourcePulse} />
 
       <CountdownWidget project={stats.project} counts={stats.counts} labels={labels.countdown} />
 
