@@ -12,6 +12,8 @@ const demoCredentials = {
   password: "admin123",
 };
 
+const demoLoginEnabled = process.env.DEMO_LOGIN_ENABLED === "true" || (!process.env.DATABASE_URL && process.env.NODE_ENV !== "production");
+
 const credentialsSchema = z.object({
   email: z.email().trim().toLowerCase(),
   password: z.string().min(1),
@@ -32,7 +34,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        if (!process.env.DATABASE_URL && process.env.NODE_ENV !== "production") {
+        if (!process.env.DATABASE_URL && demoLoginEnabled) {
           if (parsed.data.email !== demoCredentials.email || parsed.data.password !== demoCredentials.password) {
             return null;
           }

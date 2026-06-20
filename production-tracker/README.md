@@ -112,7 +112,7 @@ npm run db:seed
 
 ### Netlify
 
-仓库里已包含 `netlify.toml`。如果 Netlify 从上一级仓库导入，请把 Base directory 指到：
+仓库根目录和 `production-tracker/` 内都包含 Netlify 配置。若从仓库根目录导入，根目录 `netlify.toml` 会自动把 Base directory 指到：
 
 ```text
 production-tracker
@@ -130,7 +130,24 @@ npm run build
 .next
 ```
 
-Netlify 会通过 Next.js/OpenNext 适配运行服务端路由。生产环境同样需要设置 `DATABASE_URL`、`AUTH_SECRET`、`AUTH_URL`、`NEXTAUTH_URL`。
+Netlify 会通过 Next.js/OpenNext 适配运行服务端路由。
+
+先发演示版时，可以暂时不配置 `DATABASE_URL`，但需要设置：
+
+```env
+AUTH_SECRET=generate-a-long-random-secret
+NEXTAUTH_SECRET=generate-a-long-random-secret
+AUTH_URL=https://your-netlify-site.netlify.app
+NEXTAUTH_URL=https://your-netlify-site.netlify.app
+NEXT_PUBLIC_APP_URL=https://your-netlify-site.netlify.app
+DEMO_LOGIN_ENABLED=true
+AI_PROVIDER=mock
+NOTIFICATIONS_ENABLED=false
+```
+
+演示账号仍然是 `admin@studio.com` / `admin123`。此模式适合给人看功能，不适合真实多人生产。
+
+正式试用或商业化时，关闭 `DEMO_LOGIN_ENABLED`，配置 `DATABASE_URL`，并执行数据库迁移和 seed。
 
 ## Storage
 
