@@ -1,11 +1,16 @@
 import Link from "next/link";
 
+import { TrialFeedbackIntakeActions } from "@/components/admin/trial-feedback-intake-actions";
 import { buildProductionReadinessReport, type ReadinessStatus } from "@/lib/production-readiness";
 import { getCurrentProjectId } from "@/lib/current-project";
 import {
+  buildTrialFeedbackIntakeTemplate,
   buildTrialFeedbackSummary,
   demoTrialFeedbackResponses,
+  prepareTrialFeedbackIntake,
   type TrialCommercialSignal,
+  type TrialFeedbackIntakeResult,
+  type TrialFeedbackIntakeTemplate,
   type TrialFeedbackResponse,
   type TrialFeedbackSummary,
   type TrialFeedbackTheme,
@@ -21,6 +26,21 @@ export default async function TrialHandoffPage() {
     projectId: currentProjectId,
   });
   const feedback = buildTrialFeedbackSummary(demoTrialFeedbackResponses);
+  const intakeTemplate = buildTrialFeedbackIntakeTemplate();
+  const intakePreview = prepareTrialFeedbackIntake({
+    testerName: "陈制片",
+    organization: "短剧制片团队",
+    role: "制片主任",
+    testedAt: "2026-06-20",
+    valueScore: 5,
+    clarityScore: 4,
+    workflowFitScore: 5,
+    willingnessToPay: "愿意",
+    blockerSeverity: "严重",
+    blockers: "权限不够细、Excel 模板需要适配",
+    requestedFeatures: "预算审批 / 付款节点提醒",
+    quote: "预算和资金流如果能接真实单据，这个给监制看很有用。",
+  });
 
   return (
     <>
@@ -89,9 +109,9 @@ export default async function TrialHandoffPage() {
         </div>
       </section>
 
-      <section className="mt-5 border border-[#34322b] bg-[#151410]">
+      <section className="mt-5 min-w-0 border border-[#34322b] bg-[#151410]">
         <SectionHeader eyebrow="Acceptance route" title="外部试用验收路线" />
-        <div className="overflow-x-auto">
+        <div className="min-w-0 overflow-x-auto">
           <div className="grid min-w-[980px] grid-cols-[220px_170px_1fr_1fr_120px] border-b border-[#2f2d27] bg-[#1e1d19] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7f7a70]">
             <span>模块</span>
             <span>测试角色</span>
@@ -106,10 +126,11 @@ export default async function TrialHandoffPage() {
       </section>
 
       <TrialFeedbackPanel summary={feedback} />
+      <TrialFeedbackIntakePanel template={intakeTemplate} preview={intakePreview} />
 
-      <section className="mt-5 grid gap-5 xl:grid-cols-2">
+      <section className="mt-5 grid min-w-0 gap-5 xl:grid-cols-2">
         <ActionList title="仍需处理" eyebrow="Blockers / Warnings" items={[...pack.blockedItems, ...pack.warningItems]} />
-        <div className="border border-[#34322b] bg-[#151410]">
+        <div className="min-w-0 border border-[#34322b] bg-[#151410]">
           <SectionHeader eyebrow="Feedback questions" title="试用反馈问题" />
           <div className="divide-y divide-[#2f2d27]">
             {pack.testerBrief.feedbackQuestions.map((question, index) => (
@@ -130,6 +151,79 @@ export default async function TrialHandoffPage() {
         </div>
       </section>
     </>
+  );
+}
+
+function TrialFeedbackIntakePanel({ template, preview }: { template: TrialFeedbackIntakeTemplate; preview: TrialFeedbackIntakeResult }) {
+  const previewResponse = preview.response;
+
+  return (
+    <section className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="min-w-0 border border-[#34322b] bg-[#151410]">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#2f2d27] px-4 py-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7f7a70]">Feedback intake</p>
+            <h2 className="mt-1 text-lg font-semibold text-[#f4f1e8]">试用反馈录入模板</h2>
+          </div>
+          <TrialFeedbackIntakeActions rows={template.csvRows} />
+        </div>
+        <div className="grid min-w-0 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="min-w-0 overflow-x-auto border border-[#2f2d27]">
+            <div className="grid min-w-[900px] grid-cols-[150px_80px_170px_1fr] bg-[#1e1d19] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7f7a70]">
+              <span>字段</span>
+              <span>必填</span>
+              <span>示例</span>
+              <span>填写说明</span>
+            </div>
+            {template.fields.map((field) => (
+              <div key={field.key} className="grid min-w-[900px] grid-cols-[150px_80px_170px_1fr] border-t border-[#2f2d27] px-3 py-2 text-sm">
+                <span className="font-semibold text-[#f4f1e8]">{field.label}</span>
+                <span className={field.required ? "text-[#e8c678]" : "text-[#7f7a70]"}>{field.required ? "是" : "否"}</span>
+                <span className="font-mono text-xs text-[#aaa599]">{field.example}</span>
+                <span className="leading-5 text-[#8f8a7e]">{field.hint}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="min-w-0 space-y-2">
+            {template.operatorNotes.map((note, index) => (
+              <p key={note} className="grid grid-cols-[28px_1fr] border border-[#2f2d27] bg-[#11110f] px-3 py-2 text-xs leading-5 text-[#aaa599]">
+                <span className="font-mono text-[#7f7a70]">{String(index + 1).padStart(2, "0")}</span>
+                <span>{note}</span>
+              </p>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <aside className="border border-[#34322b] bg-[#151410] p-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7f7a70]">Intake preview</p>
+        <h3 className="mt-2 text-lg font-semibold text-[#f4f1e8]">示例预检</h3>
+        {previewResponse ? (
+          <div className="mt-4 space-y-3">
+            <div className="border border-[#294838] bg-[#13221b] px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#9cccae]">Ready for analysis</p>
+              <p className="mt-1 text-sm text-[#c9c3b5]">{preview.nextStep}</p>
+            </div>
+            <Metric label="反馈编号" value={previewResponse.id} />
+            <Metric label="跟进负责人" value={previewResponse.nextStepOwner} />
+            <div className="border border-[#2f2d27] bg-[#11110f] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7f7a70]">Features / blockers</p>
+              <p className="mt-2 text-xs leading-5 text-[#c9c3b5]">{previewResponse.requestedFeatures.join(" / ") || "暂无功能需求"}</p>
+              <p className="mt-1 text-xs leading-5 text-[#8f8a7e]">{previewResponse.blockers.join(" / ") || "暂无阻断"}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {preview.issues.map((issue) => (
+              <p key={`${issue.field}-${issue.message}`} className="border border-[#6f2f2f] bg-[#2b1717] px-3 py-2 text-xs leading-5 text-[#ffb1a8]">
+                {issue.message}
+              </p>
+            ))}
+          </div>
+        )}
+      </aside>
+    </section>
   );
 }
 
@@ -178,7 +272,7 @@ function TrialFeedbackPanel({ summary }: { summary: TrialFeedbackSummary }) {
             ))}
           </div>
         </div>
-        <div className="overflow-x-auto">
+          <div className="min-w-0 overflow-x-auto">
           <div className="grid min-w-[860px] grid-cols-[160px_150px_100px_100px_1fr_110px] border-b border-[#2f2d27] bg-[#1e1d19] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7f7a70]">
             <span>测试者</span>
             <span>组织/角色</span>

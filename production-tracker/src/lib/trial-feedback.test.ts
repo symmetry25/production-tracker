@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { buildTrialFeedbackSummary, type TrialFeedbackResponse } from "@/lib/trial-feedback";
+import {
+  buildTrialFeedbackIntakeTemplate,
+  buildTrialFeedbackSummary,
+  prepareTrialFeedbackIntake,
+  type TrialFeedbackResponse,
+} from "@/lib/trial-feedback";
 
 describe("buildTrialFeedbackSummary", () => {
   it("prioritizes qualified testers and repeated product themes", () => {
@@ -28,6 +33,73 @@ describe("buildTrialFeedbackSummary", () => {
     expect(summary.criticalBlockerCount).toBe(1);
     expect(summary.commercialSignal).toBe("blocked");
     expect(summary.recommendation).toContain("先修复关键阻断");
+  });
+});
+
+describe("trial feedback intake", () => {
+  it("builds a spreadsheet-ready intake template", () => {
+    const template = buildTrialFeedbackIntakeTemplate();
+
+    expect(template.fields.map((field) => field.key)).toEqual([
+      "testerName",
+      "organization",
+      "role",
+      "testedAt",
+      "valueScore",
+      "clarityScore",
+      "workflowFitScore",
+      "willingnessToPay",
+      "blockerSeverity",
+      "blockers",
+      "requestedFeatures",
+      "quote",
+      "nextStepOwner",
+    ]);
+    expect(template.csvRows[0]).toEqual(template.fields.map((field) => field.label));
+    expect(template.csvRows[1]).toContain("陈制片");
+  });
+
+  it("normalizes a tester response from spreadsheet-style input", () => {
+    const result = prepareTrialFeedbackIntake({
+      testerName: " 陈制片 ",
+      organization: " 短剧制片团队 ",
+      role: "制片主任",
+      testedAt: "",
+      valueScore: "5",
+      clarityScore: "4",
+      workflowFitScore: "5",
+      willingnessToPay: "愿意",
+      blockerSeverity: "严重",
+      blockers: "权限不够细、Excel 模板需要适配",
+      requestedFeatures: "预算审批 / 付款节点提醒",
+      quote: " 预算和资金流如果能接真实单据，这个给监制看很有用。 ",
+      nextStepOwner: "",
+    }, { today: "2026-06-20" });
+
+    expect(result.issues).toEqual([]);
+    expect(result.response).toEqual(expect.objectContaining({
+      id: "chen-zhi-pian-2026-06-20",
+      testerName: "陈制片",
+      organization: "短剧制片团队",
+      testedAt: "2026-06-20",
+      willingnessToPay: "yes",
+      blockerSeverity: "major",
+      blockers: ["权限不够细", "Excel 模板需要适配"],
+      requestedFeatures: ["预算审批", "付款节点提醒"],
+      nextStepOwner: "Product",
+    }));
+  });
+
+  it("rejects responses without required identity and valid scores", () => {
+    const result = prepareTrialFeedbackIntake({
+      testerName: "",
+      valueScore: "6",
+      clarityScore: "abc",
+      workflowFitScore: "0",
+    }, { today: "2026-06-20" });
+
+    expect(result.response).toBeNull();
+    expect(result.issues.map((issue) => issue.field)).toEqual(["testerName", "valueScore", "clarityScore", "workflowFitScore"]);
   });
 });
 

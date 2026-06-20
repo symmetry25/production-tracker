@@ -110,15 +110,15 @@ export async function AppShell({ session, locale, dictionary, children }: AppShe
           "g l": "/app/users/demo-user-vfx/scorecard",
         }}
       />
-      <header className="flex h-14 items-center justify-between border-b border-[#34322b] bg-[#181713] px-6 print:hidden">
-        <div className="flex items-center gap-6">
-          <Link href="/app" className="flex items-center gap-3">
+      <header className="flex h-14 min-w-0 items-center justify-between gap-4 border-b border-[#34322b] bg-[#181713] px-6 print:hidden">
+        <div className="flex min-w-0 flex-1 items-center gap-6">
+          <Link href="/app" className="flex shrink-0 items-center gap-3">
             <div className="grid size-8 place-items-center border border-[#d8b46a]/45 bg-[#d8b46a]/10 text-sm font-semibold text-[#e8c678]">
               PT
             </div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#d8b46a]">Production Tracker</p>
           </Link>
-          <nav className="flex items-center gap-1">
+          <nav className="flex min-w-0 items-center gap-1 overflow-x-auto">
             {topNavItems.map((item, index) => (
               <Link
                 key={item.key}
@@ -134,7 +134,7 @@ export async function AppShell({ session, locale, dictionary, children }: AppShe
           </nav>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           <CommandPalette items={commandItems} />
           {isDemoMode ? (
             <span className="border border-[#d8b46a]/35 bg-[#d8b46a]/10 px-3 py-1.5 text-xs font-semibold text-[#e8c678]">
@@ -168,7 +168,7 @@ export async function AppShell({ session, locale, dictionary, children }: AppShe
         </div>
       </header>
 
-      <section className="grid grid-cols-[240px_1fr] print:block">
+      <section className="grid grid-cols-[240px_minmax(0,1fr)] print:block">
         <aside className="min-h-[calc(100vh-56px)] border-r border-[#34322b] bg-[#151410] p-4 print:hidden">
           <p className="px-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#7f7a70]">{t.workspace}</p>
           <div className="mt-4 space-y-1">
