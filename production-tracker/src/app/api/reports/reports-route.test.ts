@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { DashboardStats } from "@/lib/dashboard-data";
+import type { ResourceBudgetData } from "@/lib/resource-data";
 
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/lib/dashboard-data", () => ({ getDashboardStats: vi.fn() }));
 
 import { getBurndownReport } from "./burndown/route";
 import { getOverviewReport } from "./overview/route";
+import { getProducerAgendaReport } from "./producer-agenda/route";
 import { getWorkloadReport } from "./workload/route";
 import { getScheduleSuggestions } from "../projects/[projectId]/schedule-suggestions/route";
 
@@ -75,9 +77,15 @@ describe("reports routes", () => {
 
     const overview = await getOverviewReport(new Request("http://app.test/api/reports/overview"), deps);
     const burndown = await getBurndownReport(new Request("http://app.test/api/reports/burndown"), deps);
+    const producerAgenda = await getProducerAgendaReport(new Request("http://app.test/api/reports/producer-agenda"), {
+      ...deps,
+      getTaskTableItems: vi.fn(),
+      getResourceBudgetData: vi.fn(),
+    });
 
     expect(overview.status).toBe(422);
     expect(burndown.status).toBe(422);
+    expect(producerAgenda.status).toBe(422);
     expect(deps.getDashboardStats).not.toHaveBeenCalled();
   });
 
@@ -156,4 +164,115 @@ describe("reports routes", () => {
       error: null,
     });
   });
+
+  it("returns a producer agenda report that combines overview, resource and schedule signals", async () => {
+    const response = await getProducerAgendaReport(new Request("http://app.test/api/reports/producer-agenda?projectId=demo"), {
+      auth: vi.fn().mockResolvedValue(session),
+      getDashboardStats: vi.fn().mockResolvedValue(stats),
+      getTaskTableItems: vi.fn().mockResolvedValue([
+        {
+          id: "task-overdue",
+          name: "VFX turnover",
+          status: "IN_PROGRESS",
+          priority: 3,
+          startDate: "2026-05-01T00:00:00.000Z",
+          dueDate: "2026-06-17T00:00:00.000Z",
+          duration: 4,
+          timeLogged: 3,
+          estimatedCost: 500,
+          calculatedCost: 300,
+          overBudget: false,
+          context: { kind: "shot", id: "shot-1", label: "VFX_0100", secondary: "MAIN" },
+          assignees: [{ id: "artist-1", name: "Artist One", department: "VFX", role: "ARTIST" }],
+          reviewerIds: [],
+          predecessors: [],
+          successors: [],
+          versionCount: 0,
+          noteCount: 0,
+        },
+      ]),
+      getResourceBudgetData: vi.fn().mockResolvedValue(resourceData),
+      now: () => new Date("2026-06-20T00:00:00.000Z"),
+    });
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        projectId: "demo",
+        projectCode: "DEMO",
+        generatedAt: "2026-06-20T00:00:00.000Z",
+        summary: {
+          headlineTone: "hold",
+          holdCount: 2,
+          auditReadinessPct: 50,
+          scheduleHealthScore: 82,
+        },
+        rows: expect.arrayContaining([
+          ["project", "name", "Demo", "DEMO", ""],
+          ["finance", "blocked_payments", "$180", "1 payments blocked", "Line Producer"],
+          ["decision", "01 · Payment · Action needed", "冻结付款 $180", "建议暂缓 $180 付款，先补齐审计材料和付款关口，再由制片主任放行。", "/app/projects/demo/resources/report"],
+          ["schedule", "critical · overdue", "VFX turnover 已逾期 3 天", "安排当日 standup 决策：补人、拆 scope，或把下游依赖整体后移。", "VFX_0100"],
+        ]),
+      },
+      error: null,
+    });
+  });
 });
+
+const resourceData: ResourceBudgetData = {
+  project: {
+    id: "demo",
+    name: "Demo",
+    totalBudget: 1000,
+    actualTotal: 460,
+    committedTotal: 860,
+  },
+  departments: [
+    {
+      id: "camera",
+      name: "摄影组",
+      budget: 500,
+      committed: 520,
+      actual: 460,
+      risk: "over",
+      color: "#c84c39",
+    },
+  ],
+  people: [],
+  vendors: [
+    {
+      id: "vendor-camera",
+      name: "Camera Vendor",
+      category: "equipment",
+      owner: "摄影组",
+      amount: 180,
+      status: "review",
+      progress: 60,
+      auditFlag: "待复核",
+    },
+  ],
+  payments: [
+    {
+      id: "payment-camera",
+      vendorId: "vendor-camera",
+      vendorName: "Camera Vendor",
+      label: "尾款",
+      dueDate: "2026-06-21",
+      amount: 180,
+      status: "blocked",
+      gate: "缺材料",
+    },
+  ],
+  documents: [
+    {
+      id: "doc-camera",
+      owner: "Camera Vendor",
+      category: "器材",
+      required: 4,
+      received: 2,
+      missing: ["合同", "发票"],
+      severity: "over",
+    },
+  ],
+  insights: [],
+  fundFlow: [],
+};
