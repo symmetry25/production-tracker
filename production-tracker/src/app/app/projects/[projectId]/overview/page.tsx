@@ -1,4 +1,5 @@
 import { DashboardOverview } from "@/components/dashboard/dashboard-overview";
+import { ProducerAgendaExportButton } from "@/components/dashboard/producer-agenda-export-button";
 import { ReportExportButton } from "@/components/dashboard/report-export-button";
 import { ProjectSettingsButton } from "@/components/project/project-settings-button";
 import { getDashboardStats, type DashboardStats } from "@/lib/dashboard-data";
@@ -53,6 +54,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <ProducerAgendaExportButton stats={stats} resourcePulse={resourcePulse} decisionBrief={decisionBrief} scheduleSummary={scheduleSummary} label={t.agenda} />
           <ReportExportButton stats={stats} label={t.report} />
           <ProjectSettingsButton project={stats.project} />
         </div>

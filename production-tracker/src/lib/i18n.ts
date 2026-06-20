@@ -107,6 +107,7 @@ export const dictionaries = {
       overview: {
         eyebrow: "项目总览",
         fallbackDescription: "生产洞察看板汇总镜头、资产、任务、版本和成员状态，供制片、监制和工作室负责人快速判断风险。",
+        agenda: "导出议程",
         report: "下载报告",
         databasePending: "生产洞察看板等待数据库",
         decisionBrief: {
@@ -579,6 +580,7 @@ export const dictionaries = {
         eyebrow: "Project overview",
         fallbackDescription:
           "Production insights summarize shots, assets, tasks, versions, and crew status for producers, supervisors, and studio leads.",
+        agenda: "Export agenda",
         report: "Download report",
         databasePending: "Production insights are waiting for the database",
         decisionBrief: {
