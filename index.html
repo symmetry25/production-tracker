@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>制片管理看板</title>
+    <meta name="theme-color" content="#111413" />
+    <title>Frederick — 制片管理系统</title>
     <script>
       (function () {
         try {
@@ -13,21 +14,20 @@
         } catch (error) {}
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=task-detail-1" />
+    <link rel="stylesheet" href="./styles.css?v=frederick-static-1" />
   </head>
   <body>
+    <a class="skip-link" href="#mainWorkspace">跳到主工作区</a>
     <div class="app-shell">
       <header class="topbar">
         <div class="topbar-main">
-          <div class="brand-lockup">
+          <div class="brand-lockup" translate="no">
             <div class="brand-mark" aria-hidden="true">
-              <span></span>
-              <span></span>
-              <span></span>
+              <span>F</span>
             </div>
             <div>
-              <p class="eyebrow">Crew Budget & Call Sheet</p>
-              <h1 data-i18n="app.title">制片管理看板</h1>
+              <p class="eyebrow">Production Intelligence</p>
+              <h1 data-i18n="app.title">Frederick</h1>
             </div>
           </div>
           <div class="project-summary">
@@ -111,7 +111,7 @@
         </div>
       </header>
 
-      <main>
+      <main id="mainWorkspace">
         <div class="workspace-ribbon" aria-label="工作区概览">
           <div>
             <span>Workspace</span>
@@ -2109,6 +2109,6 @@
     </div>
 
     <script src="./xlsx.full.min.js?v=0.18.5"></script>
-    <script src="./app.js?v=studio-console-1"></script>
+    <script src="./app.js?v=frederick-static-1"></script>
   </body>
 </html>

@@ -770,7 +770,7 @@ const ratedGradeOptions = gradeOptions.filter((grade) => grade !== "none");
 
 const i18nText = {
   zh: {
-    "app.title": "制片管理看板",
+    "app.title": "Frederick",
     "project.current": "当前项目",
     "project.new": "新建",
     "project.save": "保存",
@@ -847,7 +847,7 @@ const i18nText = {
     "personnelInput.export": "导出人员表",
   },
   en: {
-    "app.title": "Production Budget Dashboard",
+    "app.title": "Frederick",
     "project.current": "Current Project",
     "project.new": "New",
     "project.save": "Save",
@@ -1334,6 +1334,14 @@ function translate(key) {
   return i18nText[displaySettings.language]?.[key] || i18nText.zh[key] || key;
 }
 
+function localizedText(zh, en) {
+  return displaySettings.language === "en" ? en : zh;
+}
+
+function contextualLabel(zh, en) {
+  return localizedText(zh, en);
+}
+
 function renderLanguageText() {
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     node.textContent = translate(node.dataset.i18n);
@@ -1342,6 +1350,11 @@ function renderLanguageText() {
     node.setAttribute("placeholder", translate(node.dataset.i18nPlaceholder));
   });
   document.documentElement.lang = displaySettings.language === "en" ? "en" : "zh-CN";
+  document.documentElement.style.colorScheme = displaySettings.darkMode ? "dark" : "light";
+  const title = localizedText("Frederick — 制片管理系统", "Frederick — Production Management System");
+  document.title = title;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", displaySettings.darkMode ? "#111413" : "#f3f4f1");
+  updatePanelControlLabels();
 }
 
 function isRatingEnabled() {
@@ -3089,6 +3102,94 @@ function chartToolbarMarkup(id) {
       })}
     </div>
   `;
+}
+
+function panelControlIcon(kind) {
+  if (kind === "fullscreen") {
+    return '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 3H3v5" /><path d="M16 3h5v5" /><path d="M21 16v5h-5" /><path d="M3 16v5h5" /></svg>';
+  }
+  if (kind === "collapse") {
+    return '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></svg>';
+  }
+  return "";
+}
+
+function updatePanelControlLabels() {
+  document.querySelectorAll("[data-panel-action='fullscreen']").forEach((button) => {
+    const panel = button.closest(".panel");
+    const active = panel?.classList.contains("panel-fullscreen");
+    const label = active ? localizedText("退出全屏", "Exit Fullscreen") : localizedText("全屏", "Fullscreen");
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.setAttribute("aria-pressed", String(Boolean(active)));
+  });
+  document.querySelectorAll("[data-panel-action='collapse']").forEach((button) => {
+    const panel = button.closest(".panel");
+    const active = panel?.classList.contains("panel-collapsed");
+    const label = active ? localizedText("展开面板", "Expand Panel") : localizedText("折叠面板", "Collapse Panel");
+    button.title = label;
+    button.setAttribute("aria-label", label);
+    button.setAttribute("aria-pressed", String(Boolean(active)));
+  });
+}
+
+function redrawChartsInsidePanel(panel) {
+  if (!panel) return;
+  panel.querySelectorAll("canvas[id]").forEach((canvas) => redrawChartById(canvas.id));
+}
+
+function setupPanelControls() {
+  document.querySelectorAll(".panel").forEach((panel, index) => {
+    const heading = Array.from(panel.children).find((child) => child.classList?.contains("panel-heading"));
+    if (!heading || heading.querySelector(".panel-controls")) return;
+    if (!panel.id) panel.dataset.panelId = panel.dataset.panelId || `panel-${index + 1}`;
+    heading.insertAdjacentHTML(
+      "beforeend",
+      `
+        <div class="panel-controls" aria-label="${escapeHtml(localizedText("面板控制", "Panel Controls"))}">
+          <button class="panel-control-button" type="button" data-panel-action="fullscreen">
+            ${panelControlIcon("fullscreen")}
+          </button>
+          <button class="panel-control-button" type="button" data-panel-action="collapse">
+            ${panelControlIcon("collapse")}
+          </button>
+        </div>
+      `,
+    );
+  });
+  updatePanelControlLabels();
+  if (setupPanelControls.bound) return;
+  setupPanelControls.bound = true;
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-panel-action]");
+    if (!button) return;
+    const panel = button.closest(".panel");
+    if (!panel) return;
+    const action = button.dataset.panelAction;
+    if (action === "fullscreen") {
+      document.querySelectorAll(".panel.panel-fullscreen").forEach((item) => {
+        if (item !== panel) item.classList.remove("panel-fullscreen");
+      });
+      panel.classList.toggle("panel-fullscreen");
+      document.body.classList.toggle("panel-fullscreen-active", Boolean(document.querySelector(".panel.panel-fullscreen")));
+      updatePanelControlLabels();
+      window.setTimeout(() => redrawChartsInsidePanel(panel), 80);
+    }
+    if (action === "collapse") {
+      panel.classList.toggle("panel-collapsed");
+      updatePanelControlLabels();
+      if (!panel.classList.contains("panel-collapsed")) window.setTimeout(() => redrawChartsInsidePanel(panel), 80);
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const fullscreenPanel = document.querySelector(".panel.panel-fullscreen");
+    if (!fullscreenPanel) return;
+    fullscreenPanel.classList.remove("panel-fullscreen");
+    document.body.classList.remove("panel-fullscreen-active");
+    updatePanelControlLabels();
+    redrawChartsInsidePanel(fullscreenPanel);
+  });
 }
 
 function resizeCanvas(canvas) {
@@ -6125,6 +6226,28 @@ function renderHeader() {
 function activeViewLabel() {
   const activeTab = document.querySelector(".tab-button.active span");
   return activeTab?.textContent?.trim() || "总览";
+}
+
+function redrawVisibleCharts(target = "") {
+  const activeView = document.querySelector(".view.active");
+  const chartIds = target === "fundflow"
+    ? ["fundFlowLargeChart", "fundFlowChart"]
+    : target === "budget"
+      ? ["fundFlowChart", "fundFlowLargeChart", "categoryChart"]
+      : target === "analysis"
+        ? ["analysisVisualChart"]
+        : target === "visuals"
+          ? ["visualExplorerChart"]
+          : [];
+  if (chartIds.length === 0 && activeView) {
+    activeView.querySelectorAll("canvas[id]").forEach((canvas) => chartIds.push(canvas.id));
+  }
+  window.requestAnimationFrame(() => {
+    chartIds.forEach((id) => redrawChartById(id));
+  });
+  window.setTimeout(() => {
+    chartIds.forEach((id) => redrawChartById(id));
+  }, 90);
 }
 
 function defaultInspectorTarget() {
@@ -13188,7 +13311,7 @@ function renderModeSpecificUi() {
   const custom = isCustomInputMode();
   const unitLabel = budgetUnitLabel();
   const budgetLabel = budgetBudgetLabel();
-  setText(".brand-lockup h1", custom ? "项目管理看板" : translate("app.title"));
+  setText(".brand-lockup h1", translate("app.title"));
   setText("#progressMetricLabel", custom ? "完成进度" : "拍摄进度");
   setText('[data-view="callsheet"] span', custom ? "执行" : translate("nav.callsheet"));
   setText("#overviewTitle", custom ? "项目预算与执行状态" : "今日预算与拍摄状态");
@@ -13677,6 +13800,72 @@ function contextSummaryFromElement(target) {
   return `${title}${meta ? `\n${meta}` : ""}`.trim();
 }
 
+const workspaceContextTranslations = {
+  "打开关联视图": "Open Linked View",
+  "跳转到对应模块": "Jump to the related module",
+  "复制对象摘要": "Copy Object Summary",
+  "名称、状态和关键说明": "Name, status & key notes",
+  "编辑阶段": "Edit Phase",
+  "载入左侧排期表单": "Load the schedule form",
+  "标记完成": "Mark Complete",
+  "进度设为 100%": "Set progress to 100%",
+  "标记暂停": "Mark Paused",
+  "进入风险关注": "Move to risk watch",
+  "复制阶段": "Duplicate Phase",
+  "生成一个相邻副本": "Create an adjacent copy",
+  "复制阶段摘要": "Copy Phase Summary",
+  "阶段、负责人和天数": "Phase, owner & days",
+  "编辑版本": "Edit Version",
+  "载入版本审阅表单": "Load the version review form",
+  "标记通过": "Mark Approved",
+  "通过数量设为全量": "Set approved shots to total",
+  "标记阻塞": "Mark Blocked",
+  "付款关口暂缓": "Hold payment gate",
+  "复制版本摘要": "Copy Version Summary",
+  "供应商、版本、批注": "Vendor, version & notes",
+  "删除版本": "Delete Version",
+  "移出审阅记录": "Remove from review records",
+  "进入版本审阅": "Open Version Review",
+  "打开 VFX / 审查区域": "Open VFX / Audit area",
+  "复制镜头摘要": "Copy Shot Summary",
+  "场次、步骤和状态": "Scene, step & status",
+  "跳到这个模板或 Hook 对应模块": "Jump to this template or Hook module",
+  "复制路径 / 摘要": "Copy Path / Summary",
+  "复制当前管线对象": "Copy the current pipeline object",
+  "复制文件夹结构": "Copy Folder Structure",
+  "项目管线目录草案": "Project pipeline folder draft",
+  "发布版本": "Publish Version",
+  "进入 VFX / 后期版本审阅": "Open VFX / post version review",
+  "加载供应商交付": "Load Vendor Delivery",
+  "进入资金流和供应商明细": "Open fund flow & vendor details",
+  "进入这个队列项对应模块": "Open the module linked to this queue item",
+  "复制发布包": "Copy Publish Package",
+  "名称、路径、金额和下一步": "Name, path, amount & next step",
+  "复制路径": "Copy Path",
+  "复制队列输出路径": "Copy queue output path",
+  "通过后可进入付款判断": "After approval, evaluate payment",
+  "暂停付款关口": "Pause payment gate",
+  "阶段完成": "Complete Phase",
+  "把工作阶段设为 100%": "Set phase progress to 100%",
+  "查看交付 / 资金流": "View Delivery / Fund Flow",
+  "进入供应商明细": "Open vendor details",
+  "触发动作": "Trigger Action",
+  "写入本地 webhook 事件": "Write local webhook event",
+  "复制 Payload": "Copy Payload",
+  "复制将要发送的数据": "Copy outgoing data",
+  "复制事件 Payload": "Copy Event Payload",
+  "用于 API / webhook 调试": "For API / webhook debugging",
+  "复制关联路径": "Copy Linked Path",
+  "事件绑定的文件或队列路径": "Event file or queue path",
+  "当前对象": "Current Object",
+  "右键操作": "Context Actions",
+};
+
+function contextMenuText(value) {
+  if (displaySettings.language !== "en") return value;
+  return workspaceContextTranslations[value] || value;
+}
+
 function contextMenuItems(target) {
   const kind = target?.dataset?.contextKind || "";
   const base = [
@@ -13764,13 +13953,13 @@ function showWorkspaceContextMenu(event, target) {
   const body = document.querySelector("#workspaceContextMenuBody");
   if (!menu || !title || !meta || !body || !target) return;
   const items = contextMenuItems(target);
-  title.textContent = target.dataset.contextTitle || "当前对象";
-  meta.textContent = target.dataset.contextMeta || "右键操作";
+  title.textContent = target.dataset.contextTitle || contextMenuText("当前对象");
+  meta.textContent = target.dataset.contextMeta || contextMenuText("右键操作");
   body.innerHTML = items
     .map(
       (item) => `
         <button class="workspace-context-menu-item ${item.danger ? "danger" : ""}" type="button" data-context-action="${escapeHtml(item.action)}">
-          <span><b>${escapeHtml(item.label)}</b><small>${escapeHtml(item.hint)}</small></span>
+          <span><b>${escapeHtml(contextMenuText(item.label))}</b><small>${escapeHtml(contextMenuText(item.hint))}</small></span>
           <span class="workspace-context-menu-kbd">${escapeHtml(item.key || "")}</span>
         </button>
       `,
@@ -15289,6 +15478,7 @@ function setupTabs() {
       }
       renderProductionInspector();
       canvasRegistry.forEach((draw) => draw());
+      redrawVisibleCharts(target);
     });
   });
 }
@@ -15765,6 +15955,7 @@ function init() {
   setupInputPreferences();
   setupInputForms();
   setupChartViewControls();
+  setupPanelControls();
   renderCharts();
   setupChartTooltips();
   refreshAll();
@@ -15772,6 +15963,10 @@ function init() {
 
 window.addEventListener("resize", () => {
   canvasRegistry.forEach((draw) => draw());
+  const active = document.querySelector(".view.active");
+  if (active?.id === "fundflow" || active?.id === "budget" || active?.id === "analysis" || active?.id === "visuals") {
+    redrawVisibleCharts(active.id);
+  }
 });
 
 init();
