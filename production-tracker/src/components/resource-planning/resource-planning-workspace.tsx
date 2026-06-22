@@ -38,6 +38,17 @@ type SelectedCell = { userId: string; weekKey: string };
 type InspectRow = { name: string; subtitle: string; capacity: number; workload: number; delta: number };
 type ExceptionType = PlanningCalendarException["type"];
 type CalendarDraft = { exceptions: PlanningCalendarException[]; savedAt: string | null };
+type ResourceDecisionAction = { id: string; title: string; detail: string; tone: "ok" | "watch" | "over" };
+type ResourceDecisionBriefData = {
+  pressureWeek: CapacityWeek | null;
+  reliefWeek: CapacityWeek | null;
+  topOverbookedUsers: PlanningUserRow[];
+  topAvailableUsers: PlanningUserRow[];
+  unassignedWeeks: ResourcePlanningData["unassignedWeeks"];
+  calendarLoss: number;
+  actions: ResourceDecisionAction[];
+  briefText: string;
+};
 
 export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-mission" }: { data: ResourcePlanningData; projectId?: string }) {
   const [chartMode, setChartMode] = useState<ChartMode>("step");
@@ -62,6 +73,7 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
   const selectedWeekMeta = activeData.weeks.find((week) => week.key === selectedWeek?.weekKey) ?? activeData.weeks[0];
   const inspectWeek = inspectWeekKey === "all" ? null : activeData.weeks.find((week) => week.key === inspectWeekKey) ?? null;
   const inspectRows = useMemo(() => buildInspectRows(activeData, inspectGroup, inspectWeekKey), [activeData, inspectGroup, inspectWeekKey]);
+  const decisionBrief = useMemo(() => buildResourceDecisionBrief(activeData), [activeData]);
   const lineType = chartMode === "step" ? "stepAfter" : "monotone";
   const gridTemplateColumns = `232px repeat(${activeData.weeks.length}, minmax(116px, 1fr)) 124px`;
 
@@ -139,6 +151,8 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
           </div>
         </div>
       </section>
+
+      <ResourceDecisionBrief brief={decisionBrief} onInspectWeek={(weekKey) => setInspectWeekKey(weekKey)} />
 
       <section className="border border-[#34322b] bg-[#181713]">
         <PanelHeader eyebrow="calendar controls" title="日历例外与产能修正" meta={calendarDraft ? "Local draft" : "Project baseline"} />
@@ -422,6 +436,79 @@ function CellInspector({ user, week, weekLabel }: { user?: PlanningUserRow; week
         </div>
       </div>
     </aside>
+  );
+}
+
+function ResourceDecisionBrief({ brief, onInspectWeek }: { brief: ResourceDecisionBriefData; onInspectWeek: (weekKey: string) => void }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyBrief() {
+    await copyText(brief.briefText);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  }
+
+  return (
+    <section className="grid gap-5 border border-[#34322b] bg-[#181713] xl:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)]">
+      <div className="border-b border-[#34322b] p-4 xl:border-b-0 xl:border-r">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">resource decision brief</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#f4f1e8]">制片资源决策摘要</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#aaa599]">把容量、人员过载、未分配任务和日历损失压缩成会议可用的下一步。</p>
+          </div>
+          <button type="button" onClick={copyBrief} className="h-9 shrink-0 border border-[#3f3c33] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]">
+            {copied ? "Copied" : "Copy brief"}
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <BriefMetric
+            label="Pressure week"
+            value={brief.pressureWeek ? brief.pressureWeek.label : "-"}
+            meta={brief.pressureWeek ? signedDays(brief.pressureWeek.daysOverUnder) : "No week"}
+            tone={brief.pressureWeek && brief.pressureWeek.daysOverUnder > 0 ? "over" : "ok"}
+            onClick={brief.pressureWeek ? () => onInspectWeek(brief.pressureWeek!.key) : undefined}
+          />
+          <BriefMetric label="Overbooked" value={`${brief.topOverbookedUsers.length}`} meta={brief.topOverbookedUsers[0] ? brief.topOverbookedUsers[0].name : "No overload"} tone={brief.topOverbookedUsers.length ? "over" : "ok"} />
+          <BriefMetric label="Unassigned" value={days(brief.unassignedWeeks.reduce((sum, week) => sum + week.workload, 0))} meta={`${brief.unassignedWeeks.reduce((sum, week) => sum + week.tasks.length, 0)} tasks`} tone={brief.unassignedWeeks.length ? "watch" : "ok"} />
+          <BriefMetric label="Calendar loss" value={days(brief.calendarLoss)} meta="capacity removed" tone={brief.calendarLoss > 0 ? "watch" : "ok"} />
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          <BriefRoster title="超载人员" rows={brief.topOverbookedUsers} empty="暂无超载人员" tone="over" />
+          <BriefRoster title="可调配人员" rows={brief.topAvailableUsers} empty="暂无明显空余" tone="ok" />
+        </div>
+      </div>
+
+      <div className="p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">next decisions</p>
+            <h3 className="mt-1 text-lg font-semibold text-[#f4f1e8]">建议制片会议确认</h3>
+          </div>
+          {brief.reliefWeek ? (
+            <button type="button" onClick={() => onInspectWeek(brief.reliefWeek!.key)} className="border border-[#34322b] px-3 py-2 text-xs text-[#8cc6ff] transition hover:border-[#8cc6ff]">
+              Inspect relief {brief.reliefWeek.label}
+            </button>
+          ) : null}
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {brief.actions.map((action) => (
+            <div key={action.id} className={["border px-3 py-3", action.tone === "over" ? "border-[#6f2f2f] bg-[#241716]" : action.tone === "watch" ? "border-[#5a4324] bg-[#211b12]" : "border-[#294838] bg-[#13221b]"].join(" ")}>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-[#f4f1e8]">{action.title}</p>
+                <span className={["shrink-0 border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]", action.tone === "over" ? "border-[#6f2f2f] text-[#ff8b7c]" : action.tone === "watch" ? "border-[#5a4324] text-[#e8c678]" : "border-[#294838] text-[#75d9a7]"].join(" ")}>
+                  {action.tone}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-[#aaa599]">{action.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1170,6 +1257,80 @@ function MiniMetric({ label, value, tone = "normal" }: { label: string; value: s
   );
 }
 
+function BriefMetric({
+  label,
+  value,
+  meta,
+  tone = "normal",
+  onClick,
+}: {
+  label: string;
+  value: string;
+  meta: string;
+  tone?: "normal" | "ok" | "watch" | "over";
+  onClick?: () => void;
+}) {
+  const className = [
+    "min-h-24 border border-[#2f2c25] bg-[#11110f] px-3 py-3 text-left transition",
+    onClick ? "hover:border-[#d8b46a] hover:bg-[#17150f] focus:outline-none focus:ring-2 focus:ring-[#d8b46a]" : "",
+  ].join(" ");
+
+  const content = (
+    <>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7f7a70]">{label}</p>
+      <p className={["mt-2 truncate font-mono text-xl font-semibold", metricTone(tone)].join(" ")}>{value}</p>
+      <p className="mt-2 truncate text-xs text-[#8f8a7e]">{meta}</p>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
+}
+
+function BriefRoster({
+  title,
+  rows,
+  empty,
+  tone,
+}: {
+  title: string;
+  rows: PlanningUserRow[];
+  empty: string;
+  tone: "ok" | "over";
+}) {
+  const valueClass = tone === "over" ? "text-[#ff8b7c]" : "text-[#8cc6ff]";
+
+  return (
+    <div className="border border-[#2f2c25] bg-[#11110f]">
+      <div className="border-b border-[#2a2a28] px-3 py-2">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">{title}</p>
+      </div>
+      <div className="divide-y divide-[#24231f]">
+        {rows.length > 0 ? (
+          rows.slice(0, 4).map((row) => (
+            <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_76px] items-center gap-3 px-3 py-2 text-xs">
+              <div className="min-w-0">
+                <p className="truncate font-medium text-[#f4f1e8]">{row.name}</p>
+                <p className="mt-1 truncate text-[11px] text-[#8f8a7e]">{row.department} · {days(row.totalWorkload)} / {days(row.totalCapacity)}</p>
+              </div>
+              <span className={["text-right font-mono font-semibold", valueClass].join(" ")}>{signedDays(row.delta)}</span>
+            </div>
+          ))
+        ) : (
+          <div className="px-3 py-8 text-center text-xs text-[#7f7a70]">{empty}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function metricTone(tone: "normal" | "ok" | "watch" | "over") {
   if (tone === "over") return "text-[#ff8b7c]";
   if (tone === "watch") return "text-[#e8c678]";
@@ -1256,11 +1417,118 @@ function calendarLoss(data: ResourcePlanningData) {
   return roundDays(data.weeks.reduce((sum, week) => sum + week.unavailableDays * data.users.length, 0));
 }
 
+function weekLabel(data: ResourcePlanningData, weekKey: string) {
+  return data.weeks.find((week) => week.key === weekKey)?.label ?? weekKey;
+}
+
 function buildScenarioDelta(activeData: ResourcePlanningData, baselineData: ResourcePlanningData) {
   return {
     capacity: roundDays(activeData.totals.capacity - baselineData.totals.capacity),
     calendarLoss: roundDays(calendarLoss(activeData) - calendarLoss(baselineData)),
     overbookedUsers: activeData.totals.overbookedUsers - baselineData.totals.overbookedUsers,
+  };
+}
+
+function buildResourceDecisionBrief(data: ResourcePlanningData): ResourceDecisionBriefData {
+  const pressureCandidate = data.capacity.length
+    ? [...data.capacity].sort((a, b) => b.daysOverUnder - a.daysOverUnder)[0]
+    : null;
+  const pressureWeek = pressureCandidate && pressureCandidate.daysOverUnder > 0 ? pressureCandidate : null;
+  const reliefCandidate = data.capacity.length
+    ? [...data.capacity].sort((a, b) => a.daysOverUnder - b.daysOverUnder)[0]
+    : null;
+  const reliefWeek = reliefCandidate && reliefCandidate.daysOverUnder < -1 ? reliefCandidate : null;
+  const topOverbookedUsers = data.users
+    .filter((user) => user.delta > 0)
+    .sort((a, b) => b.delta - a.delta)
+    .slice(0, 4);
+  const topAvailableUsers = data.users
+    .filter((user) => user.delta < -2)
+    .sort((a, b) => a.delta - b.delta)
+    .slice(0, 4);
+  const unassignedWeeks = data.unassignedWeeks
+    .filter((week) => week.workload > 0)
+    .sort((a, b) => b.workload - a.workload);
+  const loss = calendarLoss(data);
+  const unassignedTotal = roundDays(unassignedWeeks.reduce((sum, week) => sum + week.workload, 0));
+  const unassignedTaskCount = unassignedWeeks.reduce((sum, week) => sum + week.tasks.length, 0);
+  const actions: ResourceDecisionAction[] = [];
+
+  if (pressureWeek && pressureWeek.daysOverUnder > 0) {
+    actions.push({
+      id: "pressure-week",
+      title: `冻结 ${pressureWeek.label} 的新增需求`,
+      detail: `该周工作量已经超出 ${days(pressureWeek.daysOverUnder)}。建议先移动低优先级任务、追加短租人手，或确认是否允许加班。`,
+      tone: "over",
+    });
+  }
+
+  if (topOverbookedUsers.length > 0) {
+    actions.push({
+      id: "overbooked-users",
+      title: "先处理人员过载",
+      detail: `${topOverbookedUsers.map((user) => `${user.name} ${signedDays(user.delta)}`).join("、")} 是当前窗口最高压力人员，建议在排期会逐人确认可移交任务。`,
+      tone: "over",
+    });
+  }
+
+  if (unassignedWeeks.length > 0) {
+    actions.push({
+      id: "unassigned-work",
+      title: "给未分配任务指定负责人",
+      detail: `${unassignedTaskCount} 个任务还没有进入个人容量表，共 ${days(unassignedTotal)}。高峰集中在 ${unassignedWeeks.slice(0, 3).map((week) => weekLabel(data, week.weekKey)).join("、")}。`,
+      tone: "watch",
+    });
+  }
+
+  if (loss > 0) {
+    actions.push({
+      id: "calendar-loss",
+      title: "确认停工/半日损失的追回方案",
+      detail: `日历例外移除了 ${days(loss)} 产能。建议在制片会议里明确是顺延交付、转移班组，还是增加供应商支持。`,
+      tone: "watch",
+    });
+  }
+
+  if (topAvailableUsers.length > 0) {
+    actions.push({
+      id: "available-users",
+      title: "把可移动任务转入空余人员",
+      detail: `${topAvailableUsers.map((user) => `${user.name} ${signedDays(user.delta)}`).join("、")} 还有可用窗口，可作为过载人员的第一批接收对象。`,
+      tone: "ok",
+    });
+  }
+
+  if (actions.length === 0) {
+    actions.push({
+      id: "balanced-window",
+      title: "当前资源窗口可以进入例行跟踪",
+      detail: "没有明显过载、未分配任务或日历损失。建议保留每周容量复盘，避免后续任务导入后才发现风险。",
+      tone: "ok",
+    });
+  }
+
+  const briefText = [
+    "制片资源决策摘要",
+    `窗口容量: ${days(data.totals.capacity)} / 工作量: ${days(data.totals.workload)} / 差额: ${signedDays(data.totals.delta)}`,
+    pressureWeek ? `压力周: ${pressureWeek.label} (${signedDays(pressureWeek.daysOverUnder)})` : "压力周: 暂无",
+    reliefWeek ? `可调配周: ${reliefWeek.label} (${signedDays(reliefWeek.daysOverUnder)})` : "可调配周: 暂无明显富余",
+    `过载人员: ${topOverbookedUsers.length ? topOverbookedUsers.map((user) => `${user.name} ${signedDays(user.delta)}`).join("、") : "暂无"}`,
+    `未分配任务: ${days(unassignedTotal)} / ${unassignedTaskCount} 个任务`,
+    `日历损失: ${days(loss)}`,
+    "建议动作:",
+    ...actions.map((action, index) => `${index + 1}. ${action.title} - ${action.detail}`),
+  ].join("\n");
+
+  return {
+    pressureWeek,
+    reliefWeek,
+    topOverbookedUsers,
+    topAvailableUsers,
+    unassignedWeeks,
+    calendarLoss: loss,
+    actions,
+    briefText,
   };
 }
 
