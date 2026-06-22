@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { CreateTaskForm } from "@/components/task/create-task-form";
 import { GanttPanel } from "@/components/task/gantt-panel";
@@ -9,6 +9,27 @@ import { TaskTable } from "@/components/task/task-table";
 import { buildScheduleSuggestions, type ScheduleSuggestion, type ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
 import type { TaskFormOptions, TaskTableItem } from "@/lib/task-data";
 import { buildWorkHourHeatmap, type WorkHourHeatmapRow } from "@/lib/work-hour-heatmap";
+
+type TaskBriefTone = "ok" | "watch" | "danger";
+type TaskDecisionAction = { id: string; title: string; detail: string; tone: TaskBriefTone };
+type TaskExecutionBriefData = {
+  healthScore: number;
+  totalTasks: number;
+  activeTasks: number;
+  completedTasks: number;
+  overdueTasks: TaskTableItem[];
+  dueSoonTasks: TaskTableItem[];
+  unassignedTasks: TaskTableItem[];
+  reviewTasks: TaskTableItem[];
+  overBudgetTasks: TaskTableItem[];
+  onHoldTasks: TaskTableItem[];
+  missingDateTasks: TaskTableItem[];
+  budgetRisk: number;
+  actions: TaskDecisionAction[];
+  briefText: string;
+};
+
+const completeTaskStatuses: TaskTableItem["status"][] = ["APPROVED", "FINAL", "OMIT"];
 
 export function TaskWorkspace({
   projectId,
@@ -26,7 +47,9 @@ export function TaskWorkspace({
   const [taskItems, setTaskItems] = useState(tasks);
   const [view, setView] = useState<"table" | "board" | "gantt">("table");
   const [showSuggestions, setShowSuggestions] = useState(Boolean(scheduleSuggestions?.criticalCount || scheduleSuggestions?.warningCount));
-  const currentScheduleSuggestions = buildScheduleSuggestions({ projectId, tasks: taskItems, now: new Date(analysisDate), provider: scheduleSuggestions?.provider ?? "rules" });
+  const analysisNow = useMemo(() => new Date(analysisDate), [analysisDate]);
+  const currentScheduleSuggestions = buildScheduleSuggestions({ projectId, tasks: taskItems, now: analysisNow, provider: scheduleSuggestions?.provider ?? "rules" });
+  const executionBrief = useMemo(() => buildTaskExecutionBrief(taskItems, currentScheduleSuggestions, analysisNow), [analysisNow, currentScheduleSuggestions, taskItems]);
   const workHourHeatmap = buildWorkHourHeatmap(taskItems);
 
   return (
@@ -74,6 +97,8 @@ export function TaskWorkspace({
         </div>
       </div>
 
+      <TaskExecutionBrief brief={executionBrief} />
+
       {showSuggestions ? <ScheduleSuggestionPanel summary={currentScheduleSuggestions} /> : null}
 
       <WorkHourHeatmapPanel rows={workHourHeatmap} />
@@ -86,6 +111,70 @@ export function TaskWorkspace({
         <GanttPanel projectId={projectId} tasks={taskItems} onTasksChange={setTaskItems} />
       )}
     </div>
+  );
+}
+
+function TaskExecutionBrief({ brief }: { brief: TaskExecutionBriefData }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyBrief() {
+    await copyText(brief.briefText);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  }
+
+  return (
+    <section className="mb-4 grid gap-4 border border-[#34322b] bg-[#171611] p-4 xl:grid-cols-[minmax(280px,0.7fr)_minmax(0,1.05fr)_minmax(320px,0.85fr)]">
+      <div className="border border-[#2f2d27] bg-[#11110f] p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">execution brief</p>
+            <h2 className="mt-2 text-xl font-semibold text-[#f4f1e8]">任务执行决策摘要</h2>
+          </div>
+          <button type="button" onClick={copyBrief} className="h-8 shrink-0 border border-[#3f3c33] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]">
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <div className="mt-5 flex items-end gap-3">
+          <span className={["font-mono text-6xl leading-none", brief.healthScore < 70 ? "text-[#ff9a8f]" : brief.healthScore < 86 ? "text-[#e8c678]" : "text-[#9cccae]"].join(" ")}>{brief.healthScore}</span>
+          <span className="pb-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#7f7a70]">health</span>
+        </div>
+        <div className="mt-5 grid grid-cols-3 border border-[#2a2a28] bg-[#181713]">
+          <BriefMiniStat label="Total" value={brief.totalTasks} />
+          <BriefMiniStat label="Active" value={brief.activeTasks} tone={brief.activeTasks ? "watch" : "ok"} />
+          <BriefMiniStat label="Done" value={brief.completedTasks} tone="ok" />
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <BriefMetric label="Delivery risk" value={`${brief.overdueTasks.length}`} meta={`${brief.dueSoonTasks.length} due soon`} tone={brief.overdueTasks.length ? "danger" : brief.dueSoonTasks.length ? "watch" : "ok"} />
+        <BriefMetric label="Unassigned" value={`${brief.unassignedTasks.length}`} meta={brief.unassignedTasks[0]?.name ?? "No owner gap"} tone={brief.unassignedTasks.length ? "danger" : "ok"} />
+        <BriefMetric label="Review queue" value={`${brief.reviewTasks.length}`} meta={brief.reviewTasks[0]?.context.label ?? "No review block"} tone={brief.reviewTasks.length ? "watch" : "ok"} />
+        <BriefMetric label="Budget risk" value={formatMoney(brief.budgetRisk)} meta={`${brief.overBudgetTasks.length} over budget`} tone={brief.budgetRisk > 0 ? "danger" : "ok"} />
+        <BriefMetric label="On hold" value={`${brief.onHoldTasks.length}`} meta={brief.onHoldTasks[0]?.name ?? "No hold"} tone={brief.onHoldTasks.length ? "watch" : "ok"} />
+        <BriefMetric label="Missing dates" value={`${brief.missingDateTasks.length}`} meta="schedule hygiene" tone={brief.missingDateTasks.length ? "watch" : "ok"} />
+      </div>
+
+      <div className="border border-[#2f2d27] bg-[#11110f]">
+        <div className="border-b border-[#2a2a28] px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">today calls</p>
+          <h3 className="mt-1 text-lg font-semibold text-[#f4f1e8]">制片会优先确认</h3>
+        </div>
+        <div className="divide-y divide-[#24231f]">
+          {brief.actions.map((action) => (
+            <div key={action.id} className="px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-[#f4f1e8]">{action.title}</p>
+                <span className={["shrink-0 border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]", briefToneClass(action.tone)].join(" ")}>
+                  {action.tone}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-[#aaa599]">{action.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -246,4 +335,182 @@ function MiniRule({ label, value }: { label: string; value: string }) {
 function SeverityBadge({ severity }: { severity: ScheduleSuggestion["severity"] }) {
   const className = severity === "critical" ? "border-[#6f2f2f] bg-[#2b1717] text-[#ff9a8f]" : severity === "warning" ? "border-[#6f5631] bg-[#211b12] text-[#e8c678]" : "border-[#294838] bg-[#13221b] text-[#9cccae]";
   return <span className={["shrink-0 border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]", className].join(" ")}>{severity}</span>;
+}
+
+function BriefMetric({ label, value, meta, tone }: { label: string; value: string; meta: string; tone: TaskBriefTone }) {
+  return (
+    <div className="min-h-24 border border-[#2f2d27] bg-[#11110f] px-3 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7f7a70]">{label}</p>
+      <p className={["mt-2 truncate font-mono text-2xl font-semibold", briefTextClass(tone)].join(" ")}>{value}</p>
+      <p className="mt-2 truncate text-xs text-[#8f8a7e]">{meta}</p>
+    </div>
+  );
+}
+
+function BriefMiniStat({ label, value, tone = "watch" }: { label: string; value: number; tone?: TaskBriefTone }) {
+  return (
+    <div className="border-r border-[#2a2a28] px-3 py-2 last:border-r-0">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7f7a70]">{label}</p>
+      <p className={["mt-1 font-mono text-sm font-semibold", briefTextClass(tone)].join(" ")}>{value.toLocaleString()}</p>
+    </div>
+  );
+}
+
+function buildTaskExecutionBrief(tasks: TaskTableItem[], summary: ScheduleSuggestionSummary, now: Date): TaskExecutionBriefData {
+  const activeTasks = tasks.filter((task) => !completeTaskStatuses.includes(task.status));
+  const completedTasks = tasks.length - activeTasks.length;
+  const overdueTasks = activeTasks.filter((task) => isOverdue(task, now)).sort(sortByDueThenPriority);
+  const dueSoonTasks = activeTasks.filter((task) => !isOverdue(task, now) && isDueSoon(task, now)).sort(sortByDueThenPriority);
+  const unassignedTasks = activeTasks.filter((task) => task.assignees.length === 0).sort(sortByPriorityThenDue);
+  const reviewTasks = tasks.filter((task) => task.status === "PENDING_REVIEW").sort(sortByPriorityThenDue);
+  const overBudgetTasks = tasks.filter((task) => task.overBudget).sort((a, b) => budgetOverrun(b) - budgetOverrun(a));
+  const onHoldTasks = tasks.filter((task) => task.status === "ON_HOLD").sort(sortByPriorityThenDue);
+  const missingDateTasks = activeTasks.filter((task) => !task.startDate || !task.dueDate).sort(sortByPriorityThenDue);
+  const budgetRisk = overBudgetTasks.reduce((sum, task) => sum + budgetOverrun(task), 0);
+  const actions: TaskDecisionAction[] = [];
+
+  if (overdueTasks.length > 0) {
+    actions.push({
+      id: "overdue",
+      title: "先处理逾期交付",
+      detail: `${overdueTasks.slice(0, 3).map((task) => `${task.context.label}/${task.name}`).join("、")} 已过截止日。建议今天确认补人、缩 scope 或整体顺延。`,
+      tone: "danger",
+    });
+  }
+
+  if (unassignedTasks.length > 0) {
+    actions.push({
+      id: "unassigned",
+      title: "给无负责人任务指定 owner",
+      detail: `${unassignedTasks.length} 个进行中任务没有负责人，高优先级任务不要进入 ready 队列，先分配执行人和 reviewer。`,
+      tone: "danger",
+    });
+  }
+
+  if (budgetRisk > 0) {
+    actions.push({
+      id: "budget-risk",
+      title: "冻结超预算任务的新增工时",
+      detail: `${overBudgetTasks.length} 个任务超预算，风险金额 ${formatMoney(budgetRisk)}。建议让负责人提交剩余工时和重估报价。`,
+      tone: "danger",
+    });
+  }
+
+  if (reviewTasks.length > 0) {
+    actions.push({
+      id: "review-queue",
+      title: "清掉待审队列",
+      detail: `${reviewTasks.length} 个任务等待审阅，优先安排导演/监制集中看版本，明确通过或返修责任人。`,
+      tone: "watch",
+    });
+  }
+
+  if (dueSoonTasks.length > 0) {
+    actions.push({
+      id: "due-soon",
+      title: "锁定三天内交付清单",
+      detail: `${dueSoonTasks.length} 个任务将在 3 天内到期，建议只保留必要变更，避免临近交付继续扩大范围。`,
+      tone: "watch",
+    });
+  }
+
+  if (missingDateTasks.length > 0) {
+    actions.push({
+      id: "missing-dates",
+      title: "补齐日期，避免资源排期失真",
+      detail: `${missingDateTasks.length} 个活动任务缺少开始或截止日期，会影响甘特图、资源规划和工时热力图。`,
+      tone: "watch",
+    });
+  }
+
+  if (actions.length === 0) {
+    actions.push({
+      id: "healthy",
+      title: "当前任务盘面可以进入例行跟踪",
+      detail: "没有明显逾期、预算或负责人缺口。保持每日审阅节奏，并用 ready 任务填补资源空档。",
+      tone: "ok",
+    });
+  }
+
+  const briefText = [
+    "任务执行决策摘要",
+    `健康度: ${summary.healthScore}/100`,
+    `任务: ${tasks.length} 总数 / ${activeTasks.length} 活动 / ${completedTasks} 已完成`,
+    `逾期: ${overdueTasks.length} / 三天内到期: ${dueSoonTasks.length} / 无负责人: ${unassignedTasks.length}`,
+    `待审: ${reviewTasks.length} / 超预算: ${overBudgetTasks.length} / 风险金额: ${formatMoney(budgetRisk)}`,
+    "建议动作:",
+    ...actions.map((action, index) => `${index + 1}. ${action.title} - ${action.detail}`),
+  ].join("\n");
+
+  return {
+    healthScore: summary.healthScore,
+    totalTasks: tasks.length,
+    activeTasks: activeTasks.length,
+    completedTasks,
+    overdueTasks,
+    dueSoonTasks,
+    unassignedTasks,
+    reviewTasks,
+    overBudgetTasks,
+    onHoldTasks,
+    missingDateTasks,
+    budgetRisk,
+    actions,
+    briefText,
+  };
+}
+
+function isOverdue(task: TaskTableItem, now: Date) {
+  if (!task.dueDate || completeTaskStatuses.includes(task.status)) return false;
+  return startOfDay(new Date(task.dueDate)).getTime() < startOfDay(now).getTime();
+}
+
+function isDueSoon(task: TaskTableItem, now: Date) {
+  if (!task.dueDate || completeTaskStatuses.includes(task.status)) return false;
+  const delta = Math.round((startOfDay(new Date(task.dueDate)).getTime() - startOfDay(now).getTime()) / 86_400_000);
+  return delta >= 0 && delta <= 3;
+}
+
+function sortByDueThenPriority(a: TaskTableItem, b: TaskTableItem) {
+  return dateValue(a.dueDate) - dateValue(b.dueDate) || b.priority - a.priority || a.name.localeCompare(b.name);
+}
+
+function sortByPriorityThenDue(a: TaskTableItem, b: TaskTableItem) {
+  return b.priority - a.priority || dateValue(a.dueDate) - dateValue(b.dueDate) || a.name.localeCompare(b.name);
+}
+
+function dateValue(value: string | null) {
+  return value ? new Date(value).getTime() : Number.MAX_SAFE_INTEGER;
+}
+
+function startOfDay(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function budgetOverrun(task: TaskTableItem) {
+  return Math.max(0, task.calculatedCost - (task.estimatedCost ?? 0));
+}
+
+function formatMoney(value: number) {
+  return `$${Math.round(value).toLocaleString()}`;
+}
+
+function briefTextClass(tone: TaskBriefTone) {
+  if (tone === "danger") return "text-[#ff9a8f]";
+  if (tone === "watch") return "text-[#e8c678]";
+  return "text-[#9cccae]";
+}
+
+function briefToneClass(tone: TaskBriefTone) {
+  if (tone === "danger") return "border-[#6f2f2f] bg-[#2b1717] text-[#ff9a8f]";
+  if (tone === "watch") return "border-[#6f5631] bg-[#211b12] text-[#e8c678]";
+  return "border-[#294838] bg-[#13221b] text-[#9cccae]";
+}
+
+async function copyText(value: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    // Clipboard access can be blocked in file or restricted browser contexts.
+  }
 }
