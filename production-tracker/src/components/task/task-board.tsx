@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type Dispatch, type SetStateAction, useMemo, useState, useTransition } from "react";
+import { type Dispatch, type DragEvent, type SetStateAction, useMemo, useState, useTransition } from "react";
 import type { TaskStatus } from "@/generated/prisma/enums";
 
 import { STATUS_COLORS } from "@/lib/status-colors";
@@ -24,6 +24,8 @@ export function TaskBoard({
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [dropStatus, setDropStatus] = useState<TaskStatus | null>(null);
   const [, startTransition] = useTransition();
   const lanes = useMemo(() => boardStatuses.map((status) => buildLane(status, tasks)), [tasks]);
   const totals = useMemo(() => buildBoardTotals(tasks), [tasks]);
@@ -57,6 +59,38 @@ export function TaskBoard({
     startTransition(() => router.refresh());
   }
 
+  function startDragging(taskId: string, event: DragEvent<HTMLElement>) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/task-id", taskId);
+    event.dataTransfer.setData("text/plain", taskId);
+    setDraggingTaskId(taskId);
+  }
+
+  function allowLaneDrop(status: TaskStatus, event: DragEvent<HTMLElement>) {
+    if (!draggingTaskId) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDropStatus(status);
+  }
+
+  function stopLaneHover(status: TaskStatus, event: DragEvent<HTMLElement>) {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    setDropStatus((current) => (current === status ? null : current));
+  }
+
+  function dropOnLane(status: TaskStatus, event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    const taskId = event.dataTransfer.getData("text/task-id") || event.dataTransfer.getData("text/plain") || draggingTaskId;
+    setDraggingTaskId(null);
+    setDropStatus(null);
+
+    const task = tasks.find((item) => item.id === taskId);
+    if (task) {
+      void updateStatus(task, status);
+    }
+  }
+
   return (
     <div>
       {message ? <div className="mb-3 border border-[#3f3c33] bg-[#181713] px-3 py-2 text-sm text-[#d8b46a]">{message}</div> : null}
@@ -71,7 +105,14 @@ export function TaskBoard({
       <div className="overflow-x-auto border border-[#34322b] bg-[#141411]">
         <div className="grid min-w-[1480px] grid-cols-7 gap-px bg-[#2a2a28]">
           {lanes.map((lane) => (
-            <section key={lane.status} className="min-h-[620px] bg-[#181713]">
+            <section
+              key={lane.status}
+              data-task-board-lane={lane.status}
+              onDragOver={(event) => allowLaneDrop(lane.status, event)}
+              onDragLeave={(event) => stopLaneHover(lane.status, event)}
+              onDrop={(event) => dropOnLane(lane.status, event)}
+              className={["min-h-[620px] bg-[#181713] transition", dropStatus === lane.status ? "bg-[#211d13] ring-1 ring-inset ring-[#d8b46a]/60" : ""].join(" ")}
+            >
               <div className="sticky top-0 z-10 border-b border-[#2a2a28] bg-[#1e1e1c] px-3 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
@@ -83,12 +124,24 @@ export function TaskBoard({
                   </div>
                   <span className="font-mono text-xs text-[#e8c678]">${lane.budget.toLocaleString()}</span>
                 </div>
+                <p className="mt-2 text-[11px] text-[#6f6a60]">拖动任务卡到这里更新状态</p>
               </div>
 
               <div className="space-y-2 p-2">
                 {lane.tasks.length ? (
                   lane.tasks.map((task) => (
-                    <TaskBoardCard key={task.id} task={task} pending={pendingId === task.id} onStatusChange={(status) => updateStatus(task, status)} />
+                    <TaskBoardCard
+                      key={task.id}
+                      task={task}
+                      pending={pendingId === task.id}
+                      dragging={draggingTaskId === task.id}
+                      onDragStart={(event) => startDragging(task.id, event)}
+                      onDragEnd={() => {
+                        setDraggingTaskId(null);
+                        setDropStatus(null);
+                      }}
+                      onStatusChange={(status) => updateStatus(task, status)}
+                    />
                   ))
                 ) : (
                   <div className="grid h-32 place-items-center border border-dashed border-[#34322b] bg-[#11110f] px-3 text-center text-xs leading-5 text-[#6f6a60]">
@@ -104,12 +157,37 @@ export function TaskBoard({
   );
 }
 
-function TaskBoardCard({ task, pending, onStatusChange }: { task: TaskTableItem; pending: boolean; onStatusChange: (status: TaskStatus) => void }) {
+function TaskBoardCard({
+  task,
+  pending,
+  dragging,
+  onDragStart,
+  onDragEnd,
+  onStatusChange,
+}: {
+  task: TaskTableItem;
+  pending: boolean;
+  dragging: boolean;
+  onDragStart: (event: DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
+  onStatusChange: (status: TaskStatus) => void;
+}) {
   const nextStatus = getNextStatus(task.status);
   const dueState = getDueState(task);
 
   return (
-    <article className={["border bg-[#11110f] p-3 shadow-[0_8px_22px_rgba(0,0,0,0.22)]", task.overBudget ? "border-[#6f2f2f]" : "border-[#302d26]"].join(" ")}>
+    <article
+      data-task-board-card={task.id}
+      draggable={!pending}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className={[
+        "cursor-grab border bg-[#11110f] p-3 shadow-[0_8px_22px_rgba(0,0,0,0.22)] transition active:cursor-grabbing",
+        task.overBudget ? "border-[#6f2f2f]" : "border-[#302d26]",
+        pending ? "opacity-55" : "",
+        dragging ? "scale-[0.98] opacity-45 ring-1 ring-[#d8b46a]" : "",
+      ].join(" ")}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate font-mono text-[11px] uppercase tracking-[0.08em] text-[#7f7a70]">{task.context.kind} / {task.context.label}</p>
