@@ -1,12 +1,17 @@
+import { DashboardCreateForm } from "@/components/dashboard-builder/dashboard-create-form";
 import { PageHeader } from "@/components/extensions/entity-type-pages";
+import { listEntityTypesAsync } from "@/lib/custom-data-store";
+import { getCurrentProjectId } from "@/lib/current-project";
 
-export default function NewDashboardPage() {
+export default async function NewDashboardPage() {
+  const projectId = await getCurrentProjectId();
+  const projectEntities = projectId ? await listEntityTypesAsync({ projectId }) : [];
+  const entities = projectEntities.length ? projectEntities : await listEntityTypesAsync();
+
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow="New dashboard" title="新建仪表盘" description="API 已支持 POST /api/dashboards 创建仪表盘。下一步可以把这里升级成表单：名称、项目、共享状态、初始模板。" />
-      <div className="border border-[#34322b] bg-[#181713] p-5 font-mono text-xs leading-6 text-[#8f8a7e]">
-        POST /api/dashboards {"{ name, description, projectId, isShared }"}
-      </div>
+      <PageHeader eyebrow="New dashboard" title="新建仪表盘" description="选择制片成本、供应商审计或空白画布，系统会根据当前项目的实体字段生成一套可继续拖拽编辑的初始 Widget。" />
+      <DashboardCreateForm entities={entities} projectId={projectId} />
     </div>
   );
 }
