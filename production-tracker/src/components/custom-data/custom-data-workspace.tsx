@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import type { CustomRecord, IndustryTemplate } from "@/lib/custom-data";
 import type { FieldDefinition } from "@/lib/field-types";
@@ -11,10 +11,10 @@ type EntryMode = "form" | "spreadsheet" | "quick";
 
 const emptyRecords: CustomRecord[] = [];
 
-export function CustomDataWorkspace({ templates }: { templates: IndustryTemplate[] }) {
+export function CustomDataWorkspace({ templates, initialImportOpen = false }: { templates: IndustryTemplate[]; initialImportOpen?: boolean }) {
   const [activeTemplateId, setActiveTemplateId] = useState(templates[0]?.id ?? "");
   const [entryMode, setEntryMode] = useState<EntryMode>("spreadsheet");
-  const [importOpen, setImportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(initialImportOpen);
   const [lastImportSummary, setLastImportSummary] = useState<string | null>(null);
   const [recordsByTemplate, setRecordsByTemplate] = useState<Record<string, CustomRecord[]>>(() =>
     Object.fromEntries(templates.map((template) => [template.id, template.records])),
@@ -24,6 +24,13 @@ export function CustomDataWorkspace({ templates }: { templates: IndustryTemplate
   const visibleFields = useMemo(() => activeTemplate.fields.filter((field) => !field.hidden).sort((a, b) => a.order - b.order), [activeTemplate]);
   const editableFields = visibleFields.filter((field) => !field.readOnly && !["created_at", "updated_at", "created_by"].includes(field.type));
   const totals = useMemo(() => buildColumnTotals(records, visibleFields), [records, visibleFields]);
+
+  const markHydrated = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    requestAnimationFrame(() => {
+      node.dataset.hydrated = "true";
+    });
+  }, []);
 
   function createRecord(data: Record<string, unknown>) {
     const nextRecord: CustomRecord = {
@@ -67,7 +74,7 @@ export function CustomDataWorkspace({ templates }: { templates: IndustryTemplate
   }
 
   return (
-    <div className="space-y-5">
+    <div ref={markHydrated} className="space-y-5" data-hydrated="false" data-testid="custom-data-workspace">
       <section className="border border-[#34322b] bg-[#181713]">
         <div className="grid gap-0 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
           <TemplateRail templates={templates} activeId={activeTemplate.id} onSelect={setActiveTemplateId} />
@@ -377,12 +384,12 @@ function ImportWizard({ fields, onImport }: { fields: FieldDefinition[]; onImpor
           className="w-full resize-none border border-[#34322b] bg-[#151410] px-3 py-2 font-mono text-xs leading-5 text-[#f4f1e8] outline-none focus:border-[#d8b46a]"
           aria-label="CSV import text"
         />
-        <button type="button" onClick={parseSource} className="h-9 w-full bg-[#d8b46a] text-xs font-semibold text-[#171713]">
+        <button type="button" onClick={parseSource} className="h-9 w-full bg-[#d8b46a] text-xs font-semibold text-[#171713]" data-testid="custom-data-parse-import">
           解析并自动映射
         </button>
 
         {parsed ? (
-          <div className="space-y-3">
+          <div className="space-y-3" data-testid="custom-data-import-mapping">
             <ImportSummary parsed={parsed} validation={validation} />
             <MappingEditor headers={parsed.headers} fields={importableFields} mapping={mapping} onChange={setMapping} />
             <ErrorList validation={validation} />

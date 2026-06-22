@@ -3,8 +3,8 @@
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import * as Popover from "@radix-ui/react-popover";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { useCallback, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import {
   Area,
   AreaChart,
@@ -26,18 +26,19 @@ import {
   type PlanningUserWeek,
   type ResourcePlanningData,
 } from "@/lib/resource-planning";
-import { formatUtcMonthDayTime } from "@/lib/date-format";
 import { rebuildResourcePlanningWithCalendarExceptions } from "@/lib/resource-planning-calendar";
+import { reassignTaskInPlanningData } from "@/lib/resource-planning-actions";
 
 const numberFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
+const stablePlanningChartSize = { width: 640, height: 300 };
 
 type ChartMode = "step" | "line";
 type DetailMode = "heatmap" | "area";
 type InspectGroup = "department" | "user";
 type SelectedCell = { userId: string; weekKey: string };
+type AssignmentDraft = { userId: string; weekKey: string; mode: "new" | "reassign" } | null;
 type InspectRow = { name: string; subtitle: string; capacity: number; workload: number; delta: number };
 type ExceptionType = PlanningCalendarException["type"];
-type CalendarDraft = { exceptions: PlanningCalendarException[]; savedAt: string | null };
 type ResourceDecisionAction = { id: string; title: string; detail: string; tone: "ok" | "watch" | "over" };
 type ResourceDecisionBriefData = {
   pressureWeek: CapacityWeek | null;
@@ -51,20 +52,22 @@ type ResourceDecisionBriefData = {
 };
 
 export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-mission" }: { data: ResourcePlanningData; projectId?: string }) {
+  const router = useRouter();
   const [chartMode, setChartMode] = useState<ChartMode>("step");
   const [detailMode, setDetailMode] = useState<DetailMode>("heatmap");
   const [inspectGroup, setInspectGroup] = useState<InspectGroup>("department");
   const [inspectWeekKey, setInspectWeekKey] = useState<string | "all">("all");
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
+  const [assignmentDraft, setAssignmentDraft] = useState<AssignmentDraft>(null);
+  const [localData, setLocalData] = useState(data);
+  const [isRefreshing, startRefreshTransition] = useTransition();
   const searchParams = useSearchParams();
   const searchParamString = searchParams.toString();
   const linkQuery = searchParamString ? `?${searchParamString}` : "";
-  const calendarDraftKey = useMemo(() => `production-tracker:calendar-exceptions:${projectId}`, [projectId]);
-  const calendarDraft = useCalendarDraft(calendarDraftKey);
-  const calendarExceptions = calendarDraft?.exceptions ?? data.calendarExceptions;
+  const baseData = projectId === "demo-mkali-mission" ? localData : data;
 
-  const baselineData = useMemo(() => rebuildResourcePlanningWithCalendarExceptions(data, data.calendarExceptions), [data]);
-  const activeData = useMemo(() => rebuildResourcePlanningWithCalendarExceptions(data, calendarExceptions), [data, calendarExceptions]);
+  const baselineData = useMemo(() => rebuildResourcePlanningWithCalendarExceptions(baseData, data.calendarExceptions), [baseData, data.calendarExceptions]);
+  const activeData = useMemo(() => rebuildResourcePlanningWithCalendarExceptions(baseData, baseData.calendarExceptions), [baseData]);
   const scenarioDelta = useMemo(() => buildScenarioDelta(activeData, baselineData), [activeData, baselineData]);
   const defaultCell = useMemo(() => findDefaultCell(activeData), [activeData]);
   const activeCell = selectedCell ?? defaultCell;
@@ -98,7 +101,7 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
             }
           />
           <div className="p-4">
-            <ResponsiveContainer width="100%" height={300} minWidth={1} minHeight={1}>
+            <ResponsiveContainer width="100%" height={300} minWidth={1} minHeight={1} initialDimension={stablePlanningChartSize}>
               <LineChart
                 data={activeData.capacity}
                 margin={{ top: 10, right: 18, left: -14, bottom: 0 }}
@@ -155,14 +158,16 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
       <ResourceDecisionBrief brief={decisionBrief} onInspectWeek={(weekKey) => setInspectWeekKey(weekKey)} />
 
       <section className="border border-[#34322b] bg-[#181713]">
-        <PanelHeader eyebrow="calendar controls" title="日历例外与产能修正" meta={calendarDraft ? "Local draft" : "Project baseline"} />
+        <PanelHeader eyebrow="calendar controls" title="日历例外与产能修正" meta={projectId === "demo-mkali-mission" ? "Demo scenario" : "Project database"} />
         <CalendarExceptionManager
+          projectId={projectId}
           data={activeData}
-          exceptions={calendarExceptions}
+          exceptions={activeData.calendarExceptions}
           baselineExceptions={data.calendarExceptions}
-          draft={calendarDraft}
           scenarioDelta={scenarioDelta}
-          storageKey={calendarDraftKey}
+          onDemoDataChange={setLocalData}
+          onSaved={() => startRefreshTransition(() => router.refresh())}
+          refreshing={isRefreshing}
         />
       </section>
 
@@ -271,8 +276,13 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
                           user={user}
                           week={week}
                           weekLabel={activeData.weeks.find((item) => item.key === week.weekKey)?.label ?? week.weekKey}
+                          projectId={projectId}
                           linkQuery={linkQuery}
                           onInspect={() => setSelectedCell({ userId: user.id, weekKey: week.weekKey })}
+                          onOpenAssignment={(mode) => {
+                            setSelectedCell({ userId: user.id, weekKey: week.weekKey });
+                            setAssignmentDraft({ userId: user.id, weekKey: week.weekKey, mode });
+                          }}
                         />
                       </ContextMenu.Root>
                     );
@@ -289,6 +299,15 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
 
         <CellInspector user={selectedUser} week={selectedWeek} weekLabel={selectedWeekMeta?.label ?? "Week"} />
       </section>
+
+      <AssignmentActionPanel
+        projectId={projectId}
+        data={activeData}
+        draft={assignmentDraft}
+        onClose={() => setAssignmentDraft(null)}
+        onDemoDataChange={setLocalData}
+        onSaved={() => startRefreshTransition(() => router.refresh())}
+      />
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(420px,0.9fr)]">
         <div className="border border-[#34322b] bg-[#181713]">
@@ -352,7 +371,7 @@ export function ResourcePlanningWorkspace({ data, projectId = "demo-mkali-missio
           />
           <div className="p-4">
             <div>
-              <ResponsiveContainer width="100%" height={176} minWidth={1} minHeight={1}>
+              <ResponsiveContainer width="100%" height={176} minWidth={1} minHeight={1} initialDimension={{ width: 360, height: 176 }}>
                 <BarChart data={inspectRows} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid stroke="#2a2a28" vertical={false} />
                   <XAxis dataKey="name" tick={{ fill: "#8f8a7e", fontSize: 10 }} axisLine={false} tickLine={false} interval={0} />
@@ -516,17 +535,22 @@ function ResourceCellContextMenu({
   user,
   week,
   weekLabel,
+  projectId,
   linkQuery,
   onInspect,
+  onOpenAssignment,
 }: {
   user: PlanningUserRow;
   week: PlanningUserWeek;
   weekLabel: string;
+  projectId: string;
   linkQuery: string;
   onInspect: () => void;
+  onOpenAssignment: (mode: "new" | "reassign") => void;
 }) {
   const summary = buildCellSummary(user, week, weekLabel);
   const pressureTone = week.delta > 0 ? "Overbooked" : week.delta < -2 ? "Available" : "Balanced";
+  const newTaskHref = buildResourceTaskHref(projectId, user, week, weekLabel);
 
   return (
     <ContextMenu.Portal>
@@ -547,12 +571,10 @@ function ResourceCellContextMenu({
           <Link href={`/app/resource-planning/${encodeURIComponent(user.department)}${linkQuery}`}>↳ Open Department Drilldown</Link>
         </ContextMenu.Item>
         <Separator />
-        <ContextMenu.Item disabled className="cursor-default px-3 py-2 text-xs text-[#7f7a70] outline-none">
-          ➕ Assign New Task... · 任务页创建后自动进入资源规划
+        <ContextMenu.Item asChild className="flex cursor-default items-center px-3 py-2 text-[#d8d3c7] outline-none hover:bg-[#252523]">
+          <Link href={newTaskHref}>➕ Assign New Task...</Link>
         </ContextMenu.Item>
-        <ContextMenu.Item disabled className="cursor-default px-3 py-2 text-xs text-[#7f7a70] outline-none">
-          ↔ Reassign Tasks... · 批量重新分配待接入
-        </ContextMenu.Item>
+        <MenuItem onSelect={() => onOpenAssignment("reassign")}>↔ Reassign Tasks...</MenuItem>
         <MenuItem onSelect={() => downloadCsv(`resource-week-${user.id}-${week.weekKey}.csv`, buildWeekCsv(user, week, weekLabel))}>📤 Export Week Data</MenuItem>
         <Separator />
         <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">Tasks</ContextMenu.Label>
@@ -635,6 +657,137 @@ function ResourceTaskPopover({ user, week, weekLabel }: { user: PlanningUserRow;
         </div>
       </Popover.Content>
     </Popover.Portal>
+  );
+}
+
+function AssignmentActionPanel({
+  projectId,
+  data,
+  draft,
+  onClose,
+  onDemoDataChange,
+  onSaved,
+}: {
+  projectId: string;
+  data: ResourcePlanningData;
+  draft: AssignmentDraft;
+  onClose: () => void;
+  onDemoDataChange: (data: ResourcePlanningData) => void;
+  onSaved: () => void;
+}) {
+  const sourceUser = draft ? data.users.find((user) => user.id === draft.userId) : null;
+  const sourceWeek = sourceUser?.weeks.find((week) => week.weekKey === draft?.weekKey) ?? null;
+  const sourceWeekLabel = draft ? data.weeks.find((week) => week.key === draft.weekKey)?.label ?? draft.weekKey : "";
+  const [taskId, setTaskId] = useState("");
+  const [toUserId, setToUserId] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const availableUsers = data.users
+    .filter((user) => user.id !== sourceUser?.id)
+    .toSorted((a, b) => a.delta - b.delta || a.department.localeCompare(b.department) || a.name.localeCompare(b.name));
+  const selectedTaskId = taskId || sourceWeek?.tasks[0]?.id || "";
+  const selectedToUserId = toUserId || availableUsers[0]?.id || "";
+
+  if (!draft || !sourceUser || !sourceWeek) {
+    return null;
+  }
+
+  async function reassignTask() {
+    if (!selectedTaskId || !selectedToUserId || !sourceUser) return;
+
+    if (projectId === "demo-mkali-mission") {
+      onDemoDataChange(reassignTaskInPlanningData(data, selectedTaskId, sourceUser.id, selectedToUserId));
+      setMessage("演示任务已重新分配，容量表已即时更新。");
+      return;
+    }
+
+    setPending(true);
+    const response = await fetch(`/api/tasks/${selectedTaskId}/reassign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fromUserId: sourceUser.id,
+        toUserId: selectedToUserId,
+      }),
+    });
+    setPending(false);
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      setMessage(body?.error ?? "任务重新分配失败。");
+      return;
+    }
+
+    setMessage("任务已重新分配并保存。");
+    onSaved();
+  }
+
+  return (
+    <section className="border border-[#34322b] bg-[#181713]">
+      <div className="grid gap-0 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="border-b border-[#34322b] p-4 xl:border-b-0 xl:border-r">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">assignment actions</p>
+          <h2 className="mt-2 text-xl font-semibold text-[#f4f1e8]">资源分配操作</h2>
+          <p className="mt-2 text-sm leading-6 text-[#aaa599]">
+            {sourceUser.name} · {sourceUser.department} · {sourceWeekLabel}
+          </p>
+          <div className="mt-4 grid grid-cols-3 border border-[#2a2a28] bg-[#11110f] text-xs">
+            <ContextMetric label="Assigned" value={days(sourceWeek.workload)} />
+            <ContextMetric label="Capacity" value={days(sourceWeek.capacity)} />
+            <ContextMetric label={sourceWeek.delta > 0 ? "Over" : "Delta"} value={signedDays(sourceWeek.delta)} tone={sourceWeek.delta > 0 ? "over" : "ok"} />
+          </div>
+          {message ? <p className="mt-3 border border-[#2f2c25] bg-[#11110f] px-3 py-2 text-xs text-[#c9c3b5]">{message}</p> : null}
+        </div>
+
+        <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)_auto]">
+          <Field label="选择任务">
+            <select
+              value={selectedTaskId}
+              onChange={(event) => setTaskId(event.target.value)}
+              className="h-10 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm text-[#f4f1e8] outline-none focus:border-[#d8b46a]"
+            >
+              {sourceWeek.tasks.length > 0 ? (
+                sourceWeek.tasks.map((task) => (
+                  <option key={task.id} value={task.id}>
+                    {task.contextLabel} / {task.name} · {days(task.days)}
+                  </option>
+                ))
+              ) : (
+                <option value="">这一周没有可重分配任务</option>
+              )}
+            </select>
+          </Field>
+
+          <Field label="转给人员">
+            <select
+              value={selectedToUserId}
+              onChange={(event) => setToUserId(event.target.value)}
+              className="h-10 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm text-[#f4f1e8] outline-none focus:border-[#d8b46a]"
+            >
+              {availableUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.department} / {user.name} / {signedDays(user.delta)}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <div className="flex items-end gap-2">
+            <button
+              type="button"
+              onClick={reassignTask}
+              disabled={pending || !selectedTaskId || !selectedToUserId || sourceWeek.tasks.length === 0}
+              className="h-10 bg-[#d8b46a] px-4 text-sm font-semibold text-[#171713] transition hover:bg-[#edc875] disabled:opacity-50"
+            >
+              {pending ? "保存中" : "重新分配"}
+            </button>
+            <button type="button" onClick={onClose} className="h-10 border border-[#34322b] px-4 text-sm text-[#aaa599] transition hover:text-[#f4f1e8]">
+              关闭
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -814,7 +967,7 @@ function CapacityDot(props: { cx?: number; cy?: number; payload?: CapacityWeek; 
 function OverUnderArea({ data }: { data: ResourcePlanningData }) {
   return (
     <div className="p-4">
-      <ResponsiveContainer width="100%" height={286} minWidth={1} minHeight={1}>
+      <ResponsiveContainer width="100%" height={286} minWidth={1} minHeight={1} initialDimension={{ width: 560, height: 286 }}>
         <AreaChart data={data.capacity} margin={{ top: 10, right: 18, left: -18, bottom: 0 }}>
           <CartesianGrid stroke="#2a2a28" vertical={false} />
           <XAxis dataKey="label" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -881,19 +1034,23 @@ function ExportPlanningButton({ data, filename }: { data: ResourcePlanningData; 
 }
 
 function CalendarExceptionManager({
+  projectId,
   data,
   exceptions,
   baselineExceptions,
-  draft,
   scenarioDelta,
-  storageKey,
+  onDemoDataChange,
+  onSaved,
+  refreshing,
 }: {
+  projectId: string;
   data: ResourcePlanningData;
   exceptions: PlanningCalendarException[];
   baselineExceptions: PlanningCalendarException[];
-  draft: CalendarDraft | null;
   scenarioDelta: ReturnType<typeof buildScenarioDelta>;
-  storageKey: string;
+  onDemoDataChange: (data: ResourcePlanningData) => void;
+  onSaved: () => void;
+  refreshing: boolean;
 }) {
   const defaultDate = data.weeks[0]?.start ?? new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(defaultDate);
@@ -901,44 +1058,102 @@ function CalendarExceptionManager({
   const [hoursWorked, setHoursWorked] = useState(4);
   const [description, setDescription] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const sortedExceptions = exceptions
     .map((exception, index) => ({ exception, index }))
     .sort((a, b) => a.exception.date.localeCompare(b.exception.date) || a.exception.type.localeCompare(b.exception.type));
   const canAdd = date.trim().length > 0;
-  const draftLabel = draft?.savedAt ? `已保存 ${formatSavedAt(draft.savedAt)}` : "未保存，本次页面预览";
+  const isDemo = projectId === "demo-mkali-mission";
+  const statusLabel = isDemo ? "Demo scenario" : refreshing ? "Refreshing" : "Saved in database";
 
-  function addException() {
+  async function addException() {
     if (!canAdd) return;
 
     const nextException: PlanningCalendarException = {
+      id: `demo-calendar-${slugify(`${date}-${type}-${description || "exception"}`)}-${Date.now().toString(36)}`,
       date,
       type,
       hoursWorked: type === "REDUCED_HOURS" ? clampHours(hoursWorked) : 0,
       description: description.trim() || exceptionTypeLabel(type),
-      inheritedFrom: "local-scenario",
+      projectId,
+      inheritedFrom: isDemo ? "demo-scenario" : "project",
     };
 
-    saveDraft(storageKey, [...exceptions, nextException].sort(sortExceptions));
-    setMessage("已加入本机草稿，刷新后仍会保留。");
+    if (isDemo) {
+      onDemoDataChange(rebuildResourcePlanningWithCalendarExceptions(data, [...exceptions, nextException].sort(sortExceptions)));
+      setMessage("演示日历例外已加入，当前页面立即重算容量。");
+      setDescription("");
+      return;
+    }
+
+    setPendingId("create");
+    const response = await fetch("/api/calendar-exceptions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: nextException.date,
+        type: nextException.type,
+        description: nextException.description,
+        hoursWorked: nextException.hoursWorked,
+        projectId,
+        inheritedFrom: nextException.inheritedFrom,
+      }),
+    });
+    setPendingId(null);
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      setMessage(body?.error ?? "日历例外保存失败。");
+      return;
+    }
+
+    setMessage("日历例外已保存到项目数据库。");
     setDescription("");
+    onSaved();
   }
 
-  function deleteException(index: number) {
-    saveDraft(
-      storageKey,
-      exceptions.filter((_, itemIndex) => itemIndex !== index),
-    );
-    setMessage("已从本机草稿删除。");
+  async function deleteException(index: number) {
+    const target = exceptions[index];
+    if (!target) return;
+
+    if (isDemo || !target.id) {
+      onDemoDataChange(rebuildResourcePlanningWithCalendarExceptions(data, exceptions.filter((_, itemIndex) => itemIndex !== index)));
+      setMessage("演示日历例外已删除，容量已重新计算。");
+      return;
+    }
+
+    setPendingId(target.id);
+    const response = await fetch(`/api/calendar-exceptions/${target.id}`, { method: "DELETE" });
+    setPendingId(null);
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      setMessage(body?.error ?? "日历例外删除失败。");
+      return;
+    }
+
+    setMessage("日历例外已从项目数据库删除。");
+    onSaved();
   }
 
   function restoreBaseline() {
-    saveDraft(storageKey, baselineExceptions);
-    setMessage("已恢复为项目基线日历。");
+    if (!isDemo) {
+      setMessage("真实项目请逐条删除需要移除的日历例外，避免误删全局节假日。");
+      return;
+    }
+
+    onDemoDataChange(rebuildResourcePlanningWithCalendarExceptions(data, baselineExceptions));
+    setMessage("演示日历已恢复为项目基线。");
   }
 
-  function clearDraft() {
-    deleteDraft(storageKey);
-    setMessage("本机草稿已清空，正在使用项目基线。");
+  function clearScenario() {
+    if (!isDemo) {
+      setMessage("真实项目不支持一键清空，请在右侧逐项删除。");
+      return;
+    }
+
+    onDemoDataChange(rebuildResourcePlanningWithCalendarExceptions(data, []));
+    setMessage("演示日历例外已清空。");
   }
 
   return (
@@ -947,7 +1162,7 @@ function CalendarExceptionManager({
         <div className="mb-4 border border-[#2f2c25] bg-[#11110f] px-3 py-2 text-xs">
           <div className="flex items-center justify-between gap-3">
             <span className="font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">draft status</span>
-            <span className={draft ? "font-mono text-[#e8c678]" : "font-mono text-[#8f8a7e]"}>{draftLabel}</span>
+            <span className="font-mono text-[#e8c678]">{statusLabel}</span>
           </div>
           {message ? <p className="mt-2 text-[#c9c3b5]">{message}</p> : null}
         </div>
@@ -1008,10 +1223,10 @@ function CalendarExceptionManager({
           <button
             type="button"
             onClick={addException}
-            disabled={!canAdd}
+            disabled={!canAdd || pendingId === "create"}
             className="h-9 bg-[#d8b46a] px-4 text-sm font-semibold text-[#171713] transition hover:bg-[#edc875] disabled:opacity-50"
           >
-            加入修正
+            {pendingId === "create" ? "保存中" : "保存修正"}
           </button>
           <button
             type="button"
@@ -1022,10 +1237,10 @@ function CalendarExceptionManager({
           </button>
           <button
             type="button"
-            onClick={clearDraft}
+            onClick={clearScenario}
             className="h-9 border border-[#34322b] px-3 text-sm text-[#7f7a70] transition hover:border-[#ff8b7c] hover:text-[#ff8b7c]"
           >
-            清空草稿
+            {isDemo ? "清空演示" : "批量清空"}
           </button>
         </div>
       </div>
@@ -1047,8 +1262,8 @@ function CalendarExceptionManager({
                 <span className="text-[#c9c3b5]">{exceptionTypeLabel(exception.type)}</span>
                 <span className="min-w-0 truncate text-[#aaa599]">{exception.description ?? "No note"}</span>
                 <span className="text-right font-mono text-[#e8c678]">-{days(exceptionLoss(exception) * data.users.length)}</span>
-                <button type="button" onClick={() => deleteException(index)} className="text-right text-[#7f7a70] transition hover:text-[#ff8b7c]">
-                  删除
+                <button type="button" onClick={() => deleteException(index)} disabled={pendingId === exception.id} className="text-right text-[#7f7a70] transition hover:text-[#ff8b7c] disabled:opacity-45">
+                  {pendingId === exception.id ? "删除中" : "删除"}
                 </button>
               </div>
             ))
@@ -1094,81 +1309,8 @@ function exceptionLoss(exception: PlanningCalendarException) {
   return 1;
 }
 
-function useCalendarDraft(storageKey: string) {
-  const subscribe = useCallback((onStoreChange: () => void) => {
-    if (typeof window === "undefined") return () => undefined;
-
-    window.addEventListener("storage", onStoreChange);
-    window.addEventListener("resource-planning-calendar-draft", onStoreChange);
-
-    return () => {
-      window.removeEventListener("storage", onStoreChange);
-      window.removeEventListener("resource-planning-calendar-draft", onStoreChange);
-    };
-  }, []);
-  const getSnapshot = useCallback(() => readDraftPayload(storageKey), [storageKey]);
-  const getServerSnapshot = useCallback(() => null, []);
-  const rawDraft = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-
-  return useMemo(() => parseDraftPayload(rawDraft), [rawDraft]);
-}
-
-function saveDraft(storageKey: string, exceptions: PlanningCalendarException[]) {
-  if (typeof window === "undefined") return;
-
-  const draft: CalendarDraft = {
-    exceptions,
-    savedAt: new Date().toISOString(),
-  };
-
-  window.localStorage.setItem(storageKey, JSON.stringify(draft));
-  window.dispatchEvent(new Event("resource-planning-calendar-draft"));
-}
-
-function deleteDraft(storageKey: string) {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(storageKey);
-  window.dispatchEvent(new Event("resource-planning-calendar-draft"));
-}
-
-function readDraftPayload(storageKey: string) {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(storageKey);
-}
-
-function parseDraftPayload(raw: string | null): CalendarDraft | null {
-  try {
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<CalendarDraft>;
-    if (!Array.isArray(parsed.exceptions)) return null;
-
-    return {
-      exceptions: parsed.exceptions.filter(isPlanningCalendarException).sort(sortExceptions),
-      savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function isPlanningCalendarException(value: unknown): value is PlanningCalendarException {
-  if (!value || typeof value !== "object") return false;
-
-  const item = value as Partial<PlanningCalendarException>;
-  return (
-    typeof item.date === "string" &&
-    (item.type === "HOLIDAY" || item.type === "REDUCED_HOURS" || item.type === "STUDIO_CLOSURE") &&
-    typeof item.hoursWorked === "number"
-  );
-}
-
 function sortExceptions(a: PlanningCalendarException, b: PlanningCalendarException) {
   return a.date.localeCompare(b.date) || a.type.localeCompare(b.type);
-}
-
-function formatSavedAt(value: string) {
-  const formatted = formatUtcMonthDayTime(value);
-  return formatted === "--" ? "本机草稿" : formatted;
 }
 
 function clampHours(value: number) {
@@ -1675,6 +1817,24 @@ function buildCellSummary(user: PlanningUserRow, week: PlanningUserWeek, weekLab
     .join("\n");
 }
 
+function buildResourceTaskHref(projectId: string, user: PlanningUserRow, week: PlanningUserWeek, weekLabel: string) {
+  const params = new URLSearchParams();
+  params.set("action", "new-task");
+  params.set("assigneeId", user.id);
+  params.set("startDate", week.weekKey);
+  params.set("dueDate", addDaysToIsoDate(week.weekKey, 4));
+  params.set("name", `${user.department} ${weekLabel} resource task`);
+
+  return `/app/projects/${projectId}/tasks?${params.toString()}`;
+}
+
+function addDaysToIsoDate(value: string, daysToAdd: number) {
+  const date = parseDate(value);
+  if (!date) return value;
+  date.setDate(date.getDate() + daysToAdd);
+  return date.toISOString().slice(0, 10);
+}
+
 async function copyText(value: string) {
   try {
     await navigator.clipboard.writeText(value);
@@ -1692,6 +1852,10 @@ function parseDate(value: string | null) {
 
 function diffDays(a: Date, b: Date) {
   return Math.round((a.getTime() - b.getTime()) / 86_400_000);
+}
+
+function slugify(value: string) {
+  return value.toLowerCase().trim().replaceAll(/[^a-z0-9]+/g, "-").replaceAll(/^-|-$/g, "");
 }
 
 const tooltipStyle = {

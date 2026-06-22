@@ -50,7 +50,7 @@ export function ImportActionsPanel({ entityId, sourceText }: { entityId: string;
         className="mt-3 w-full resize-none border border-[#34322b] bg-[#11110f] px-3 py-2 font-mono text-xs leading-5 text-[#c9c3b5] outline-none focus:border-[#d8b46a]"
       />
       <button type="button" onClick={importValidRows} disabled={status === "importing" || (!file && !textSource.trim())} className="mt-4 h-9 w-full border border-[#27422e] bg-[#132016] text-xs font-semibold text-[#83d6ae] disabled:opacity-50">
-        {status === "importing" ? "导入中..." : file ? "上传并导入文件" : "导入粘贴文本"}
+        {status === "importing" ? "导入中..." : file ? "上传并导入文件" : "仅导入有效行"}
       </button>
       {message ? <p className={["mt-3 text-xs", status === "error" ? "text-[#ff9c8c]" : "text-[#83d6ae]"].join(" ")}>{message}</p> : null}
     </div>

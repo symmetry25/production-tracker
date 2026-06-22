@@ -25,6 +25,7 @@ import type { AssetStatusDatum, ChartDatum, PercentFinalDatum, TaskStatusTrendDa
 import type { Dictionary } from "@/lib/i18n";
 
 const taskStatuses = ["WAITING_TO_START", "READY_TO_START", "IN_PROGRESS", "PENDING_REVIEW", "APPROVED", "FINAL", "ON_HOLD", "OMIT"] as const;
+const stableChartSize = { width: 480, height: 260 };
 type ChartLabels = Dictionary["pages"]["overview"]["charts"];
 
 export function DonutChart({ data, labels }: { data: ChartDatum[]; labels: ChartLabels }) {
@@ -33,7 +34,7 @@ export function DonutChart({ data, labels }: { data: ChartDatum[]; labels: Chart
   return (
     <ChartShell empty={data.length === 0} minHeight={300} emptyLabel={labels.empty}>
       <ChartViewport title={labels.shotStatus.title} minHeight={240} labels={labels.chartTools}>
-        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} initialDimension={stableChartSize}>
           <PieChart>
             <Pie data={localizedData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={92} paddingAngle={2}>
               {localizedData.map((item) => (
@@ -55,7 +56,7 @@ export function StackedBarChart({ data, labels }: { data: AssetStatusDatum[]; la
   return (
     <ChartShell empty={data.length === 0} emptyLabel={labels.empty}>
       <ChartViewport title={labels.assetStatus.title} minHeight={260} labels={labels.chartTools}>
-        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} initialDimension={stableChartSize}>
           <BarChart data={localizedData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
             <CartesianGrid stroke={chartTheme.grid} vertical={false} />
             <XAxis dataKey="type" tick={chartTheme.axisTick} axisLine={false} tickLine={false} />
@@ -75,7 +76,7 @@ export function StackedAreaChart({ data, labels }: { data: TaskStatusTrendDatum[
   return (
     <ChartShell empty={data.length === 0} emptyLabel={labels.empty}>
       <ChartViewport title={labels.taskStatus.title} minHeight={260} labels={labels.chartTools}>
-        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} initialDimension={stableChartSize}>
           <AreaChart data={data} margin={{ top: 10, right: 12, bottom: 0, left: -20 }}>
             <CartesianGrid stroke={chartTheme.grid} vertical={false} />
             <XAxis dataKey="department" tick={chartTheme.axisTick} axisLine={false} tickLine={false} />
@@ -95,7 +96,7 @@ export function VelocityChart({ data, labels }: { data: VelocityDatum[]; labels:
   return (
     <ChartShell empty={data.length === 0} minHeight={240} emptyLabel={labels.empty}>
       <ChartViewport title={labels.velocity.title} minHeight={220} labels={labels.chartTools}>
-        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} initialDimension={stableChartSize}>
           <LineChart data={data} margin={{ top: 10, right: 12, bottom: 0, left: -20 }}>
             <CartesianGrid stroke={chartTheme.grid} vertical={false} />
             <XAxis dataKey="week" tick={chartTheme.axisTick} axisLine={false} tickLine={false} />

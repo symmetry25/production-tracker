@@ -168,7 +168,7 @@ export function AiRecognizerPanel({ entityTypeId = "retail-purchase-order" }: { 
               {loading ? "识别中" : "开始识别"}
             </button>
             <button type="button" onClick={applyAsRecord} disabled={!result || applyStatus === "saving"} className="h-9 border border-[#27422e] bg-[#132016] px-4 text-xs font-semibold text-[#83d6ae] disabled:opacity-45">
-              {applyStatus === "saving" ? "应用中" : `应用当前${currentRecords.length > 1 ? ` ${currentRecords.length} 条` : ""}`}
+              {applyStatus === "saving" ? "应用中" : `应用为记录${currentRecords.length > 1 ? ` ${currentRecords.length} 条` : ""}`}
             </button>
           </div>
         </div>

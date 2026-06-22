@@ -11,9 +11,28 @@ const initialState: CreateTaskState = {};
 const demoProjectId = "demo-mkali-mission";
 const demoTaskCostPerDay = 8_000;
 
-export function CreateTaskForm({ projectId, options, onTaskCreated }: { projectId: string; options: TaskFormOptions; onTaskCreated?: (task: TaskTableItem) => void }) {
-  const [open, setOpen] = useState(false);
-  const [sourceType, setSourceType] = useState<"shot" | "asset">("shot");
+export type TaskFormPrefill = {
+  open?: boolean;
+  name?: string;
+  startDate?: string;
+  dueDate?: string;
+  assigneeId?: string;
+  sourceType?: "shot" | "asset";
+};
+
+export function CreateTaskForm({
+  projectId,
+  options,
+  prefill,
+  onTaskCreated,
+}: {
+  projectId: string;
+  options: TaskFormOptions;
+  prefill?: TaskFormPrefill;
+  onTaskCreated?: (task: TaskTableItem) => void;
+}) {
+  const [open, setOpen] = useState(Boolean(prefill?.open));
+  const [sourceType, setSourceType] = useState<"shot" | "asset">(prefill?.sourceType ?? "shot");
   const [state, formAction, pending] = useActionState(createTaskAction.bind(null, projectId), initialState);
 
   function handleDemoSubmit(formData: FormData) {
@@ -56,6 +75,7 @@ export function CreateTaskForm({ projectId, options, onTaskCreated }: { projectI
                 <input
                   name="name"
                   required
+                  defaultValue={prefill?.name ?? ""}
                   placeholder="ANM blocking / vendor delivery / final comp"
                   className="h-11 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm outline-none focus:border-[#d8b46a]"
                 />
@@ -117,6 +137,7 @@ export function CreateTaskForm({ projectId, options, onTaskCreated }: { projectI
                 <input
                   name="startDate"
                   type="date"
+                  defaultValue={prefill?.startDate ?? ""}
                   className="h-11 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm outline-none focus:border-[#d8b46a]"
                 />
               </label>
@@ -125,6 +146,7 @@ export function CreateTaskForm({ projectId, options, onTaskCreated }: { projectI
                 <input
                   name="dueDate"
                   type="date"
+                  defaultValue={prefill?.dueDate ?? ""}
                   className="h-11 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm outline-none focus:border-[#d8b46a]"
                 />
               </label>
@@ -171,7 +193,7 @@ export function CreateTaskForm({ projectId, options, onTaskCreated }: { projectI
 
               <label className="space-y-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a09a8d]">Assignee</span>
-                <select name="assigneeId" className="h-11 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm outline-none focus:border-[#d8b46a]">
+                <select name="assigneeId" defaultValue={prefill?.assigneeId ?? ""} className="h-11 w-full border border-[#34322b] bg-[#11110f] px-3 text-sm outline-none focus:border-[#d8b46a]">
                   <option value="">未分配</option>
                   {options.users.map((user) => (
                     <option key={user.id} value={user.id}>

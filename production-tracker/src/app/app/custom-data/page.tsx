@@ -1,8 +1,10 @@
 import { CustomDataWorkspace } from "@/components/custom-data/custom-data-workspace";
 import { getIndustryTemplates } from "@/lib/custom-data";
 
-export default function CustomDataPage() {
+export default async function CustomDataPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const resolvedSearchParams = await searchParams;
   const templates = getIndustryTemplates();
+  const initialImportOpen = first(resolvedSearchParams.import) === "1";
 
   return (
     <>
@@ -20,7 +22,11 @@ export default function CustomDataPage() {
         </div>
       </div>
 
-      <CustomDataWorkspace templates={templates} />
+      <CustomDataWorkspace templates={templates} initialImportOpen={initialImportOpen} />
     </>
   );
+}
+
+function first(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
 }

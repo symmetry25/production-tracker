@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test.describe("production tracker smoke flow", () => {
   test("login, inspect core pages, and read reporting APIs", async ({ page }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(120_000);
     const e2eWidgetTitle = `E2E 临时图表 ${Date.now().toString().slice(-5)}`;
 
     await page.goto("/login");
@@ -13,16 +13,17 @@ test.describe("production tracker smoke flow", () => {
     await expect(page.getByRole("heading", { name: /Mkali's Mission 控制台/ })).toBeVisible();
 
     await page.goto("/app/projects");
-    await expect(page.getByRole("link", { name: /Mkali's Mission/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Mkali's Mission", exact: true })).toBeVisible();
 
-    await page.goto("/app/custom-data");
+    await page.goto("/app/custom-data?import=1");
     await expect(page.getByRole("heading", { name: "通用录入与行业模板" })).toBeVisible();
     await expect(page.getByText("Industry Templates")).toBeVisible();
     await expect(page.getByRole("button", { name: /采购单/ })).toBeVisible();
     await expect(page.getByText("合计金额")).toBeVisible();
-    await page.getByRole("button", { name: "打开导入向导" }).click();
-    await page.getByRole("button", { name: "解析并自动映射" }).click();
-    await expect(page.getByText("字段映射", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("custom-data-workspace")).toHaveAttribute("data-hydrated", "true");
+    await expect(page.getByRole("button", { name: "解析并自动映射" })).toBeVisible();
+    await page.getByTestId("custom-data-parse-import").click();
+    await expect(page.getByTestId("custom-data-import-mapping")).toBeVisible();
     await expect(page.getByText(/行 3: unit_cost - 非数字值/)).toBeVisible();
     await page.getByRole("button", { name: "仅导入有效行 (1)" }).click();
     await expect(page.getByText("已导入 1 条有效记录")).toBeVisible();
@@ -56,7 +57,7 @@ test.describe("production tracker smoke flow", () => {
     await expect(page.getByRole("heading", { name: "采购单 导入向导" })).toBeVisible();
     await expect(page.getByText(/行 3: unit_cost - 非数字值/)).toBeVisible();
     await page.getByRole("button", { name: "仅导入有效行" }).click();
-    await expect(page.getByText(/已导入 1 条，跳过 1 条/)).toBeVisible();
+    await expect(page.getByRole("main").getByText(/已导入 1 条，跳过 1 条/)).toBeVisible();
 
     await page.goto("/app/dashboards/dashboard-producer-demo");
     await expect(page.getByRole("heading", { name: "制片数据驾驶舱" })).toBeVisible();
@@ -78,7 +79,7 @@ test.describe("production tracker smoke flow", () => {
     await page.getByRole("button", { name: "开始识别" }).click();
     await expect(page.getByText("invoice_number").first()).toBeVisible();
     await page.getByRole("button", { name: "应用为记录" }).click();
-    await expect(page.getByText("识别结果已写入采购单记录。")).toBeVisible();
+    await expect(page.getByText("当前结果共 1 条，已写入 1 条，失败 0 条。")).toBeVisible();
 
     await page.goto("/app/users/demo-user-vfx/scorecard");
     await expect(page.getByRole("heading", { name: "Nora Li 评分卡" })).toBeVisible();

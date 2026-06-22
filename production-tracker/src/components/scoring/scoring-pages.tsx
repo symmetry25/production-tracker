@@ -10,6 +10,7 @@ import type { getScoreLeaderboard, getUserScorecard, listSkills } from "@/lib/sc
 type Scorecard = NonNullable<ReturnType<typeof getUserScorecard>>;
 type Leaderboard = ReturnType<typeof getScoreLeaderboard>;
 type Skills = ReturnType<typeof listSkills>;
+const stableRadarSize = { width: 420, height: 320 };
 
 export function ScorecardPageView({ scorecard, leaderboard }: { scorecard: Scorecard; leaderboard: Leaderboard }) {
   const radarData = scorecard.rows.map((row) => ({ subject: row.dimension.name, score: row.score, fullMark: row.dimension.maxScore }));
@@ -27,7 +28,7 @@ export function ScorecardPageView({ scorecard, leaderboard }: { scorecard: Score
       <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
         <section className="border border-[#34322b] bg-[#181713] p-4">
           <p className="text-sm font-semibold">维度雷达图</p>
-          <ResponsiveContainer width="100%" height={320} minWidth={1} minHeight={1}>
+          <ResponsiveContainer width="100%" height={320} minWidth={1} minHeight={1} initialDimension={stableRadarSize}>
             <RadarChart data={radarData}>
               <PolarGrid stroke="#34322b" />
               <PolarAngleAxis dataKey="subject" tick={{ fill: "#aaa599", fontSize: 11 }} />

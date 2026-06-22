@@ -29,6 +29,7 @@ export type DashboardWidgetData = { rows: unknown[]; total: number };
 export type ChartRow = { name: string; value: number };
 
 const palette = ["#d8b46a", "#4a9eff", "#1d9e75", "#ef9f27", "#7f77dd", "#e24b4a", "#4f7f9b"];
+const stableWidgetChartSize = { width: 420, height: 220 };
 
 export function DashboardWidgetContent({ type, rows, total, title = "Dashboard widget", compact = false }: { type: WidgetConfig["type"]; rows: ChartRow[]; total: number; title?: string; compact?: boolean }) {
   if (!rows.length) {
@@ -47,7 +48,7 @@ export function DashboardWidgetContent({ type, rows, total, title = "Dashboard w
   if (type === "pie_chart") {
     return (
       <ChartViewport title={title} compact={compact} minHeight={compact ? 180 : 240}>
-        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} initialDimension={stableWidgetChartSize}>
           <PieChart>
             <Pie data={rows} dataKey="value" nameKey="name" innerRadius={48} outerRadius={78} paddingAngle={2}>
               {rows.map((row, index) => <Cell key={row.name ?? index} fill={palette[index % palette.length]} />)}
@@ -62,7 +63,7 @@ export function DashboardWidgetContent({ type, rows, total, title = "Dashboard w
   if (type === "line_chart" || type === "timeline") {
     return (
       <ChartViewport title={title} compact={compact} minHeight={compact ? 180 : 240}>
-        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} initialDimension={stableWidgetChartSize}>
           <LineChart data={rows} margin={{ top: 18, right: 18, bottom: 0, left: -12 }}>
             <CartesianGrid stroke={chartTheme.gridSubtle} vertical={false} />
             <XAxis dataKey="name" tick={chartTheme.axisTick} axisLine={false} tickLine={false} />
@@ -78,7 +79,7 @@ export function DashboardWidgetContent({ type, rows, total, title = "Dashboard w
   if (type === "area_chart") {
     return (
       <ChartViewport title={title} compact={compact} minHeight={compact ? 180 : 240}>
-        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} initialDimension={stableWidgetChartSize}>
           <AreaChart data={rows} margin={{ top: 18, right: 18, bottom: 0, left: -12 }}>
             <defs>
               <linearGradient id={`area-${slugify(title)}`} x1="0" x2="0" y1="0" y2="1">
@@ -100,7 +101,7 @@ export function DashboardWidgetContent({ type, rows, total, title = "Dashboard w
   if (type === "radar_chart") {
     return (
       <ChartViewport title={title} compact={compact} minHeight={compact ? 180 : 240}>
-        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} initialDimension={stableWidgetChartSize}>
           <RadarChart data={rows.slice(0, 8)} outerRadius={compact ? 72 : 92}>
             <PolarGrid stroke={chartTheme.radarGrid} />
             <PolarAngleAxis dataKey="name" tick={{ fill: "#aaa599", fontSize: 10 }} />
@@ -119,7 +120,7 @@ export function DashboardWidgetContent({ type, rows, total, title = "Dashboard w
 
   return (
     <ChartViewport title={title} compact={compact} minHeight={compact ? 180 : 240}>
-      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} initialDimension={stableWidgetChartSize}>
         <BarChart data={rows} margin={{ top: 18, right: 14, bottom: 0, left: -12 }}>
           <XAxis dataKey="name" tick={chartTheme.axisTick} axisLine={false} tickLine={false} />
           <YAxis tick={chartTheme.axisTick} axisLine={false} tickLine={false} />

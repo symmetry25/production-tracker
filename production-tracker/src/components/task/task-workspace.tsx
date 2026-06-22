@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { CreateTaskForm } from "@/components/task/create-task-form";
+import { CreateTaskForm, type TaskFormPrefill } from "@/components/task/create-task-form";
 import { GanttPanel } from "@/components/task/gantt-panel";
 import { TaskBoard } from "@/components/task/task-board";
 import { TaskTable } from "@/components/task/task-table";
@@ -50,12 +50,14 @@ export function TaskWorkspace({
   options,
   scheduleSuggestions,
   analysisDate,
+  prefill,
 }: {
   projectId: string;
   tasks: TaskTableItem[];
   options: TaskFormOptions;
   scheduleSuggestions: ScheduleSuggestionSummary | null;
   analysisDate: string;
+  prefill?: TaskFormPrefill;
 }) {
   const [taskItems, setTaskItems] = useState(tasks);
   const [view, setView] = useState<"table" | "board" | "gantt">("table");
@@ -79,7 +81,7 @@ export function TaskWorkspace({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <CreateTaskForm projectId={projectId} options={options} onTaskCreated={(task) => setTaskItems((current) => [task, ...current])} />
+          <CreateTaskForm projectId={projectId} options={options} prefill={prefill} onTaskCreated={(task) => setTaskItems((current) => [task, ...current])} />
           <button
             type="button"
             onClick={() => setShowSuggestions((current) => !current)}

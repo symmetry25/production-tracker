@@ -1,10 +1,12 @@
 import { TaskWorkspace } from "@/components/task/task-workspace";
+import type { TaskFormPrefill } from "@/components/task/create-task-form";
 import { getDictionary, getLocale } from "@/lib/i18n";
 import { buildScheduleSuggestions, type ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
 import { getTaskFormOptions, getTaskTableItems, type TaskFormOptions, type TaskTableItem } from "@/lib/task-data";
 
-export default async function ProjectTasksPage({ params }: { params: Promise<{ projectId: string }> }) {
+export default async function ProjectTasksPage({ params, searchParams }: { params: Promise<{ projectId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { projectId } = await params;
+  const resolvedSearchParams = await searchParams;
   const locale = await getLocale();
   const t = getDictionary(locale).pages.tasks;
   let tasks: TaskTableItem[] = [];
@@ -37,8 +39,24 @@ export default async function ProjectTasksPage({ params }: { params: Promise<{ p
           <p className="mt-3 max-w-3xl text-sm leading-6 text-[#c9c3b5]">{error}</p>
         </div>
       ) : (
-        <TaskWorkspace projectId={projectId} tasks={tasks} options={options} scheduleSuggestions={scheduleSuggestions} analysisDate={analysisDate.toISOString()} />
+        <TaskWorkspace projectId={projectId} tasks={tasks} options={options} scheduleSuggestions={scheduleSuggestions} analysisDate={analysisDate.toISOString()} prefill={buildTaskPrefill(resolvedSearchParams)} />
       )}
     </>
   );
+}
+
+function buildTaskPrefill(searchParams: Record<string, string | string[] | undefined>): TaskFormPrefill | undefined {
+  if (first(searchParams.action) !== "new-task") return undefined;
+
+  return {
+    open: true,
+    name: first(searchParams.name) ?? "",
+    startDate: first(searchParams.startDate) ?? "",
+    dueDate: first(searchParams.dueDate) ?? "",
+    assigneeId: first(searchParams.assigneeId) ?? "",
+  };
+}
+
+function first(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
 }

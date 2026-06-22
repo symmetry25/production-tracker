@@ -89,10 +89,12 @@ export type UnassignedWeekRow = {
 };
 
 export type PlanningCalendarException = {
+  id?: string;
   date: string;
   type: "HOLIDAY" | "REDUCED_HOURS" | "STUDIO_CLOSURE";
   description: string | null;
   hoursWorked: number;
+  projectId?: string | null;
   inheritedFrom?: string | null;
 };
 
@@ -174,10 +176,12 @@ export async function getResourcePlanningData(projectId: string, start = "2026-0
       },
       orderBy: { date: "asc" },
       select: {
+        id: true,
         date: true,
         type: true,
         description: true,
         hoursWorked: true,
+        projectId: true,
         inheritedFrom: true,
       },
     }),
@@ -208,10 +212,12 @@ export async function getResourcePlanningData(projectId: string, start = "2026-0
     start,
     end,
     calendarExceptions: calendarExceptions.map((exception) => ({
+      id: exception.id,
       date: exception.date.toISOString().slice(0, 10),
       type: exception.type,
       description: exception.description,
       hoursWorked: exception.hoursWorked,
+      projectId: exception.projectId,
       inheritedFrom: exception.inheritedFrom,
     })),
   });
@@ -466,17 +472,21 @@ function getDemoPlanningPeople(projectId: string): PlanningPerson[] {
 function getDemoCalendarExceptions(): PlanningCalendarException[] {
   return [
     {
+      id: "demo-calendar-stage-power",
       date: "2026-05-25",
       type: "STUDIO_CLOSURE",
       description: "棚内电力检修，拍摄组与后期组容量下调",
       hoursWorked: 0,
+      projectId: "demo-mkali-mission",
       inheritedFrom: "studio",
     },
     {
+      id: "demo-calendar-vfx-review",
       date: "2026-06-08",
       type: "REDUCED_HOURS",
       description: "VFX 供应商半日审查，团队仅保留 4 小时窗口",
       hoursWorked: 4,
+      projectId: "demo-mkali-mission",
       inheritedFrom: "vendor",
     },
   ];
