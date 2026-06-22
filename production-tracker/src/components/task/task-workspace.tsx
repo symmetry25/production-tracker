@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { CreateTaskForm } from "@/components/task/create-task-form";
 import { GanttPanel } from "@/components/task/gantt-panel";
+import { TaskBoard } from "@/components/task/task-board";
 import { TaskTable } from "@/components/task/task-table";
 import { buildScheduleSuggestions, type ScheduleSuggestion, type ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
 import type { TaskFormOptions, TaskTableItem } from "@/lib/task-data";
@@ -23,7 +24,7 @@ export function TaskWorkspace({
   analysisDate: string;
 }) {
   const [taskItems, setTaskItems] = useState(tasks);
-  const [view, setView] = useState<"table" | "gantt">("table");
+  const [view, setView] = useState<"table" | "board" | "gantt">("table");
   const [showSuggestions, setShowSuggestions] = useState(Boolean(scheduleSuggestions?.criticalCount || scheduleSuggestions?.warningCount));
   const currentScheduleSuggestions = buildScheduleSuggestions({ projectId, tasks: taskItems, now: new Date(analysisDate), provider: scheduleSuggestions?.provider ?? "rules" });
   const workHourHeatmap = buildWorkHourHeatmap(taskItems);
@@ -47,13 +48,20 @@ export function TaskWorkspace({
           >
             Schedule intelligence
           </button>
-          <div className="grid grid-cols-2 overflow-hidden border border-[#3f3c33] bg-[#11110f] text-xs">
+          <div className="grid grid-cols-3 overflow-hidden border border-[#3f3c33] bg-[#11110f] text-xs">
             <button
               type="button"
               onClick={() => setView("table")}
               className={["h-8 px-4 font-semibold", view === "table" ? "bg-[#2b2924] text-[#f4f1e8]" : "text-[#8f8a7e] hover:text-[#f4f1e8]"].join(" ")}
             >
               Table
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("board")}
+              className={["h-8 px-4 font-semibold", view === "board" ? "bg-[#2b2924] text-[#f4f1e8]" : "text-[#8f8a7e] hover:text-[#f4f1e8]"].join(" ")}
+            >
+              Board
             </button>
             <button
               type="button"
@@ -72,6 +80,8 @@ export function TaskWorkspace({
 
       {view === "table" ? (
         <TaskTable projectId={projectId} tasks={taskItems} options={options} onTasksChange={setTaskItems} />
+      ) : view === "board" ? (
+        <TaskBoard projectId={projectId} tasks={taskItems} onTasksChange={setTaskItems} />
       ) : (
         <GanttPanel projectId={projectId} tasks={taskItems} onTasksChange={setTaskItems} />
       )}
