@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
+import { buildRecognizedRecords } from "@/lib/ai-apply";
 import type { AiRecognitionMode } from "@/lib/ai-recognition";
 
 const modes: AiRecognitionMode[] = ["invoice", "table", "document", "card", "custom"];
@@ -16,7 +18,15 @@ type BatchRecognitionItem = {
   };
 };
 
+type ApplySummary = {
+  source: "single" | "batch";
+  total: number;
+  inserted: number;
+  failed: number;
+};
+
 export function AiRecognizerPanel({ entityTypeId = "retail-purchase-order" }: { entityTypeId?: string }) {
+  const router = useRouter();
   const [mode, setMode] = useState<AiRecognitionMode>("invoice");
   const [loading, setLoading] = useState(false);
   const [batchLoading, setBatchLoading] = useState(false);
@@ -26,6 +36,10 @@ export function AiRecognizerPanel({ entityTypeId = "retail-purchase-order" }: { 
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [note, setNote] = useState("");
   const [applyStatus, setApplyStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const [applySummary, setApplySummary] = useState<ApplySummary | null>(null);
+
+  const currentRecords = useMemo(() => buildRecognizedRecords(result), [result]);
+  const batchRecords = useMemo(() => buildRecognizedRecords(batchResults), [batchResults]);
 
   async function runRecognition() {
     setLoading(true);
@@ -39,18 +53,48 @@ export function AiRecognizerPanel({ entityTypeId = "retail-purchase-order" }: { 
     setResult(body.data?.result ?? null);
     setNote(body.data?.note ?? body.error ?? "");
     setApplyStatus("idle");
+    setApplySummary(null);
   }
 
   async function applyAsRecord() {
     if (!result) return;
+    await applyRecords(currentRecords, "single");
+  }
+
+  async function applyBatchAsRecords() {
+    await applyRecords(batchRecords, "batch");
+  }
+
+  async function applyRecords(records: ReturnType<typeof buildRecognizedRecords>, source: ApplySummary["source"]) {
+    if (!records.length) {
+      setApplyStatus("error");
+      setApplySummary({ source, total: 0, inserted: 0, failed: 0 });
+      setNote("没有识别到可以写入的记录。");
+      return;
+    }
+
     setApplyStatus("saving");
-    const data = normalizeRecognizedRecord(result);
-    const response = await fetch(`/api/entity-types/${entityTypeId}/records`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data, createdBy: "AI识别" }),
-    });
-    setApplyStatus(response.ok ? "done" : "error");
+    setApplySummary(null);
+
+    let inserted = 0;
+    let failed = 0;
+    for (const data of records) {
+      const response = await fetch(`/api/entity-types/${entityTypeId}/records`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data, createdBy: "AI识别" }),
+      });
+
+      if (response.ok) {
+        inserted += 1;
+      } else {
+        failed += 1;
+      }
+    }
+
+    setApplySummary({ source, total: records.length, inserted, failed });
+    setApplyStatus(failed ? "error" : "done");
+    if (inserted > 0) router.refresh();
   }
 
   async function runBatchRecognition() {
@@ -58,6 +102,8 @@ export function AiRecognizerPanel({ entityTypeId = "retail-purchase-order" }: { 
     setBatchResults([]);
     setBatchProgress({ current: 0, total: batchFiles.length || 1 });
     setNote("");
+    setApplyStatus("idle");
+    setApplySummary(null);
 
     const files = batchFiles.length
       ? await Promise.all(
@@ -122,7 +168,7 @@ export function AiRecognizerPanel({ entityTypeId = "retail-purchase-order" }: { 
               {loading ? "识别中" : "开始识别"}
             </button>
             <button type="button" onClick={applyAsRecord} disabled={!result || applyStatus === "saving"} className="h-9 border border-[#27422e] bg-[#132016] px-4 text-xs font-semibold text-[#83d6ae] disabled:opacity-45">
-              {applyStatus === "saving" ? "应用中" : "应用为记录"}
+              {applyStatus === "saving" ? "应用中" : `应用当前${currentRecords.length > 1 ? ` ${currentRecords.length} 条` : ""}`}
             </button>
           </div>
         </div>
@@ -152,6 +198,14 @@ export function AiRecognizerPanel({ entityTypeId = "retail-purchase-order" }: { 
             >
               {batchLoading ? "批量识别中" : "运行批量识别"}
             </button>
+            <button
+              type="button"
+              onClick={applyBatchAsRecords}
+              disabled={!batchResults.length || applyStatus === "saving"}
+              className="h-9 border border-[#d8b46a]/55 bg-[#d8b46a]/10 px-4 text-xs font-semibold text-[#e8c678] disabled:opacity-45"
+            >
+              {applyStatus === "saving" ? "写入中" : `批量应用${batchRecords.length ? ` ${batchRecords.length} 条` : ""}`}
+            </button>
           </div>
           <input
             type="file"
@@ -169,8 +223,11 @@ export function AiRecognizerPanel({ entityTypeId = "retail-purchase-order" }: { 
           </div>
         </div>
         {note ? <p className="mt-4 text-xs text-[#8f8a7e]">{note}</p> : null}
-        {applyStatus === "done" ? <p className="mt-3 text-xs text-[#83d6ae]">识别结果已写入采购单记录。</p> : null}
-        {applyStatus === "error" ? <p className="mt-3 text-xs text-[#ff9c8c]">应用失败，请检查字段映射。</p> : null}
+        {applySummary ? (
+          <p className={["mt-3 text-xs", applyStatus === "error" ? "text-[#ff9c8c]" : "text-[#83d6ae]"].join(" ")}>
+            {applySummary.source === "batch" ? "批量结果" : "当前结果"}共 {applySummary.total} 条，已写入 {applySummary.inserted} 条，失败 {applySummary.failed} 条。
+          </p>
+        ) : null}
       </div>
       <aside className="border border-[#34322b] bg-[#181713] p-4">
         <p className="text-sm font-semibold">识别结果</p>
@@ -199,22 +256,6 @@ export function AiRecognizerPanel({ entityTypeId = "retail-purchase-order" }: { 
       </aside>
     </section>
   );
-}
-
-function normalizeRecognizedRecord(result: Record<string, unknown>) {
-  const total = Number(result.total ?? result.total_amount ?? 0);
-  const item = Array.isArray(result.items) ? (result.items[0] as Record<string, unknown> | undefined) : undefined;
-
-  return {
-    po_number: String(result.invoice_number ?? result.document_number ?? `AI-${Date.now().toString().slice(-5)}`),
-    supplier: String(result.seller_name ?? result.parties?.["from" as never] ?? "AI识别供应商"),
-    order_date: String(result.invoice_date ?? result.date ?? "2026-06-18"),
-    expected_date: "2026-06-25",
-    unit_cost: total || Number(item?.unit_price ?? item?.amount ?? 1),
-    quantity: Number(item?.quantity ?? 1),
-    status: "pending",
-    vendor_score: Math.round(Number(result.confidence ?? 0.85) * 100),
-  };
 }
 
 function parseSseRecognitionItem(eventText: string): BatchRecognitionItem | null {
