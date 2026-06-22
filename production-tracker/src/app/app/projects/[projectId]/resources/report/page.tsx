@@ -10,6 +10,7 @@ import {
   type ResourcePerson,
   type VendorSpend,
 } from "@/lib/resource-data";
+import { buildProfessionalResourceReport, type ProfessionalResourceReport } from "@/lib/professional-resource-report";
 import { buildResourceReportSummary, type ResourceReportSummary } from "@/lib/resource-report";
 
 const moneyFormatter = new Intl.NumberFormat("en-US", {
@@ -65,16 +66,25 @@ const gradeLabels: Record<ResourceReportSummary["reportGrade"], { title: string;
   },
 };
 
+const riskKindLabels: Record<ProfessionalResourceReport["riskRadar"][number]["kind"], string> = {
+  finance: "付款",
+  audit: "审计",
+  budget: "预算",
+  vendor: "供应商",
+};
+
 export default async function ProjectResourceReportPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   const data = await getResourceBudgetData(projectId);
   const reportDate = new Date().toISOString().slice(0, 10);
   const summary = buildResourceReportSummary(data, reportDate);
+  const professionalReport = buildProfessionalResourceReport({ data, summary, reportDate });
 
   return (
     <article className="mx-auto max-w-[1180px] border border-[#34322b] bg-[#181713] text-[#f4f1e8] print:max-w-none print:border-0 print:bg-white print:text-[#171717]">
       <ReportHeader projectId={projectId} data={data} summary={summary} reportDate={reportDate} />
       <ExecutiveSummary summary={summary} />
+      <ProfessionalReportSection report={professionalReport} />
       <ReportMetrics summary={summary} />
       <div className="grid grid-cols-[1fr_0.82fr] gap-5 border-t border-[#34322b] p-5 print:block print:border-[#d8d1c4] print:p-0">
         <div className="space-y-5 print:space-y-4">
@@ -89,6 +99,70 @@ export default async function ProjectResourceReportPage({ params }: { params: Pr
         </div>
       </div>
     </article>
+  );
+}
+
+function ProfessionalReportSection({ report }: { report: ProfessionalResourceReport }) {
+  return (
+    <section className="border-b border-[#34322b] bg-[#141310] p-5 print:border-[#d8d1c4] print:bg-white print:px-0">
+      <div className="grid grid-cols-[1fr_300px] gap-5 print:block">
+        <div>
+          <SectionTitle eyebrow="ai professional brief" title="AI 专业报告包" />
+          <p className="mt-3 text-base leading-8 text-[#e6dfd0] print:text-[#26231d]">{report.executiveBrief}</p>
+          <p className="mt-3 border-l-2 border-[#d8b46a] pl-3 text-sm leading-6 text-[#c9c3b5] print:border-[#9b7a2c] print:text-[#4a4640]">{report.producerNote}</p>
+        </div>
+        <div className="border border-[#34322b] bg-[#11110f] p-4 print:mt-4 print:border-[#d8d1c4] print:bg-white">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#7f7a70] print:text-[#5f5a52]">report headline</p>
+          <p className="mt-3 text-lg font-semibold leading-7 text-[#f4f1e8] print:text-[#171717]">{report.headline}</p>
+          <p className="mt-3 text-xs leading-5 text-[#8f8a7e] print:text-[#5f5a52]">API: /api/reports/professional-resource</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-[1fr_0.9fr] gap-5 print:block">
+        <div className="grid grid-cols-2 gap-3 print:grid-cols-2">
+          {report.riskRadar.map((risk) => (
+            <div key={risk.kind} className="border border-[#2f2d27] bg-[#11110f] p-3 print:border-[#d8d1c4] print:bg-white">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#7f7a70] print:text-[#5f5a52]">{riskKindLabels[risk.kind]}</p>
+                  <p className="mt-2 text-sm font-semibold">{risk.title}</p>
+                </div>
+                <ToneBadge tone={toneToRisk(risk.tone)}>{risk.tone.toUpperCase()}</ToneBadge>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-[#aaa599] print:text-[#4a4640]">{risk.detail}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-3 print:mt-4">
+          <div className="border border-[#34322b] bg-[#11110f] p-4 print:border-[#d8d1c4] print:bg-white">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#d8b46a] print:text-[#735f28]">action list</p>
+            <div className="mt-3 space-y-2">
+              {report.actionItems.map((item) => (
+                <div key={`${item.priority}-${item.owner}-${item.action}`} className="grid grid-cols-[42px_76px_1fr] gap-3 border-b border-[#2a2a28] py-2 text-xs last:border-b-0 print:border-[#e4ded2]">
+                  <span className="font-mono font-semibold text-[#e8c678] print:text-[#6f5720]">{item.priority}</span>
+                  <span className="text-[#c9c3b5] print:text-[#26231d]">{item.owner}</span>
+                  <span className="leading-5 text-[#aaa599] print:text-[#4a4640]">{item.action}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="border border-[#34322b] bg-[#11110f] p-4 print:border-[#d8d1c4] print:bg-white">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#d8b46a] print:text-[#735f28]">board questions</p>
+            <ol className="mt-3 space-y-2 text-xs leading-5 text-[#aaa599] print:text-[#4a4640]">
+              {report.boardQuestions.map((question, index) => (
+                <li key={question}>{index + 1}. {question}</li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <details className="mt-5 border border-[#2f2d27] bg-[#11110f] p-4 print:hidden">
+        <summary className="cursor-pointer text-xs font-semibold text-[#e8c678]">查看 AI Prompt 数据包</summary>
+        <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap text-[11px] leading-5 text-[#aaa599]">{report.aiPrompt}</pre>
+      </details>
+    </section>
   );
 }
 
@@ -374,6 +448,12 @@ function ToneBadge({ tone, children }: { tone: BudgetDepartment["risk"]; childre
         : "border-[#224b39] bg-[#13251d] text-[#75d9a7] print:border-[#15803d] print:bg-white print:text-[#166534]";
 
   return <span className={`inline-flex border px-2 py-1 text-[11px] font-semibold ${className}`}>{children}</span>;
+}
+
+function toneToRisk(tone: ProfessionalResourceReport["riskRadar"][number]["tone"]): BudgetDepartment["risk"] {
+  if (tone === "hold") return "over";
+  if (tone === "watch") return "watch";
+  return "ok";
 }
 
 function percent(value: number, total: number) {

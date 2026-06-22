@@ -9,6 +9,7 @@ vi.mock("@/lib/dashboard-data", () => ({ getDashboardStats: vi.fn() }));
 import { getBurndownReport } from "./burndown/route";
 import { getOverviewReport } from "./overview/route";
 import { getProducerAgendaReport } from "./producer-agenda/route";
+import { getProfessionalResourceReport } from "./professional-resource/route";
 import { getWorkloadReport } from "./workload/route";
 import { getScheduleSuggestions } from "../projects/[projectId]/schedule-suggestions/route";
 
@@ -82,10 +83,15 @@ describe("reports routes", () => {
       getTaskTableItems: vi.fn(),
       getResourceBudgetData: vi.fn(),
     });
+    const professionalResource = await getProfessionalResourceReport(new Request("http://app.test/api/reports/professional-resource"), {
+      ...deps,
+      getResourceBudgetData: vi.fn(),
+    });
 
     expect(overview.status).toBe(422);
     expect(burndown.status).toBe(422);
     expect(producerAgenda.status).toBe(422);
+    expect(professionalResource.status).toBe(422);
     expect(deps.getDashboardStats).not.toHaveBeenCalled();
   });
 
@@ -212,6 +218,29 @@ describe("reports routes", () => {
           ["decision", "01 · Payment · Action needed", "冻结付款 $180", "建议暂缓 $180 付款，先补齐审计材料和付款关口，再由制片主任放行。", "/app/projects/demo/resources/report"],
           ["schedule", "critical · overdue", "VFX turnover 已逾期 3 天", "安排当日 standup 决策：补人、拆 scope，或把下游依赖整体后移。", "VFX_0100"],
         ]),
+      },
+      error: null,
+    });
+  });
+
+  it("returns a professional resource report for producer and studio review", async () => {
+    const response = await getProfessionalResourceReport(new Request("http://app.test/api/reports/professional-resource?projectId=demo"), {
+      auth: vi.fn().mockResolvedValue(session),
+      getResourceBudgetData: vi.fn().mockResolvedValue(resourceData),
+      now: () => new Date("2026-06-20T00:00:00.000Z"),
+    });
+
+    await expect(response.json()).resolves.toMatchObject({
+      data: {
+        projectId: "demo",
+        generatedAt: "2026-06-20T00:00:00.000Z",
+        report: {
+          status: "hold",
+          headline: expect.stringContaining("HOLD"),
+          riskRadar: expect.arrayContaining([expect.objectContaining({ kind: "finance" })]),
+          actionItems: expect.arrayContaining([expect.objectContaining({ owner: "制片主任" })]),
+          aiPrompt: expect.stringContaining("请生成一份给监制和制片厂阅读的制片资源报告"),
+        },
       },
       error: null,
     });
