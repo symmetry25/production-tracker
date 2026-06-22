@@ -22,6 +22,7 @@ import {
 } from "recharts";
 
 import { ChartViewport } from "@/components/charts/chart-viewport";
+import { chartTheme } from "@/lib/chart-theme";
 import type { WidgetConfig } from "@/lib/dashboard-builder";
 
 export type DashboardWidgetData = { rows: unknown[]; total: number };
@@ -51,7 +52,7 @@ export function DashboardWidgetContent({ type, rows, total, title = "Dashboard w
             <Pie data={rows} dataKey="value" nameKey="name" innerRadius={48} outerRadius={78} paddingAngle={2}>
               {rows.map((row, index) => <Cell key={row.name ?? index} fill={palette[index % palette.length]} />)}
             </Pie>
-            <Tooltip contentStyle={tooltipStyle} formatter={(value) => formatNumber(Number(value))} />
+            <Tooltip contentStyle={chartTheme.tooltip} formatter={(value) => formatNumber(Number(value))} />
           </PieChart>
         </ResponsiveContainer>
       </ChartViewport>
@@ -63,10 +64,10 @@ export function DashboardWidgetContent({ type, rows, total, title = "Dashboard w
       <ChartViewport title={title} compact={compact} minHeight={compact ? 180 : 240}>
         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <LineChart data={rows} margin={{ top: 18, right: 18, bottom: 0, left: -12 }}>
-            <CartesianGrid stroke="#24231f" vertical={false} />
-            <XAxis dataKey="name" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(value) => formatNumber(Number(value))} />
+            <CartesianGrid stroke={chartTheme.gridSubtle} vertical={false} />
+            <XAxis dataKey="name" tick={chartTheme.axisTick} axisLine={false} tickLine={false} />
+            <YAxis tick={chartTheme.axisTick} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={chartTheme.tooltip} formatter={(value) => formatNumber(Number(value))} />
             <Line type="monotone" dataKey="value" stroke="#d8b46a" strokeWidth={2} dot={{ r: 2, fill: "#d8b46a" }} activeDot={{ r: 4 }} />
           </LineChart>
         </ResponsiveContainer>
@@ -85,10 +86,10 @@ export function DashboardWidgetContent({ type, rows, total, title = "Dashboard w
                 <stop offset="100%" stopColor="#d8b46a" stopOpacity={0.04} />
               </linearGradient>
             </defs>
-            <CartesianGrid stroke="#24231f" vertical={false} />
-            <XAxis dataKey="name" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(value) => formatNumber(Number(value))} />
+            <CartesianGrid stroke={chartTheme.gridSubtle} vertical={false} />
+            <XAxis dataKey="name" tick={chartTheme.axisTick} axisLine={false} tickLine={false} />
+            <YAxis tick={chartTheme.axisTick} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={chartTheme.tooltip} formatter={(value) => formatNumber(Number(value))} />
             <Area type="monotone" dataKey="value" stroke="#d8b46a" strokeWidth={2} fill={`url(#area-${slugify(title)})`} />
           </AreaChart>
         </ResponsiveContainer>
@@ -101,9 +102,9 @@ export function DashboardWidgetContent({ type, rows, total, title = "Dashboard w
       <ChartViewport title={title} compact={compact} minHeight={compact ? 180 : 240}>
         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <RadarChart data={rows.slice(0, 8)} outerRadius={compact ? 72 : 92}>
-            <PolarGrid stroke="#302d26" />
+            <PolarGrid stroke={chartTheme.radarGrid} />
             <PolarAngleAxis dataKey="name" tick={{ fill: "#aaa599", fontSize: 10 }} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(value) => formatNumber(Number(value))} />
+            <Tooltip contentStyle={chartTheme.tooltip} formatter={(value) => formatNumber(Number(value))} />
             <Radar dataKey="value" stroke="#4a9eff" fill="#4a9eff" fillOpacity={0.24} strokeWidth={2} />
           </RadarChart>
         </ResponsiveContainer>
@@ -120,9 +121,9 @@ export function DashboardWidgetContent({ type, rows, total, title = "Dashboard w
     <ChartViewport title={title} compact={compact} minHeight={compact ? 180 : 240}>
       <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
         <BarChart data={rows} margin={{ top: 18, right: 14, bottom: 0, left: -12 }}>
-          <XAxis dataKey="name" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
-          <Tooltip contentStyle={tooltipStyle} formatter={(value) => formatNumber(Number(value))} />
+          <XAxis dataKey="name" tick={chartTheme.axisTick} axisLine={false} tickLine={false} />
+          <YAxis tick={chartTheme.axisTick} axisLine={false} tickLine={false} />
+          <Tooltip contentStyle={chartTheme.tooltip} formatter={(value) => formatNumber(Number(value))} />
           <Bar dataKey="value" fill="#d8b46a" radius={[2, 2, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
@@ -228,13 +229,6 @@ function WidgetTable({ rows, total }: { rows: ChartRow[]; total: number }) {
     </div>
   );
 }
-
-const tooltipStyle = {
-  background: "#181713",
-  border: "1px solid #34322b",
-  color: "#f4f1e8",
-  fontSize: 12,
-};
 
 function formatNumber(value: number) {
   return Number(value).toLocaleString("zh-CN", { maximumFractionDigits: 0 });

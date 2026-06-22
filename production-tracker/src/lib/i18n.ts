@@ -247,6 +247,13 @@ export const dictionaries = {
           overloadedCrew: "超负载人员",
           decisions: "下一步制片决策",
           actionsCount: "{count} 项",
+          emptyTitle: "今日暂无待处理事项",
+          emptyHint: "录入任务、版本或资源付款后，这里会自动生成制片决策提醒。",
+          emptyLinks: {
+            tasks: "录入任务",
+            media: "上传版本",
+            resources: "检查资源",
+          },
           budgetCorridor: "预算走廊",
           loggedCost: "已记录成本",
           approvedBid: "已批准预算",
@@ -404,6 +411,29 @@ export const dictionaries = {
               fps: "FPS",
               uploaded: "上传日期",
               owner: "上传人",
+              paymentGate: "付款节点",
+            },
+          },
+          paymentGate: {
+            holdReview: {
+              status: "hold",
+              label: "待审暂缓",
+              detail: "等待监制或导演审批后再放款。",
+            },
+            holdChanges: {
+              status: "hold",
+              label: "暂缓付款",
+              detail: "版本需返修，供应商付款应暂缓。",
+            },
+            watch: {
+              status: "watch",
+              label: "排队中",
+              detail: "已查看但尚未通过，付款排队等待确认。",
+            },
+            ready: {
+              status: "ready",
+              label: "可付款",
+              detail: "版本已通过，可进入付款审批。",
             },
           },
           compare: {
@@ -722,6 +752,13 @@ export const dictionaries = {
           overloadedCrew: "Overloaded crew",
           decisions: "Next producer decisions",
           actionsCount: "{count} actions",
+          emptyTitle: "No producer actions for today",
+          emptyHint: "Add tasks, review versions, or resource payments to generate decision prompts here.",
+          emptyLinks: {
+            tasks: "Add tasks",
+            media: "Upload version",
+            resources: "Review resources",
+          },
           budgetCorridor: "Budget corridor",
           loggedCost: "logged cost",
           approvedBid: "approved bid",
@@ -879,6 +916,29 @@ export const dictionaries = {
               fps: "FPS",
               uploaded: "Uploaded",
               owner: "Owner",
+              paymentGate: "Payment gate",
+            },
+          },
+          paymentGate: {
+            holdReview: {
+              status: "hold",
+              label: "Hold review",
+              detail: "Release payment after producer or director approval.",
+            },
+            holdChanges: {
+              status: "hold",
+              label: "Hold payment",
+              detail: "Changes are requested, so vendor payment should stay on hold.",
+            },
+            watch: {
+              status: "watch",
+              label: "Queued",
+              detail: "Viewed but not approved; payment waits for confirmation.",
+            },
+            ready: {
+              status: "ready",
+              label: "Ready to pay",
+              detail: "Version is approved and can enter payment approval.",
             },
           },
           compare: {

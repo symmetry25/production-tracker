@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ResourceBudgetData } from "@/lib/resource-data";
-import { buildResourceAuditLedger } from "@/lib/resource-ledger";
+import { buildResourceAuditLedger, sortResourceLedgerEntries, type ResourceLedgerEntry } from "@/lib/resource-ledger";
 
 describe("buildResourceAuditLedger", () => {
   it("creates an audit ledger from payments, vendors, documents and department exposure", () => {
@@ -52,5 +52,14 @@ describe("buildResourceAuditLedger", () => {
         nextStep: "冻结付款，补齐材料后由制片主任复核",
       }),
     );
+  });
+
+  it("sorts with deterministic string comparison for SSR hydration", () => {
+    const entries: ResourceLedgerEntry[] = [
+      { id: "manual-car", date: "2026-06-18", kind: "document", owner: "车辆组", title: "车辆特拍材料", amount: null, status: "hold", evidence: "缺保险", nextStep: "复核" },
+      { id: "manual-vfx", date: "2026-06-18", kind: "document", owner: "VFX", title: "VFX材料", amount: null, status: "hold", evidence: "缺版本单", nextStep: "复核" },
+    ];
+
+    expect([...entries].sort(sortResourceLedgerEntries).map((entry) => entry.id)).toEqual(["manual-vfx", "manual-car"]);
   });
 });

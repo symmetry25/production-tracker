@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { AssetType, TaskStatus } from "@/generated/prisma/enums";
 
+import { contextMenuLabels, getContextMenuLocale } from "@/lib/context-menu-i18n";
 import { downloadCsv, downloadXlsx } from "@/lib/csv";
 import type { AssetTableItem } from "@/lib/asset-data";
 import type { ShotTableItem } from "@/lib/shot-data";
@@ -739,16 +740,18 @@ function AssetContextMenu({
   onPreview: () => void;
   onSetStatus: (status: TaskStatus) => void;
 }) {
+  const menu = contextMenuLabels[getContextMenuLocale()];
+
   return (
     <ContextMenu.Portal>
       <ContextMenu.Content className="z-50 min-w-64 border border-[#3b382f] bg-[#181713] p-1 text-sm text-[#d8d3c7] shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
         <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">{asset.name}</ContextMenu.Label>
-        <MenuItem onSelect={onEdit}>✎ Edit Asset</MenuItem>
-        <MenuItem onSelect={onDuplicate}>⧉ Duplicate Asset</MenuItem>
-        <MenuItem onSelect={onPreview}>▶ Preview Asset</MenuItem>
-        <MenuItem onSelect={onCopy}>⌘ Copy Asset URL</MenuItem>
+        <MenuItem onSelect={onEdit}>✎ {menu.asset.edit}</MenuItem>
+        <MenuItem onSelect={onDuplicate}>⧉ {menu.asset.duplicate}</MenuItem>
+        <MenuItem onSelect={onPreview}>▶ {menu.asset.preview}</MenuItem>
+        <MenuItem onSelect={onCopy}>⌘ {menu.asset.copyUrl}</MenuItem>
         <Separator />
-        <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">状态</ContextMenu.Label>
+        <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">{menu.groups.status}</ContextMenu.Label>
         {assetMenuStatuses.map((status) => (
           <MenuItem key={status} onSelect={() => onSetStatus(status)}>
             <span className="mr-2 inline-block size-2 rounded-full" style={{ backgroundColor: STATUS_COLORS[status].dot }} />
@@ -756,10 +759,10 @@ function AssetContextMenu({
           </MenuItem>
         ))}
         <Separator />
-        <MenuItem onSelect={onLink}>↔ Link to Shot...</MenuItem>
+        <MenuItem onSelect={onLink}>↔ {menu.asset.linkShot}</MenuItem>
         <Separator />
         <MenuItem danger onSelect={onDelete}>
-          Delete Asset
+          {menu.asset.delete}
         </MenuItem>
       </ContextMenu.Content>
     </ContextMenu.Portal>

@@ -347,6 +347,7 @@ const reviewVersions: ReviewVersionItem[] = [
     createdAt: "2026-06-08T16:40:00.000Z",
     uploadedBy: { id: "demo-user-vfx", name: "Nora Li", department: "调色/VFX组" },
     task: { id: "demo-task-vfx0300-rain", name: "Rain extension comp", contextLabel: "VFX_0300", contextType: "asset" },
+    paymentGate: { status: "hold", label: "待审暂缓", detail: "等待监制或导演审批后再放款。" },
     notes: [
       {
         id: "demo-note-rain-1",
@@ -377,6 +378,7 @@ const reviewVersions: ReviewVersionItem[] = [
     createdAt: "2026-05-12T12:05:00.000Z",
     uploadedBy: { id: "demo-user-post", name: "Milo Grant", department: "后期统筹组" },
     task: { id: "demo-task-raid0010-cmp", name: "CMP", contextLabel: "RAID_0010", contextType: "shot" },
+    paymentGate: { status: "ready", label: "可付款", detail: "版本已通过，可进入付款审批。" },
     notes: [
       {
         id: "demo-note-raid-1",
@@ -401,6 +403,7 @@ const reviewVersions: ReviewVersionItem[] = [
     createdAt: "2026-05-15T21:35:00.000Z",
     uploadedBy: { id: "demo-user-gaffer", name: "陈昊", department: "灯光电工组" },
     task: { id: "demo-task-raid0030-lgt", name: "LGT", contextLabel: "RAID_0030", contextType: "shot" },
+    paymentGate: { status: "hold", label: "暂缓付款", detail: "版本需返修，供应商付款应暂缓。" },
     notes: [
       {
         id: "demo-note-lgt-1",

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Production Tracker",
+  title: "Frederick — 制片管理系统",
   description: "Crew, budget, review, schedule, and resource tracking for production teams.",
 };
 

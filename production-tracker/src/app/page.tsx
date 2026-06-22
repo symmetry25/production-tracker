@@ -27,11 +27,11 @@ export default function Home() {
       <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col px-8 py-6">
         <header className="flex h-14 items-center justify-between border-b border-[#34322b]">
           <div className="flex items-center gap-3">
-            <div className="grid size-8 place-items-center rounded-sm border border-[#d8b46a]/45 bg-[#d8b46a]/10 text-sm font-semibold text-[#e8c678]">
-              PT
+            <div className="grid size-8 place-items-center rounded-[6px] bg-[#1db954] text-base font-black text-[#11110f]">
+              F
             </div>
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">Production Tracker</p>
+              <p className="text-sm font-semibold text-[#f4f1e8]">Frederick</p>
               <p className="text-xs text-[#9f9b8f]">正式工程版 · ShotGrid-style production control</p>
             </div>
           </div>

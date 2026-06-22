@@ -19,6 +19,7 @@ import {
 
 import { ChartViewport } from "@/components/charts/chart-viewport";
 import type { TaskStatus } from "@/generated/prisma/enums";
+import { chartTheme } from "@/lib/chart-theme";
 import { STATUS_COLORS } from "@/lib/status-colors";
 import type { AssetStatusDatum, ChartDatum, PercentFinalDatum, TaskStatusTrendDatum, VelocityDatum, VersionStatusDatum } from "@/lib/dashboard-data";
 import type { Dictionary } from "@/lib/i18n";
@@ -39,7 +40,7 @@ export function DonutChart({ data, labels }: { data: ChartDatum[]; labels: Chart
                 <Cell key={item.name} fill={item.color} />
               ))}
             </Pie>
-            <Tooltip contentStyle={tooltipStyle} />
+            <Tooltip contentStyle={chartTheme.tooltip} />
           </PieChart>
         </ResponsiveContainer>
       </ChartViewport>
@@ -56,10 +57,10 @@ export function StackedBarChart({ data, labels }: { data: AssetStatusDatum[]; la
       <ChartViewport title={labels.assetStatus.title} minHeight={260} labels={labels.chartTools}>
         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <BarChart data={localizedData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
-            <CartesianGrid stroke="#2a2a28" vertical={false} />
-            <XAxis dataKey="type" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [value, labels.taskStatuses[name as TaskStatus] ?? name]} />
+            <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+            <XAxis dataKey="type" tick={chartTheme.axisTick} axisLine={false} tickLine={false} />
+            <YAxis tick={chartTheme.axisTick} axisLine={false} tickLine={false} allowDecimals={false} />
+            <Tooltip contentStyle={chartTheme.tooltip} formatter={(value, name) => [value, labels.taskStatuses[name as TaskStatus] ?? name]} />
             {taskStatuses.map((status) => (
               <Bar key={status} dataKey={status} stackId="status" fill={STATUS_COLORS[status].dot} />
             ))}
@@ -76,10 +77,10 @@ export function StackedAreaChart({ data, labels }: { data: TaskStatusTrendDatum[
       <ChartViewport title={labels.taskStatus.title} minHeight={260} labels={labels.chartTools}>
         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <AreaChart data={data} margin={{ top: 10, right: 12, bottom: 0, left: -20 }}>
-            <CartesianGrid stroke="#2a2a28" vertical={false} />
-            <XAxis dataKey="department" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [value, labels.taskStatuses[name as TaskStatus] ?? name]} />
+            <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+            <XAxis dataKey="department" tick={chartTheme.axisTick} axisLine={false} tickLine={false} />
+            <YAxis tick={chartTheme.axisTick} axisLine={false} tickLine={false} allowDecimals={false} />
+            <Tooltip contentStyle={chartTheme.tooltip} formatter={(value, name) => [value, labels.taskStatuses[name as TaskStatus] ?? name]} />
             {taskStatuses.map((status) => (
               <Area key={status} dataKey={status} stackId="status" stroke={STATUS_COLORS[status].dot} fill={STATUS_COLORS[status].dot} fillOpacity={0.7} />
             ))}
@@ -96,10 +97,10 @@ export function VelocityChart({ data, labels }: { data: VelocityDatum[]; labels:
       <ChartViewport title={labels.velocity.title} minHeight={220} labels={labels.chartTools}>
         <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
           <LineChart data={data} margin={{ top: 10, right: 12, bottom: 0, left: -20 }}>
-            <CartesianGrid stroke="#2a2a28" vertical={false} />
-            <XAxis dataKey="week" tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "#8f8a7e", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => [value, labels.taskStatuses[String(name).toUpperCase() as TaskStatus] ?? name]} />
+            <CartesianGrid stroke={chartTheme.grid} vertical={false} />
+            <XAxis dataKey="week" tick={chartTheme.axisTick} axisLine={false} tickLine={false} />
+            <YAxis tick={chartTheme.axisTick} axisLine={false} tickLine={false} allowDecimals={false} />
+            <Tooltip contentStyle={chartTheme.tooltip} formatter={(value, name) => [value, labels.taskStatuses[String(name).toUpperCase() as TaskStatus] ?? name]} />
             <Line type="monotone" dataKey="approved" name={labels.taskStatuses.APPROVED} stroke="#1d9e75" strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey="final" name={labels.taskStatuses.FINAL} stroke="#d8b46a" strokeWidth={2} dot={false} />
           </LineChart>
@@ -182,13 +183,6 @@ function Legend({ rows }: { rows: { label: string; value: number; color: string 
     </div>
   );
 }
-
-const tooltipStyle = {
-  background: "#181713",
-  border: "1px solid #34322b",
-  color: "#f4f1e8",
-  fontSize: 12,
-};
 
 function localizeTaskStatusLabel(label: string, labels: ChartLabels) {
   const entry = Object.entries(STATUS_COLORS).find(([, value]) => value.label === label);

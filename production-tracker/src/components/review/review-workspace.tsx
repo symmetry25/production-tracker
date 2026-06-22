@@ -279,6 +279,7 @@ function VersionList({
       <div className="max-h-[590px] overflow-auto">
         {versions.map((version) => {
           const isQueued = playlistIds.includes(version.id);
+          const paymentGate = getVersionPaymentGate(version, labels);
 
           return (
           <ContextMenu.Root key={version.id}>
@@ -293,14 +294,29 @@ function VersionList({
                   selectedId === version.id ? "bg-[#22201c]" : "",
                 ].join(" ")}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-mono text-xs text-[#4a9eff]">{version.name}</span>
-                  <StatusPill status={version.status} labels={labels} />
-                </div>
-                <p className="mt-2 truncate text-xs text-[#c9c3b5]">{version.task.contextLabel} / {version.task.name}</p>
-                <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-[#7f7a70]">
-                  <span>v{String(version.number).padStart(3, "0")} · {version.uploadedBy.name}</span>
-                  {isQueued ? <span className="rounded-sm bg-[#253320] px-1.5 py-0.5 text-[#9fce7d]">{labels.versionList.queued}</span> : null}
+                <div className="grid grid-cols-[76px_minmax(0,1fr)] gap-3">
+                  <div className="grid aspect-video place-items-center overflow-hidden border border-[#2f2d27] bg-black text-[10px] text-[#8f8a7e]">
+                    {version.thumbnailUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={version.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <span>{version.fileType.startsWith("video/") ? labels.filmstrip.video : labels.filmstrip.media}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate font-mono text-xs text-[#4a9eff]">{version.name}</span>
+                      <StatusPill status={version.status} labels={labels} />
+                    </div>
+                    <p className="mt-2 truncate text-xs text-[#c9c3b5]">{version.task.contextLabel} / {version.task.name}</p>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-[#7f7a70]">
+                      <span>v{String(version.number).padStart(3, "0")} · {version.uploadedBy.name}</span>
+                      {isQueued ? <span className="rounded-sm bg-[#253320] px-1.5 py-0.5 text-[#9fce7d]">{labels.versionList.queued}</span> : null}
+                    </div>
+                    <div className="mt-2">
+                      <PaymentGatePill gate={paymentGate} />
+                    </div>
+                  </div>
                 </div>
               </button>
             </ContextMenu.Trigger>
@@ -351,6 +367,8 @@ function VersionPlayer({
   onRemoveFromQueue: () => void;
   labels: ReviewWorkspaceLabels;
 }) {
+  const paymentGate = getVersionPaymentGate(version, labels);
+
   return (
     <section className="order-1 flex min-w-0 flex-col bg-[#11110f] xl:order-none">
       <div className="flex flex-col gap-3 border-b border-[#34322b] bg-[#181713] px-5 py-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
@@ -412,12 +430,13 @@ function VersionPlayer({
         </div>
       </div>
 
-      <div className="grid grid-cols-5 border-t border-[#34322b] bg-[#181713] text-xs">
+      <div className="grid grid-cols-6 border-t border-[#34322b] bg-[#181713] text-xs">
         <MetadataCell label={labels.player.metadata.queue} value={queueIndex >= 0 ? `${queueIndex + 1}/${queueSize}` : labels.player.metadata.notQueued} />
         <MetadataCell label={labels.player.metadata.frames} value={formatInteger(version.frameCount)} />
         <MetadataCell label={labels.player.metadata.fps} value={version.fps?.toString() ?? "--"} />
         <MetadataCell label={labels.player.metadata.uploaded} value={formatUtcDate(version.createdAt)} />
         <MetadataCell label={labels.player.metadata.owner} value={version.uploadedBy.name} />
+        <MetadataCell label={labels.player.metadata.paymentGate} value={paymentGate.label} />
       </div>
     </section>
   );
@@ -510,6 +529,8 @@ function ComparePane({ label, version, labels }: { label: string; version: Revie
     );
   }
 
+  const paymentGate = getVersionPaymentGate(version, labels);
+
   return (
     <div className="min-w-0 border border-[#34322b] bg-[#181713]">
       <div className="flex items-start justify-between gap-3 border-b border-[#34322b] px-3 py-3">
@@ -518,7 +539,10 @@ function ComparePane({ label, version, labels }: { label: string; version: Revie
           <h3 className="mt-1 truncate font-mono text-sm text-[#4a9eff]">{version.name}</h3>
           <p className="mt-1 truncate text-xs text-[#8f8a7e]">{version.task.contextLabel} / {version.task.name}</p>
         </div>
-        <StatusPill status={version.status} labels={labels} />
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <StatusPill status={version.status} labels={labels} />
+          <PaymentGatePill gate={paymentGate} />
+        </div>
       </div>
       <div className="grid aspect-video place-items-center bg-black">
         <MediaPreview version={version} labels={labels} />
@@ -740,7 +764,10 @@ function VersionFilmstrip({
                 <span>{version.fileType.startsWith("video/") ? labels.filmstrip.video : labels.filmstrip.media}</span>
               )}
             </div>
-            <p className="mt-2 truncate font-mono text-xs text-[#c9c3b5]">{version.name}</p>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-[#c9c3b5]">{version.name}</span>
+              <span className={["size-2 rounded-full", paymentGateDotClass(getVersionPaymentGate(version, labels).status)].join(" ")} />
+            </div>
           </button>
         ))}
       </div>
@@ -801,6 +828,43 @@ function StatusPill({ status, labels }: { status: VersionStatus; labels: ReviewW
       {labels.status[status]}
     </span>
   );
+}
+
+function PaymentGatePill({ gate }: { gate: ReturnType<typeof getVersionPaymentGate> }) {
+  return (
+    <span className={["inline-flex max-w-full items-center gap-1 border px-2 py-1 text-[10px] font-semibold", paymentGateClass(gate.status)].join(" ")} title={gate.detail}>
+      <span className={["size-1.5 shrink-0 rounded-full", paymentGateDotClass(gate.status)].join(" ")} />
+      <span className="truncate">{gate.label}</span>
+    </span>
+  );
+}
+
+function getVersionPaymentGate(version: ReviewVersionItem, labels: ReviewWorkspaceLabels) {
+  if (version.status === VersionStatus.APPROVED) {
+    return labels.paymentGate.ready;
+  }
+
+  if (version.status === VersionStatus.CHANGES_REQUESTED) {
+    return labels.paymentGate.holdChanges;
+  }
+
+  if (version.status === VersionStatus.PENDING_REVIEW) {
+    return labels.paymentGate.holdReview;
+  }
+
+  return labels.paymentGate.watch;
+}
+
+function paymentGateClass(status: "hold" | "watch" | "ready") {
+  if (status === "hold") return "border-[#6f2f2f] bg-[#2b1717] text-[#ff9a8f]";
+  if (status === "watch") return "border-[#6f5631] bg-[#211b12] text-[#e8c678]";
+  return "border-[#294838] bg-[#13221b] text-[#9cccae]";
+}
+
+function paymentGateDotClass(status: "hold" | "watch" | "ready") {
+  if (status === "hold") return "bg-[#e24b4a]";
+  if (status === "watch") return "bg-[#ef9f27]";
+  return "bg-[#1d9e75]";
 }
 
 function MetadataCell({ label, value }: { label: string; value: string }) {

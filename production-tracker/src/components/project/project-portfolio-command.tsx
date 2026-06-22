@@ -127,9 +127,9 @@ function PortfolioRow({ project, labels }: { project: ProjectPortfolioItem; labe
 
 function PortfolioMetric({ label, value, tone = "clear" }: { label: string; value: string | number; tone?: ProjectPortfolioHealth }) {
   return (
-    <div className="border border-[#2f2d27] bg-[#11110f] px-3 py-2">
-      <p className="text-[10px] uppercase tracking-[0.14em] text-[#69655c]">{label}</p>
-      <p className={["mt-1 font-mono text-lg", textClass(tone)].join(" ")}>{value}</p>
+    <div className="border border-[#2f2d27] bg-[#11110f] px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#69655c]">{label}</p>
+      <p className={["mt-2 font-mono text-2xl font-semibold tracking-[-0.03em]", textClass(tone)].join(" ")}>{value}</p>
     </div>
   );
 }

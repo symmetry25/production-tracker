@@ -39,12 +39,28 @@ const statusLabels: Record<ResourceLedgerEntry["status"], string> = {
 export function ManualLedgerPanel({ projectId, baseEntries }: ManualLedgerPanelProps) {
   const storageKey = `${storagePrefix}${projectId}`;
   const [draft, setDraft] = useState<ManualLedgerDraft>(emptyDraft);
-  const [manualEntries, setManualEntries] = useState<ResourceLedgerEntry[]>(() => loadManualEntries(storageKey));
+  const [manualEntries, setManualEntries] = useState<ResourceLedgerEntry[]>([]);
+  const [loadedStorageKey, setLoadedStorageKey] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
 
   useEffect(() => {
+    let active = true;
+
+    queueMicrotask(() => {
+      if (!active) return;
+      setManualEntries(loadManualEntries(storageKey));
+      setLoadedStorageKey(storageKey);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (loadedStorageKey !== storageKey) return;
     window.localStorage.setItem(storageKey, JSON.stringify(manualEntries));
-  }, [manualEntries, storageKey]);
+  }, [loadedStorageKey, manualEntries, storageKey]);
 
   const mergedEntries = useMemo(() => mergeManualLedgerEntries(baseEntries, manualEntries), [baseEntries, manualEntries]);
   const manualHoldTotal = manualEntries.filter((entry) => entry.status === "hold").reduce((sum, entry) => sum + Math.max(0, entry.amount ?? 0), 0);

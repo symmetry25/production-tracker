@@ -26,20 +26,22 @@ export async function AppShell({ session, locale, dictionary, children }: AppShe
   const projectQuery = currentProjectId ? `?projectId=${encodeURIComponent(currentProjectId)}` : "";
   const projectPageHref = (tab: string) => (currentProjectId ? `${currentProjectBase}/${tab}` : "/app/projects");
   const topNavItems: TopNavItem[] = [
-    { key: "inbox", href: `/app/inbox${projectQuery}` },
-    { key: "myTasks", href: `/app/my-tasks${projectQuery}` },
+    { key: "projects", href: "/app/projects" },
+    { key: "tasks", href: projectPageHref("tasks") },
     { key: "media", href: `/app/media${projectQuery}` },
     { key: "data", href: "/app/custom-data" },
-    { key: "entities", href: "/app/entity-types" },
+    { key: "resources", href: `/app/resource-planning${projectQuery}` },
     { key: "dashboards", href: "/app/dashboards" },
+  ];
+  const overflowTopNavItems: TopNavItem[] = [
+    { key: "inbox", href: `/app/inbox${projectQuery}` },
+    { key: "myTasks", href: `/app/my-tasks${projectQuery}` },
+    { key: "entities", href: "/app/entity-types" },
     { key: "ai", href: "/app/ai/recognize" },
-    { key: "projects", href: "/app/projects" },
     { key: "people", href: "/app/admin/users" },
     { key: "shots", href: projectPageHref("shots") },
     { key: "assets", href: projectPageHref("assets") },
-    { key: "tasks", href: projectPageHref("tasks") },
     { key: "review", href: projectPageHref("media") },
-    { key: "resources", href: `/app/resource-planning${projectQuery}` },
     { key: "calendar", href: "/app" },
   ];
   const sideNavItems: SideNavItem[] = [
@@ -113,10 +115,13 @@ export async function AppShell({ session, locale, dictionary, children }: AppShe
       <header className="flex h-14 min-w-0 items-center justify-between gap-4 border-b border-[#34322b] bg-[#181713] px-6 print:hidden">
         <div className="flex min-w-0 flex-1 items-center gap-6">
           <Link href="/app" className="flex shrink-0 items-center gap-3">
-            <div className="grid size-8 place-items-center border border-[#d8b46a]/45 bg-[#d8b46a]/10 text-sm font-semibold text-[#e8c678]">
-              PT
+            <div className="grid size-8 place-items-center rounded-[6px] bg-[#1db954] text-base font-black text-[#11110f] shadow-[0_0_0_1px_rgba(29,185,84,0.2)]">
+              F
             </div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#d8b46a]">Production Tracker</p>
+            <div className="leading-tight">
+              <p className="text-[15px] font-semibold text-[#f4f1e8]">Frederick</p>
+              <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#7f7a70]">制片管理系统</p>
+            </div>
           </Link>
           <nav className="flex min-w-0 items-center gap-1 overflow-x-auto">
             {topNavItems.map((item, index) => (
@@ -131,6 +136,18 @@ export async function AppShell({ session, locale, dictionary, children }: AppShe
                 {t.topNav[item.key]}
               </Link>
             ))}
+            <details className="group relative shrink-0">
+              <summary className="list-none px-3 py-2 text-xs font-medium text-[#aaa599] transition hover:bg-[#22201c] hover:text-[#f4f1e8] [&::-webkit-details-marker]:hidden">
+                More
+              </summary>
+              <div className="absolute left-0 top-9 z-40 grid min-w-44 border border-[#34322b] bg-[#181713] p-1 shadow-[0_18px_50px_rgba(0,0,0,0.42)]">
+                {overflowTopNavItems.map((item) => (
+                  <Link key={item.key} href={item.href} className="px-3 py-2 text-xs text-[#aaa599] transition hover:bg-[#22201c] hover:text-[#f4f1e8]">
+                    {t.topNav[item.key]}
+                  </Link>
+                ))}
+              </div>
+            </details>
           </nav>
         </div>
 

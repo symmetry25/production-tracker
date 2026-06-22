@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type PointerEvent, type WheelEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 
 import type { ResourceBudgetData, VendorSpend } from "@/lib/resource-data";
 
@@ -30,6 +30,7 @@ type PositionedNode = FlowNode & {
 
 const columnX = [48, 390, 746] as const;
 const nodeWidth = 170;
+const svgWidth = 980;
 const svgHeight = 640;
 const minZoom = 0.72;
 const maxZoom = 1.9;
@@ -56,13 +57,40 @@ const categoryLabels: Record<VendorSpend["category"], string> = {
 };
 
 export function SankeyFlow({ data }: { data: ResourceBudgetData }) {
+  const viewportRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<PanState>({ x: 0, y: 0 });
   const [drag, setDrag] = useState<DragState | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(svgWidth);
   const model = useMemo(() => buildSankeyModel(data), [data]);
   const activeLink = model.links.find((link) => link.id === activeId) ?? null;
+  const chartHeight = isExpanded ? Math.max(640, Math.min(860, viewportWidth * 0.62)) : Math.max(500, Math.min(svgHeight, viewportWidth * 0.62));
+
+  useEffect(() => {
+    const updateViewportWidth = () => {
+      const width = viewportRef.current?.clientWidth ?? svgWidth;
+      setViewportWidth(Math.max(360, width));
+    };
+
+    updateViewportWidth();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateViewportWidth);
+    if (viewportRef.current) observer?.observe(viewportRef.current);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) updateViewportWidth();
+    };
+
+    window.addEventListener("resize", updateViewportWidth);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateViewportWidth);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [isExpanded]);
 
   function resetCanvas() {
     setZoom(1);
@@ -116,20 +144,23 @@ export function SankeyFlow({ data }: { data: ResourceBudgetData }) {
 
       <div className={["grid min-h-0 grid-cols-[1fr_260px]", isExpanded ? "flex-1" : ""].join(" ")}>
         <div
+          ref={viewportRef}
           className={["overflow-hidden p-4", isExpanded ? "h-full" : ""].join(" ")}
           onWheel={(event) => handleChartWheel(event, setZoom)}
         >
           <div
-            className={["h-full min-h-[640px] touch-none select-none", drag ? "cursor-grabbing" : "cursor-grab"].join(" ")}
+            className={["h-full touch-none select-none", drag ? "cursor-grabbing" : "cursor-grab"].join(" ")}
+            style={{ minHeight: chartHeight }}
             onPointerDown={beginPan}
             onPointerMove={updatePan}
             onPointerUp={endPan}
             onPointerCancel={endPan}
           >
             <svg
-              viewBox="0 0 980 640"
-              className={["origin-top-left transition-transform duration-150", isExpanded ? "h-[78vh]" : "h-[640px]", "min-w-[920px]"].join(" ")}
-              style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+              viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+              preserveAspectRatio="xMidYMid meet"
+              className="block w-full"
+              style={{ height: chartHeight }}
               role="img"
               aria-label="资金流向桑基图"
             >
@@ -139,58 +170,60 @@ export function SankeyFlow({ data }: { data: ResourceBudgetData }) {
                 </filter>
               </defs>
 
-              {model.links.map((link) => {
-                const from = model.positionedNodes.get(link.from);
-                const to = model.positionedNodes.get(link.to);
-                if (!from || !to) return null;
+              <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`} className="transition-transform duration-150">
+                {model.links.map((link) => {
+                  const from = model.positionedNodes.get(link.from);
+                  const to = model.positionedNodes.get(link.to);
+                  if (!from || !to) return null;
 
-                const width = Math.max(5, Math.min(34, (link.amount / model.maxAmount) * 34));
-                const isActive = activeId === link.id;
-                const startX = from.x + from.width;
-                const startY = from.y + from.height / 2;
-                const endX = to.x;
-                const endY = to.y + to.height / 2;
-                const mid = startX + (endX - startX) * 0.52;
-                const d = `M ${startX} ${startY} C ${mid} ${startY}, ${mid} ${endY}, ${endX} ${endY}`;
+                  const width = Math.max(5, Math.min(34, (link.amount / model.maxAmount) * 34));
+                  const isActive = activeId === link.id;
+                  const startX = from.x + from.width;
+                  const startY = from.y + from.height / 2;
+                  const endX = to.x;
+                  const endY = to.y + to.height / 2;
+                  const mid = startX + (endX - startX) * 0.52;
+                  const d = `M ${startX} ${startY} C ${mid} ${startY}, ${mid} ${endY}, ${endX} ${endY}`;
 
-                return (
-                  <path
-                    key={link.id}
-                    d={d}
-                    fill="none"
-                    stroke={link.color}
-                    strokeLinecap="round"
-                    strokeOpacity={isActive || !activeId ? 0.58 : 0.16}
-                    strokeWidth={isActive ? width + 4 : width}
-                    filter={isActive ? "url(#sankeyGlow)" : undefined}
-                    onMouseEnter={() => setActiveId(link.id)}
-                    onMouseLeave={() => setActiveId(null)}
-                    className="cursor-pointer transition"
-                  />
-                );
-              })}
+                  return (
+                    <path
+                      key={link.id}
+                      d={d}
+                      fill="none"
+                      stroke={link.color}
+                      strokeLinecap="round"
+                      strokeOpacity={isActive || !activeId ? 0.58 : 0.16}
+                      strokeWidth={isActive ? width + 4 : width}
+                      filter={isActive ? "url(#sankeyGlow)" : undefined}
+                      onMouseEnter={() => setActiveId(link.id)}
+                      onMouseLeave={() => setActiveId(null)}
+                      className="cursor-pointer transition"
+                    />
+                  );
+                })}
 
-              {model.nodes.map((node) => {
-                const isRelated =
-                  !activeId || model.links.some((link) => link.id === activeId && (link.from === node.id || link.to === node.id));
+                {model.nodes.map((node) => {
+                  const isRelated =
+                    !activeId || model.links.some((link) => link.id === activeId && (link.from === node.id || link.to === node.id));
 
-                return (
-                  <g key={node.id} opacity={isRelated ? 1 : 0.38}>
-                    <rect x={node.x} y={node.y} width={node.width} height={node.height} fill="#11110f" stroke="#34322b" />
-                    <rect x={node.x} y={node.y} width={4} height={node.height} fill={node.color} />
-                    <text x={node.x + 14} y={node.y + 21} fill="#f4f1e8" fontSize="12" fontWeight="700">
-                      {node.label.length > 15 ? `${node.label.slice(0, 15)}…` : node.label}
-                    </text>
-                    <text x={node.x + 14} y={node.y + 42} fill="#8f8a7e" fontSize="11" fontFamily="monospace">
-                      {formatCompactMoney(node.amount)}
-                    </text>
-                  </g>
-                );
-              })}
+                  return (
+                    <g key={node.id} opacity={isRelated ? 1 : 0.38}>
+                      <rect x={node.x} y={node.y} width={node.width} height={node.height} fill="#11110f" stroke="#34322b" />
+                      <rect x={node.x} y={node.y} width={4} height={node.height} fill={node.color} />
+                      <text x={node.x + 14} y={node.y + 21} fill="#f4f1e8" fontSize="12" fontWeight="700">
+                        {node.label.length > 15 ? `${node.label.slice(0, 15)}…` : node.label}
+                      </text>
+                      <text x={node.x + 14} y={node.y + 42} fill="#8f8a7e" fontSize="11" fontFamily="monospace">
+                        {formatCompactMoney(node.amount)}
+                      </text>
+                    </g>
+                  );
+                })}
 
-              <ColumnLabel x={columnX[0]} label="Source" />
-              <ColumnLabel x={columnX[1]} label="Department / Category" />
-              <ColumnLabel x={columnX[2]} label="Vendor / Item" />
+                <ColumnLabel x={columnX[0]} label="Source" />
+                <ColumnLabel x={columnX[1]} label="Department / Category" />
+                <ColumnLabel x={columnX[2]} label="Vendor / Item" />
+              </g>
             </svg>
           </div>
         </div>

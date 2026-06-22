@@ -7,6 +7,7 @@ import { GanttPanel } from "@/components/task/gantt-panel";
 import { TaskTable } from "@/components/task/task-table";
 import { buildScheduleSuggestions, type ScheduleSuggestion, type ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
 import type { TaskFormOptions, TaskTableItem } from "@/lib/task-data";
+import { buildWorkHourHeatmap, type WorkHourHeatmapRow } from "@/lib/work-hour-heatmap";
 
 export function TaskWorkspace({
   projectId,
@@ -25,6 +26,7 @@ export function TaskWorkspace({
   const [view, setView] = useState<"table" | "gantt">("table");
   const [showSuggestions, setShowSuggestions] = useState(Boolean(scheduleSuggestions?.criticalCount || scheduleSuggestions?.warningCount));
   const currentScheduleSuggestions = buildScheduleSuggestions({ projectId, tasks: taskItems, now: new Date(analysisDate), provider: scheduleSuggestions?.provider ?? "rules" });
+  const workHourHeatmap = buildWorkHourHeatmap(taskItems);
 
   return (
     <div>
@@ -66,6 +68,8 @@ export function TaskWorkspace({
 
       {showSuggestions ? <ScheduleSuggestionPanel summary={currentScheduleSuggestions} /> : null}
 
+      <WorkHourHeatmapPanel rows={workHourHeatmap} />
+
       {view === "table" ? (
         <TaskTable projectId={projectId} tasks={taskItems} options={options} onTasksChange={setTaskItems} />
       ) : (
@@ -73,6 +77,58 @@ export function TaskWorkspace({
       )}
     </div>
   );
+}
+
+function WorkHourHeatmapPanel({ rows }: { rows: WorkHourHeatmapRow[] }) {
+  const dates = rows[0]?.cells.map((cell) => cell.date) ?? [];
+
+  return (
+    <section className="mb-4 border border-[#34322b] bg-[#181713]">
+      <div className="flex items-center justify-between gap-4 border-b border-[#2a2a28] px-4 py-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">work hour heatmap</p>
+          <h2 className="mt-1 text-lg font-semibold text-[#f4f1e8]">人员工时热力图</h2>
+        </div>
+        <p className="text-xs text-[#8f8a7e]">按任务到期日与已记录人天聚合</p>
+      </div>
+      {rows.length ? (
+        <div className="overflow-x-auto">
+          <div className="min-w-[780px]">
+            <div className="grid grid-cols-[220px_repeat(7,minmax(76px,1fr))_96px] border-b border-[#2a2a28] bg-[#1e1e1c] text-[11px] font-semibold uppercase tracking-[0.1em] text-[#6e6e69]">
+              <div className="px-3 py-2">Person</div>
+              {dates.map((date) => <div key={date} className="border-l border-[#2a2a28] px-3 py-2 text-right">{date.slice(5)}</div>)}
+              <div className="border-l border-[#2a2a28] px-3 py-2 text-right">Total</div>
+            </div>
+            {rows.map((row) => (
+              <div key={row.assigneeId} className="grid grid-cols-[220px_repeat(7,minmax(76px,1fr))_96px] border-b border-[#2a2a28] text-xs">
+                <div className="min-w-0 px-3 py-2">
+                  <p className="truncate font-semibold text-[#f4f1e8]">{row.assigneeName}</p>
+                  <p className="mt-1 truncate text-[#7f7a70]">{row.department}</p>
+                </div>
+                {row.cells.map((cell) => (
+                  <div key={`${row.assigneeId}-${cell.date}`} className="border-l border-[#2a2a28] px-2 py-2 text-right">
+                    <span className={["inline-flex min-w-12 justify-center px-2 py-1 font-mono", heatmapCellClass(cell.days)].join(" ")} title={`${cell.taskCount} tasks`}>
+                      {cell.days ? `${cell.days}d` : "--"}
+                    </span>
+                  </div>
+                ))}
+                <div className="border-l border-[#2a2a28] px-3 py-2 text-right font-mono text-[#e8c678]">{row.totalDays}d</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="p-5 text-sm text-[#8f8a7e]">暂无可聚合的工时数据。录入任务到期日和已记录人天后，这里会显示人员压力。</p>
+      )}
+    </section>
+  );
+}
+
+function heatmapCellClass(days: number) {
+  if (days <= 0) return "bg-[#11110f] text-[#6e6e69]";
+  if (days < 2) return "bg-[#14231d] text-[#9cccae]";
+  if (days <= 5) return "bg-[#211b12] text-[#e8c678]";
+  return "bg-[#2b1717] text-[#ff9a8f]";
 }
 
 function ScheduleSuggestionPanel({ summary }: { summary: ScheduleSuggestionSummary }) {

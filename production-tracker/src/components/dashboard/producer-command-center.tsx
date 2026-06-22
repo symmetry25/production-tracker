@@ -83,13 +83,17 @@ export function ProducerCommandCenter({
               <span className="text-xs text-[#8f8a7e]">{formatTemplate(labels.actionsCount, { count: topActions.length })}</span>
             </div>
             <div className="divide-y divide-[#24231f]">
-              {topActions.map((item) => (
-                <Link key={item.id} href={item.href} className="grid gap-3 px-4 py-3 text-sm hover:bg-[#181713] lg:grid-cols-[96px_minmax(0,1fr)_120px]">
-                  <span className={["w-fit border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]", toneClass(item.tone)].join(" ")}>{item.label}</span>
-                  <span className="min-w-0 truncate text-[#f4f1e8]">{item.title}</span>
-                  <span className="text-right font-mono text-xs text-[#8f8a7e]">{item.meta}</span>
-                </Link>
-              ))}
+              {topActions.length ? (
+                topActions.map((item) => (
+                  <Link key={item.id} href={item.href} className="grid gap-3 px-4 py-3 text-sm hover:bg-[#181713] lg:grid-cols-[96px_minmax(0,1fr)_120px]">
+                    <span className={["w-fit border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]", toneClass(item.tone)].join(" ")}>{item.label}</span>
+                    <span className="min-w-0 truncate text-[#f4f1e8]">{item.title}</span>
+                    <span className="text-right font-mono text-xs text-[#8f8a7e]">{item.meta}</span>
+                  </Link>
+                ))
+              ) : (
+                <ProducerActionEmptyState projectId={projectId} labels={labels} />
+              )}
             </div>
           </div>
 
@@ -127,6 +131,28 @@ export function ProducerCommandCenter({
         <FooterSignal label={labels.versions} value={stats.counts.versions} detail={formatTemplate(labels.pendingReview, { count: reviewQueue })} tone={reviewQueue > 0 ? "warn" : "normal"} />
       </div>
     </section>
+  );
+}
+
+function ProducerActionEmptyState({ projectId, labels }: { projectId: string; labels: Labels }) {
+  return (
+    <div className="p-4">
+      <div className="border border-dashed border-[#3f3c33] bg-[#151410] p-4">
+        <p className="text-sm font-semibold text-[#f4f1e8]">{labels.emptyTitle}</p>
+        <p className="mt-2 text-xs leading-5 text-[#8f8a7e]">{labels.emptyHint}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link href={`/app/projects/${projectId}/tasks`} className="border border-[#34322b] px-3 py-2 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]">
+            {labels.emptyLinks.tasks}
+          </Link>
+          <Link href={`/app/projects/${projectId}/media`} className="border border-[#34322b] px-3 py-2 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]">
+            {labels.emptyLinks.media}
+          </Link>
+          <Link href={`/app/projects/${projectId}/resources`} className="border border-[#34322b] px-3 py-2 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]">
+            {labels.emptyLinks.resources}
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }
 

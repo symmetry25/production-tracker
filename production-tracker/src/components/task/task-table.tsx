@@ -6,6 +6,7 @@ import { type Dispatch, type SetStateAction, useMemo, useState, useTransition } 
 import { DependencyType } from "@/generated/prisma/enums";
 import type { TaskStatus } from "@/generated/prisma/enums";
 
+import { contextMenuLabels, getContextMenuLocale } from "@/lib/context-menu-i18n";
 import { downloadCsv, downloadXlsx } from "@/lib/csv";
 import { STATUS_COLORS } from "@/lib/status-colors";
 import type { TaskFormOptions, TaskTableItem } from "@/lib/task-data";
@@ -661,18 +662,20 @@ function TaskContextMenu({
   onSetStatus: (status: TaskStatus) => void;
   onAddDependency: () => void;
 }) {
+  const menu = contextMenuLabels[getContextMenuLocale()];
+
   return (
     <ContextMenu.Portal>
       <ContextMenu.Content className="z-50 min-w-64 border border-[#3b382f] bg-[#181713] p-1 text-sm text-[#d8d3c7] shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
         <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">
           {task.name} — {task.context.label}
         </ContextMenu.Label>
-        <MenuItem onSelect={onEdit}>✎ Edit Task</MenuItem>
-        <MenuItem onSelect={onOpenVersions}>▶ Open Versions</MenuItem>
-        <MenuItem onSelect={onAddNote}>⌕ Add Note</MenuItem>
-        <MenuItem onSelect={onCopy}>⌘ Copy Task URL</MenuItem>
+        <MenuItem onSelect={onEdit}>✎ {menu.task.edit}</MenuItem>
+        <MenuItem onSelect={onOpenVersions}>▶ {menu.task.openVersions}</MenuItem>
+        <MenuItem onSelect={onAddNote}>⌕ {menu.task.addNote}</MenuItem>
+        <MenuItem onSelect={onCopy}>⌘ {menu.task.copyUrl}</MenuItem>
         <Separator />
-        <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">状态</ContextMenu.Label>
+        <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">{menu.groups.status}</ContextMenu.Label>
         {taskMenuStatuses.map((status) => (
           <MenuItem key={status} onSelect={() => onSetStatus(status)}>
             <span className="mr-2 inline-block size-2 rounded-full" style={{ backgroundColor: STATUS_COLORS[status].dot }} />
@@ -680,13 +683,13 @@ function TaskContextMenu({
           </MenuItem>
         ))}
         <Separator />
-        <MenuItem onSelect={onAssign}>👤 Assign / Reviewer...</MenuItem>
-        <MenuItem onSelect={onEditDates}>📅 Edit Dates</MenuItem>
+        <MenuItem onSelect={onAssign}>👤 {menu.task.assign}</MenuItem>
+        <MenuItem onSelect={onEditDates}>📅 {menu.task.editDates}</MenuItem>
         <Separator />
-        <MenuItem onSelect={onAddDependency}>↔ Add Predecessor...</MenuItem>
+        <MenuItem onSelect={onAddDependency}>↔ {menu.task.addDependency}</MenuItem>
         <Separator />
         <MenuItem danger onSelect={onDelete}>
-          Delete Task
+          {menu.task.delete}
         </MenuItem>
       </ContextMenu.Content>
     </ContextMenu.Portal>

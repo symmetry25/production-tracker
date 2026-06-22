@@ -121,7 +121,13 @@ export function sortResourceLedgerEntries(a: ResourceLedgerEntry, b: ResourceLed
     department: 3,
   };
 
-  return statusPriority[a.status] - statusPriority[b.status] || kindPriority[a.kind] - kindPriority[b.kind] || a.date.localeCompare(b.date) || a.title.localeCompare(b.title);
+  return (
+    statusPriority[a.status] - statusPriority[b.status]
+    || kindPriority[a.kind] - kindPriority[b.kind]
+    || compareStableText(a.date, b.date)
+    || compareStableText(a.title, b.title)
+    || compareStableText(a.id, b.id)
+  );
 }
 
 function formatMoney(value: number) {
@@ -130,4 +136,9 @@ function formatMoney(value: number) {
     currency: "USD",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function compareStableText(a: string, b: string) {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
 }

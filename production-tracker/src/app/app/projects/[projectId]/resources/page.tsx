@@ -294,9 +294,9 @@ function ResourceCommandDeck({ data }: { data: ResourceBudgetData }) {
 
 function CommandMetric({ label, value, meta, tone }: { label: string; value: string; meta: string; tone: keyof typeof riskStyles }) {
   return (
-    <div className={`border p-3 ${riskStyles[tone]}`}>
+    <div className={`border p-4 ${riskStyles[tone]}`}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-70">{label}</p>
-      <p className="mt-2 font-mono text-lg font-semibold">{value}</p>
+      <p className="mt-2 font-mono text-2xl font-semibold tracking-[-0.03em]">{value}</p>
       <p className="mt-1 text-xs opacity-75">{meta}</p>
     </div>
   );
@@ -306,7 +306,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-36 border-l border-[#34322b] px-4 py-3 first:border-l-0">
       <p className="text-[#8f8a7e]">{label}</p>
-      <p className="mt-1 font-mono text-lg font-semibold text-[#f4f1e8]">{value}</p>
+      <p className="mt-1 font-mono text-2xl font-semibold tracking-[-0.03em] text-[#f4f1e8]">{value}</p>
     </div>
   );
 }

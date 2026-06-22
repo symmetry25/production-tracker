@@ -6,6 +6,7 @@ import { useMemo, useState, useTransition } from "react";
 import { TaskStatus } from "@/generated/prisma/enums";
 
 import { downloadCsv, downloadXlsx } from "@/lib/csv";
+import { contextMenuLabels, getContextMenuLocale } from "@/lib/context-menu-i18n";
 import type { ShotTableItem } from "@/lib/shot-data";
 import { PIPELINE_COLORS, PIPELINE_STEPS, STATUS_COLORS } from "@/lib/status-colors";
 
@@ -667,17 +668,19 @@ function ShotContextMenu({
   onPreview: () => void;
   onSetStatus: (status: TaskStatus) => void;
 }) {
+  const menu = contextMenuLabels[getContextMenuLocale()];
+
   return (
     <ContextMenu.Portal>
       <ContextMenu.Content className="z-50 min-w-64 border border-[#3b382f] bg-[#181713] p-1 text-sm text-[#d8d3c7] shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
-        <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">选中 {shot.code}</ContextMenu.Label>
-        <MenuItem onSelect={onEdit}>✎ Edit Shot</MenuItem>
-        <MenuItem onSelect={onDuplicate}>⧉ Duplicate Shot</MenuItem>
-        <MenuItem onSelect={onPreview}>▶ Preview Shot</MenuItem>
-        <MenuItem onSelect={onOpenReview}>⏵ Open Review Queue</MenuItem>
-        <MenuItem onSelect={onCopy}>⌘ Copy Shot URL</MenuItem>
+        <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">{menu.shot.selected} {shot.code}</ContextMenu.Label>
+        <MenuItem onSelect={onEdit}>✎ {menu.shot.edit}</MenuItem>
+        <MenuItem onSelect={onDuplicate}>⧉ {menu.shot.duplicate}</MenuItem>
+        <MenuItem onSelect={onPreview}>▶ {menu.shot.preview}</MenuItem>
+        <MenuItem onSelect={onOpenReview}>⏵ {menu.shot.openReview}</MenuItem>
+        <MenuItem onSelect={onCopy}>⌘ {menu.shot.copyUrl}</MenuItem>
         <Separator />
-        <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">状态</ContextMenu.Label>
+        <ContextMenu.Label className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#7f7a70]">{menu.groups.status}</ContextMenu.Label>
         {shotMenuStatuses.map((status) => (
           <MenuItem key={status} onSelect={() => onSetStatus(status)}>
             <span className="mr-2 inline-block size-2 rounded-full" style={{ backgroundColor: STATUS_COLORS[status].dot }} />
@@ -686,7 +689,7 @@ function ShotContextMenu({
         ))}
         <Separator />
         <MenuItem danger onSelect={onDelete}>
-          Delete Shot
+          {menu.shot.delete}
         </MenuItem>
       </ContextMenu.Content>
     </ContextMenu.Portal>

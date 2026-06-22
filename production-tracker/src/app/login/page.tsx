@@ -7,11 +7,11 @@ export default function LoginPage() {
     <main className="grid min-h-screen grid-cols-[0.95fr_1.05fr] bg-[#11110f] text-[#f4f1e8]">
       <section className="flex flex-col justify-between border-r border-[#34322b] bg-[#181713] px-10 py-8">
         <div className="flex items-center gap-3">
-          <div className="grid size-9 place-items-center border border-[#d8b46a]/45 bg-[#d8b46a]/10 text-sm font-semibold text-[#e8c678]">
-            PT
+          <div className="grid size-9 place-items-center rounded-[6px] bg-[#1db954] text-base font-black text-[#11110f]">
+            F
           </div>
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">Production Tracker</p>
+            <p className="text-sm font-semibold text-[#f4f1e8]">Frederick</p>
             <p className="text-xs text-[#9f9b8f]">secure production workspace</p>
           </div>
         </div>

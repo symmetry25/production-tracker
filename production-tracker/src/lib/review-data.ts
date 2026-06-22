@@ -20,6 +20,12 @@ export type ReviewNote = {
   };
 };
 
+export type ReviewPaymentGate = {
+  status: "hold" | "watch" | "ready";
+  label: string;
+  detail: string;
+};
+
 export type ReviewVersionItem = {
   id: string;
   projectId: string;
@@ -44,6 +50,7 @@ export type ReviewVersionItem = {
     contextLabel: string;
     contextType: "shot" | "asset" | "task";
   };
+  paymentGate: ReviewPaymentGate;
   notes: ReviewNote[];
 };
 
@@ -311,11 +318,44 @@ function mapVersion(version: {
       contextLabel: version.task.shot?.code ?? version.task.asset?.name ?? "Task",
       contextType,
     },
+    paymentGate: buildPaymentGate(version.status),
     notes: version.notes.map((note) => ({
       id: note.id,
       content: note.content,
       createdAt: note.createdAt.toISOString(),
       author: note.author,
     })),
+  };
+}
+
+function buildPaymentGate(status: VersionStatus): ReviewPaymentGate {
+  if (status === "APPROVED") {
+    return {
+      status: "ready",
+      label: "可付款",
+      detail: "版本已通过，可进入付款审批。",
+    };
+  }
+
+  if (status === "CHANGES_REQUESTED") {
+    return {
+      status: "hold",
+      label: "暂缓付款",
+      detail: "版本需返修，供应商付款应暂缓。",
+    };
+  }
+
+  if (status === "PENDING_REVIEW") {
+    return {
+      status: "hold",
+      label: "待审暂缓",
+      detail: "等待监制或导演审批后再放款。",
+    };
+  }
+
+  return {
+    status: "watch",
+    label: "排队中",
+    detail: "已查看但尚未通过，付款排队等待确认。",
   };
 }
