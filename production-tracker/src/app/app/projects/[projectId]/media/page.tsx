@@ -3,6 +3,7 @@ import { UploadVersionForm } from "@/components/review/upload-version-form";
 import { VersionStatus } from "@/generated/prisma/enums";
 import type { Dictionary } from "@/lib/i18n";
 import { getDictionary, getLocale } from "@/lib/i18n";
+import { buildReviewPaymentGateSummary, type ReviewPaymentGateSummary } from "@/lib/review-payment-gates";
 import { getProjectReviewTaskOptions, getProjectReviewVersions, type ReviewTaskOption, type ReviewVersionItem } from "@/lib/review-data";
 
 export default async function ProjectMediaPage({ params }: { params: Promise<{ projectId: string }> }) {
@@ -41,10 +42,104 @@ export default async function ProjectMediaPage({ params }: { params: Promise<{ p
       ) : (
         <div className="space-y-4">
           <ReviewCommandCenter versions={versions} labels={t.command} />
+          <VendorReviewGatePanel versions={versions} labels={t.vendorGate} />
           <ReviewWorkspace versions={versions} labels={t.workspace} />
         </div>
       )}
     </>
+  );
+}
+
+function VendorReviewGatePanel({
+  versions,
+  labels,
+}: {
+  versions: ReviewVersionItem[];
+  labels: Dictionary["pages"]["media"]["vendorGate"];
+}) {
+  const summary = buildReviewPaymentGateSummary(versions);
+  const headline = getGateHeadline(summary, labels);
+  const action = getGateAction(summary, labels);
+  const featuredItems = summary.items.slice(0, 6);
+
+  return (
+    <section className={["overflow-hidden border bg-[#151512]", gatePanelClass(summary.tone)].join(" ")}>
+      <div className="grid xl:grid-cols-[minmax(300px,0.72fr)_minmax(0,1.28fr)]">
+        <div className="border-b border-[#34322b] p-5 xl:border-b-0 xl:border-r">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#d8b46a]">{labels.eyebrow}</p>
+              <h2 className="mt-3 text-2xl font-semibold text-[#f4f1e8]">{headline}</h2>
+            </div>
+            <span className={["shrink-0 border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]", gatePillClass(summary.tone === "empty" ? "watch" : summary.tone)].join(" ")}>
+              {summary.tone === "empty" ? labels.state.empty : labels.state[summary.tone]}
+            </span>
+          </div>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-[#aaa599]">
+            {summary.counts.total ? formatTemplate(labels.description, { total: summary.counts.total, notes: summary.counts.notes }) : labels.emptyDescription}
+          </p>
+          <div className="mt-5 grid grid-cols-5 gap-2">
+            <GateMetric label={labels.metrics.hold} value={summary.counts.hold} tone={summary.counts.hold ? "hold" : "normal"} />
+            <GateMetric label={labels.metrics.watch} value={summary.counts.watch} tone={summary.counts.watch ? "watch" : "normal"} />
+            <GateMetric label={labels.metrics.ready} value={summary.counts.ready} tone="ready" />
+            <GateMetric label={labels.metrics.notes} value={summary.counts.notes} tone="normal" />
+            <GateMetric label={labels.metrics.total} value={summary.counts.total} tone="normal" />
+          </div>
+          <div className="mt-4 border border-[#2f2d27] bg-[#11110f] px-3 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#69655c]">{labels.actionLabel}</p>
+            <p className="mt-1 text-sm font-medium text-[#f4f1e8]">{action}</p>
+          </div>
+        </div>
+
+        <div className="min-w-0 p-4">
+          <div className="flex items-center justify-between border-b border-[#2f2d27] pb-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">{labels.listTitle}</p>
+              <p className="mt-1 text-xs text-[#8f8a7e]">{formatTemplate(labels.listCount, { count: featuredItems.length })}</p>
+            </div>
+            <span className="text-xs text-[#8f8a7e]">{labels.openHint}</span>
+          </div>
+
+          {featuredItems.length ? (
+            <div className="mt-3 grid gap-2 2xl:grid-cols-2">
+              {featuredItems.map((item) => {
+                const gateCopy = labels.gates[item.gateStatus];
+
+                return (
+                  <a key={item.id} href={`#${item.id}`} className="group grid min-w-0 grid-cols-[82px_minmax(0,1fr)] gap-3 border border-[#2f2d27] bg-[#11110f] p-2.5 transition hover:border-[#d8b46a] hover:bg-[#191813]">
+                    <div
+                      className="grid aspect-video place-items-center overflow-hidden border border-[#2f2d27] bg-cover bg-center text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7f7a70]"
+                      style={item.thumbnailUrl ? { backgroundImage: `url(${item.thumbnailUrl})` } : undefined}
+                    >
+                      {item.thumbnailUrl ? <span className="sr-only">{item.contextLabel}</span> : item.contextLabel.slice(0, 8)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate font-mono text-xs text-[#4a9eff] group-hover:text-[#74b4ff]">{item.name}</span>
+                        <span className={["shrink-0 border px-2 py-1 text-[10px] font-semibold", gatePillClass(item.gateStatus)].join(" ")} title={gateCopy.detail}>
+                          {gateCopy.label}
+                        </span>
+                      </div>
+                      <p className="mt-2 truncate text-xs text-[#c9c3b5]">
+                        {item.contextLabel} / {item.taskName}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#7f7a70]">
+                        <span>{formatTemplate(labels.versionMeta, { version: item.versionLabel })}</span>
+                        <span>{formatTemplate(labels.notesMeta, { count: item.noteCount })}</span>
+                        <span>{formatTemplate(labels.framesMeta, { frames: formatInteger(item.frameCount), fps: item.fps ?? "--" })}</span>
+                        <span className="truncate">{formatTemplate(labels.ownerMeta, { owner: item.uploadedBy })}</span>
+                      </div>
+                    </div>
+                  </a>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-3 grid min-h-32 place-items-center border border-dashed border-[#3f3c33] text-sm text-[#8f8a7e]">{labels.emptyList}</div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -158,6 +253,53 @@ function textClass(tone: "normal" | "warn" | "danger") {
   if (tone === "danger") return "text-[#ff9a8f]";
   if (tone === "warn") return "text-[#e8c678]";
   return "text-[#f4f1e8]";
+}
+
+function GateMetric({ label, value, tone }: { label: string; value: number; tone: "normal" | "hold" | "watch" | "ready" }) {
+  return (
+    <div className="min-w-0 border border-[#2f2d27] bg-[#11110f] px-3 py-2">
+      <p className="truncate text-[10px] uppercase tracking-[0.14em] text-[#69655c]">{label}</p>
+      <p className={["mt-1 font-mono text-lg", gateMetricTextClass(tone)].join(" ")}>{value}</p>
+    </div>
+  );
+}
+
+function getGateHeadline(summary: ReviewPaymentGateSummary, labels: Dictionary["pages"]["media"]["vendorGate"]) {
+  if (summary.tone === "hold") return labels.headlineHold;
+  if (summary.tone === "watch") return labels.headlineWatch;
+  if (summary.tone === "ready") return labels.headlineReady;
+  return labels.headlineEmpty;
+}
+
+function getGateAction(summary: ReviewPaymentGateSummary, labels: Dictionary["pages"]["media"]["vendorGate"]) {
+  if (summary.counts.hold > 0) return formatTemplate(labels.actionHold, { count: summary.counts.hold });
+  if (summary.counts.watch > 0) return formatTemplate(labels.actionWatch, { count: summary.counts.watch });
+  if (summary.counts.ready > 0) return formatTemplate(labels.actionReady, { count: summary.counts.ready });
+  return labels.actionEmpty;
+}
+
+function gatePanelClass(tone: ReviewPaymentGateSummary["tone"]) {
+  if (tone === "hold") return "border-[#563333] shadow-[inset_3px_0_0_#e24b4a]";
+  if (tone === "watch") return "border-[#5a482d] shadow-[inset_3px_0_0_#ef9f27]";
+  if (tone === "ready") return "border-[#314c3d] shadow-[inset_3px_0_0_#1d9e75]";
+  return "border-[#34322b]";
+}
+
+function gatePillClass(tone: "hold" | "watch" | "ready") {
+  if (tone === "hold") return "border-[#6f2f2f] bg-[#2b1717] text-[#ff9a8f]";
+  if (tone === "watch") return "border-[#6f5631] bg-[#211b12] text-[#e8c678]";
+  return "border-[#294838] bg-[#13221b] text-[#9cccae]";
+}
+
+function gateMetricTextClass(tone: "normal" | "hold" | "watch" | "ready") {
+  if (tone === "hold") return "text-[#ff9a8f]";
+  if (tone === "watch") return "text-[#e8c678]";
+  if (tone === "ready") return "text-[#9cccae]";
+  return "text-[#f4f1e8]";
+}
+
+function formatInteger(value: number | null) {
+  return value == null ? "--" : new Intl.NumberFormat("en-US").format(value);
 }
 
 function formatTemplate(template: string, values: Record<string, string | number>) {
