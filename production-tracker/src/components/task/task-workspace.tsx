@@ -7,11 +7,23 @@ import { GanttPanel } from "@/components/task/gantt-panel";
 import { TaskBoard } from "@/components/task/task-board";
 import { TaskTable } from "@/components/task/task-table";
 import { buildScheduleSuggestions, type ScheduleSuggestion, type ScheduleSuggestionSummary } from "@/lib/schedule-suggestions";
+import { STATUS_COLORS } from "@/lib/status-colors";
 import type { TaskFormOptions, TaskTableItem } from "@/lib/task-data";
 import { buildWorkHourHeatmap, type WorkHourHeatmapRow } from "@/lib/work-hour-heatmap";
 
 type TaskBriefTone = "ok" | "watch" | "danger";
 type TaskDecisionAction = { id: string; title: string; detail: string; tone: TaskBriefTone };
+type TaskFocusItem = {
+  id: string;
+  taskName: string;
+  contextLabel: string;
+  ownerLabel: string;
+  statusLabel: string;
+  dueLabel: string;
+  reason: string;
+  budgetDelta: number;
+  tone: TaskBriefTone;
+};
 type TaskExecutionBriefData = {
   healthScore: number;
   totalTasks: number;
@@ -26,6 +38,7 @@ type TaskExecutionBriefData = {
   missingDateTasks: TaskTableItem[];
   budgetRisk: number;
   actions: TaskDecisionAction[];
+  focusItems: TaskFocusItem[];
   briefText: string;
 };
 
@@ -48,7 +61,10 @@ export function TaskWorkspace({
   const [view, setView] = useState<"table" | "board" | "gantt">("table");
   const [showSuggestions, setShowSuggestions] = useState(Boolean(scheduleSuggestions?.criticalCount || scheduleSuggestions?.warningCount));
   const analysisNow = useMemo(() => new Date(analysisDate), [analysisDate]);
-  const currentScheduleSuggestions = buildScheduleSuggestions({ projectId, tasks: taskItems, now: analysisNow, provider: scheduleSuggestions?.provider ?? "rules" });
+  const currentScheduleSuggestions = useMemo(
+    () => buildScheduleSuggestions({ projectId, tasks: taskItems, now: analysisNow, provider: scheduleSuggestions?.provider ?? "rules" }),
+    [analysisNow, projectId, scheduleSuggestions?.provider, taskItems],
+  );
   const executionBrief = useMemo(() => buildTaskExecutionBrief(taskItems, currentScheduleSuggestions, analysisNow), [analysisNow, currentScheduleSuggestions, taskItems]);
   const workHourHeatmap = buildWorkHourHeatmap(taskItems);
 
@@ -124,55 +140,68 @@ function TaskExecutionBrief({ brief }: { brief: TaskExecutionBriefData }) {
   }
 
   return (
-    <section className="mb-4 grid gap-4 border border-[#34322b] bg-[#171611] p-4 xl:grid-cols-[minmax(280px,0.7fr)_minmax(0,1.05fr)_minmax(320px,0.85fr)]">
-      <div className="border border-[#2f2d27] bg-[#11110f] p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">execution brief</p>
-            <h2 className="mt-2 text-xl font-semibold text-[#f4f1e8]">任务执行决策摘要</h2>
-          </div>
-          <button type="button" onClick={copyBrief} className="h-8 shrink-0 border border-[#3f3c33] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]">
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
-        <div className="mt-5 flex items-end gap-3">
-          <span className={["font-mono text-6xl leading-none", brief.healthScore < 70 ? "text-[#ff9a8f]" : brief.healthScore < 86 ? "text-[#e8c678]" : "text-[#9cccae]"].join(" ")}>{brief.healthScore}</span>
-          <span className="pb-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#7f7a70]">health</span>
-        </div>
-        <div className="mt-5 grid grid-cols-3 border border-[#2a2a28] bg-[#181713]">
-          <BriefMiniStat label="Total" value={brief.totalTasks} />
-          <BriefMiniStat label="Active" value={brief.activeTasks} tone={brief.activeTasks ? "watch" : "ok"} />
-          <BriefMiniStat label="Done" value={brief.completedTasks} tone="ok" />
-        </div>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2">
-        <BriefMetric label="Delivery risk" value={`${brief.overdueTasks.length}`} meta={`${brief.dueSoonTasks.length} due soon`} tone={brief.overdueTasks.length ? "danger" : brief.dueSoonTasks.length ? "watch" : "ok"} />
-        <BriefMetric label="Unassigned" value={`${brief.unassignedTasks.length}`} meta={brief.unassignedTasks[0]?.name ?? "No owner gap"} tone={brief.unassignedTasks.length ? "danger" : "ok"} />
-        <BriefMetric label="Review queue" value={`${brief.reviewTasks.length}`} meta={brief.reviewTasks[0]?.context.label ?? "No review block"} tone={brief.reviewTasks.length ? "watch" : "ok"} />
-        <BriefMetric label="Budget risk" value={formatMoney(brief.budgetRisk)} meta={`${brief.overBudgetTasks.length} over budget`} tone={brief.budgetRisk > 0 ? "danger" : "ok"} />
-        <BriefMetric label="On hold" value={`${brief.onHoldTasks.length}`} meta={brief.onHoldTasks[0]?.name ?? "No hold"} tone={brief.onHoldTasks.length ? "watch" : "ok"} />
-        <BriefMetric label="Missing dates" value={`${brief.missingDateTasks.length}`} meta="schedule hygiene" tone={brief.missingDateTasks.length ? "watch" : "ok"} />
-      </div>
-
-      <div className="border border-[#2f2d27] bg-[#11110f]">
-        <div className="border-b border-[#2a2a28] px-4 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">today calls</p>
-          <h3 className="mt-1 text-lg font-semibold text-[#f4f1e8]">制片会优先确认</h3>
-        </div>
-        <div className="divide-y divide-[#24231f]">
-          {brief.actions.map((action) => (
-            <div key={action.id} className="px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-semibold text-[#f4f1e8]">{action.title}</p>
-                <span className={["shrink-0 border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]", briefToneClass(action.tone)].join(" ")}>
-                  {action.tone}
-                </span>
-              </div>
-              <p className="mt-2 text-xs leading-5 text-[#aaa599]">{action.detail}</p>
+    <section className="mb-4 border border-[#34322b] bg-[#171611]">
+      <div className="grid gap-4 p-4 xl:grid-cols-[minmax(280px,0.7fr)_minmax(0,1.05fr)_minmax(320px,0.85fr)]">
+        <div className="border border-[#2f2d27] bg-[#11110f] p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">execution brief</p>
+              <h2 className="mt-2 text-xl font-semibold text-[#f4f1e8]">任务执行决策摘要</h2>
             </div>
-          ))}
+            <button type="button" onClick={copyBrief} className="h-8 shrink-0 border border-[#3f3c33] px-3 text-xs font-semibold text-[#c9c3b5] transition hover:border-[#d8b46a] hover:text-[#e8c678]">
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <div className="mt-5 flex items-end gap-3">
+            <span className={["font-mono text-6xl leading-none", brief.healthScore < 70 ? "text-[#ff9a8f]" : brief.healthScore < 86 ? "text-[#e8c678]" : "text-[#9cccae]"].join(" ")}>{brief.healthScore}</span>
+            <span className="pb-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#7f7a70]">health</span>
+          </div>
+          <div className="mt-5 grid grid-cols-3 border border-[#2a2a28] bg-[#181713]">
+            <BriefMiniStat label="Total" value={brief.totalTasks} />
+            <BriefMiniStat label="Active" value={brief.activeTasks} tone={brief.activeTasks ? "watch" : "ok"} />
+            <BriefMiniStat label="Done" value={brief.completedTasks} tone="ok" />
+          </div>
         </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <BriefMetric label="Delivery risk" value={`${brief.overdueTasks.length}`} meta={`${brief.dueSoonTasks.length} due soon`} tone={brief.overdueTasks.length ? "danger" : brief.dueSoonTasks.length ? "watch" : "ok"} />
+          <BriefMetric label="Unassigned" value={`${brief.unassignedTasks.length}`} meta={brief.unassignedTasks[0]?.name ?? "No owner gap"} tone={brief.unassignedTasks.length ? "danger" : "ok"} />
+          <BriefMetric label="Review queue" value={`${brief.reviewTasks.length}`} meta={brief.reviewTasks[0]?.context.label ?? "No review block"} tone={brief.reviewTasks.length ? "watch" : "ok"} />
+          <BriefMetric label="Budget risk" value={formatMoney(brief.budgetRisk)} meta={`${brief.overBudgetTasks.length} over budget`} tone={brief.budgetRisk > 0 ? "danger" : "ok"} />
+          <BriefMetric label="On hold" value={`${brief.onHoldTasks.length}`} meta={brief.onHoldTasks[0]?.name ?? "No hold"} tone={brief.onHoldTasks.length ? "watch" : "ok"} />
+          <BriefMetric label="Missing dates" value={`${brief.missingDateTasks.length}`} meta="schedule hygiene" tone={brief.missingDateTasks.length ? "watch" : "ok"} />
+        </div>
+
+        <div className="border border-[#2f2d27] bg-[#11110f]">
+          <div className="border-b border-[#2a2a28] px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">today calls</p>
+            <h3 className="mt-1 text-lg font-semibold text-[#f4f1e8]">制片会优先确认</h3>
+          </div>
+          <div className="divide-y divide-[#24231f]">
+            {brief.actions.map((action) => (
+              <div key={action.id} className="px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold text-[#f4f1e8]">{action.title}</p>
+                  <span className={["shrink-0 border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]", briefToneClass(action.tone)].join(" ")}>
+                    {action.tone}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-[#aaa599]">{action.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-[#2a2a28] bg-[#14130f] px-4 py-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d8b46a]">focus queue</p>
+            <h3 className="mt-1 text-lg font-semibold text-[#f4f1e8]">重点盯办任务</h3>
+          </div>
+          <span className="border border-[#34322b] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[#8f8a7e]">{brief.focusItems.length} items</span>
+        </div>
+        <FocusQueue items={brief.focusItems} />
       </div>
     </section>
   );
@@ -356,6 +385,50 @@ function BriefMiniStat({ label, value, tone = "watch" }: { label: string; value:
   );
 }
 
+function FocusQueue({ items }: { items: TaskFocusItem[] }) {
+  if (items.length === 0) {
+    return (
+      <div className="border border-dashed border-[#34322b] bg-[#11110f] px-4 py-8 text-center text-sm text-[#8f8a7e]">
+        当前没有需要单独盯办的任务。
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-2 xl:grid-cols-3">
+      {items.map((item) => (
+        <article key={item.id} className={["border bg-[#11110f] px-3 py-3", focusItemClass(item.tone)].join(" ")}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate font-mono text-[11px] uppercase tracking-[0.08em] text-[#8f8a7e]">{item.contextLabel}</p>
+              <h4 className="mt-1 line-clamp-2 text-sm font-semibold leading-5 text-[#f4f1e8]">{item.taskName}</h4>
+            </div>
+            <span className={["shrink-0 border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]", briefToneClass(item.tone)].join(" ")}>
+              {item.tone}
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+            <FocusDatum label="Owner" value={item.ownerLabel} />
+            <FocusDatum label="Due" value={item.dueLabel} tone={item.tone} />
+            <FocusDatum label="Status" value={item.statusLabel} />
+            <FocusDatum label="Budget Δ" value={item.budgetDelta ? formatMoney(item.budgetDelta) : "--"} tone={item.budgetDelta > 0 ? "danger" : "ok"} />
+          </div>
+          <p className="mt-3 line-clamp-2 text-xs leading-5 text-[#aaa599]">{item.reason}</p>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function FocusDatum({ label, value, tone = "watch" }: { label: string; value: string; tone?: TaskBriefTone }) {
+  return (
+    <div className="min-w-0 border border-[#2a2a28] bg-[#181713] px-2 py-1.5">
+      <p className="text-[10px] uppercase tracking-[0.12em] text-[#69655c]">{label}</p>
+      <p className={["mt-1 truncate font-mono text-[11px]", briefTextClass(tone)].join(" ")}>{value}</p>
+    </div>
+  );
+}
+
 function buildTaskExecutionBrief(tasks: TaskTableItem[], summary: ScheduleSuggestionSummary, now: Date): TaskExecutionBriefData {
   const activeTasks = tasks.filter((task) => !completeTaskStatuses.includes(task.status));
   const completedTasks = tasks.length - activeTasks.length;
@@ -368,6 +441,16 @@ function buildTaskExecutionBrief(tasks: TaskTableItem[], summary: ScheduleSugges
   const missingDateTasks = activeTasks.filter((task) => !task.startDate || !task.dueDate).sort(sortByPriorityThenDue);
   const budgetRisk = overBudgetTasks.reduce((sum, task) => sum + budgetOverrun(task), 0);
   const actions: TaskDecisionAction[] = [];
+  const focusItems = buildFocusItems({
+    overdueTasks,
+    dueSoonTasks,
+    unassignedTasks,
+    reviewTasks,
+    overBudgetTasks,
+    onHoldTasks,
+    missingDateTasks,
+    now,
+  });
 
   if (overdueTasks.length > 0) {
     actions.push({
@@ -438,6 +521,7 @@ function buildTaskExecutionBrief(tasks: TaskTableItem[], summary: ScheduleSugges
     `任务: ${tasks.length} 总数 / ${activeTasks.length} 活动 / ${completedTasks} 已完成`,
     `逾期: ${overdueTasks.length} / 三天内到期: ${dueSoonTasks.length} / 无负责人: ${unassignedTasks.length}`,
     `待审: ${reviewTasks.length} / 超预算: ${overBudgetTasks.length} / 风险金额: ${formatMoney(budgetRisk)}`,
+    `重点盯办: ${focusItems.length ? focusItems.map((item) => `${item.contextLabel}/${item.taskName}`).join("、") : "暂无"}`,
     "建议动作:",
     ...actions.map((action, index) => `${index + 1}. ${action.title} - ${action.detail}`),
   ].join("\n");
@@ -456,7 +540,63 @@ function buildTaskExecutionBrief(tasks: TaskTableItem[], summary: ScheduleSugges
     missingDateTasks,
     budgetRisk,
     actions,
+    focusItems,
     briefText,
+  };
+}
+
+function buildFocusItems(input: {
+  overdueTasks: TaskTableItem[];
+  dueSoonTasks: TaskTableItem[];
+  unassignedTasks: TaskTableItem[];
+  reviewTasks: TaskTableItem[];
+  overBudgetTasks: TaskTableItem[];
+  onHoldTasks: TaskTableItem[];
+  missingDateTasks: TaskTableItem[];
+  now: Date;
+}) {
+  const candidates = [
+    ...input.overdueTasks.map((task) => taskFocusItem(task, "逾期交付", "danger" as const, input.now)),
+    ...input.overBudgetTasks.map((task) => taskFocusItem(task, "预算超支", "danger" as const, input.now)),
+    ...input.unassignedTasks.map((task) => taskFocusItem(task, "未分配负责人", "danger" as const, input.now)),
+    ...input.reviewTasks.map((task) => taskFocusItem(task, "等待审阅闭环", "watch" as const, input.now)),
+    ...input.dueSoonTasks.map((task) => taskFocusItem(task, "三天内到期", "watch" as const, input.now)),
+    ...input.onHoldTasks.map((task) => taskFocusItem(task, "已暂停", "watch" as const, input.now)),
+    ...input.missingDateTasks.map((task) => taskFocusItem(task, "日期缺失", "watch" as const, input.now)),
+  ];
+  const merged = new Map<string, TaskFocusItem>();
+
+  for (const item of candidates) {
+    const current = merged.get(item.id);
+    if (!current) {
+      merged.set(item.id, item);
+      continue;
+    }
+
+    merged.set(item.id, {
+      ...current,
+      reason: current.reason.includes(item.reason) ? current.reason : `${current.reason} / ${item.reason}`,
+      tone: current.tone === "danger" || item.tone === "danger" ? "danger" : item.tone,
+      budgetDelta: Math.max(current.budgetDelta, item.budgetDelta),
+    });
+  }
+
+  return Array.from(merged.values())
+    .sort((a, b) => focusRank(b) - focusRank(a) || b.budgetDelta - a.budgetDelta || a.dueLabel.localeCompare(b.dueLabel) || a.taskName.localeCompare(b.taskName))
+    .slice(0, 6);
+}
+
+function taskFocusItem(task: TaskTableItem, reason: string, tone: TaskBriefTone, now: Date): TaskFocusItem {
+  return {
+    id: task.id,
+    taskName: task.name,
+    contextLabel: task.context.label,
+    ownerLabel: task.assignees.map((assignee) => assignee.name).join(", ") || "Unassigned",
+    statusLabel: STATUS_COLORS[task.status].label,
+    dueLabel: formatDueLabel(task, now),
+    reason,
+    budgetDelta: budgetOverrun(task),
+    tone,
   };
 }
 
@@ -477,6 +617,22 @@ function sortByDueThenPriority(a: TaskTableItem, b: TaskTableItem) {
 
 function sortByPriorityThenDue(a: TaskTableItem, b: TaskTableItem) {
   return b.priority - a.priority || dateValue(a.dueDate) - dateValue(b.dueDate) || a.name.localeCompare(b.name);
+}
+
+function formatDueLabel(task: TaskTableItem, now: Date) {
+  if (!task.dueDate) return "No due";
+  const due = startOfDay(new Date(task.dueDate));
+  const today = startOfDay(now);
+  const delta = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+  if (delta < 0) return `${Math.abs(delta)}d late`;
+  if (delta === 0) return "today";
+  return `${delta}d left`;
+}
+
+function focusRank(item: TaskFocusItem) {
+  const toneScore = item.tone === "danger" ? 100 : item.tone === "watch" ? 50 : 0;
+  const reasonScore = item.reason.includes("逾期") ? 30 : item.reason.includes("预算") ? 24 : item.reason.includes("未分配") ? 18 : item.reason.includes("审阅") ? 12 : 0;
+  return toneScore + reasonScore;
 }
 
 function dateValue(value: string | null) {
@@ -505,6 +661,12 @@ function briefToneClass(tone: TaskBriefTone) {
   if (tone === "danger") return "border-[#6f2f2f] bg-[#2b1717] text-[#ff9a8f]";
   if (tone === "watch") return "border-[#6f5631] bg-[#211b12] text-[#e8c678]";
   return "border-[#294838] bg-[#13221b] text-[#9cccae]";
+}
+
+function focusItemClass(tone: TaskBriefTone) {
+  if (tone === "danger") return "border-[#5a2b2b]";
+  if (tone === "watch") return "border-[#5a4324]";
+  return "border-[#294838]";
 }
 
 async function copyText(value: string) {
