@@ -43,6 +43,8 @@ export function DashboardOverview({
 
       <ProductionTrackingConsole projectId={projectId} stats={stats} tasks={tasks} labels={labels} />
 
+      <PipelineCorePanel projectId={projectId} stats={stats} tasks={tasks} labels={labels} />
+
       <ResourcePulseCard pulse={resourcePulse} labels={labels.resourcePulse} />
 
       <CountdownWidget project={stats.project} counts={stats.counts} labels={labels.countdown} />
@@ -82,6 +84,105 @@ export function DashboardOverview({
         <CrewTable crew={stats.crew} labels={chartLabels.crewTable} />
       </DashboardPanel>
     </div>
+  );
+}
+
+function PipelineCorePanel({
+  projectId,
+  stats,
+  tasks,
+  labels,
+}: {
+  projectId: string;
+  stats: DashboardStats;
+  tasks: TaskTableItem[];
+  labels: Dictionary["pages"]["overview"];
+}) {
+  const copy = labels.pipelineCore;
+  const templateRows = buildPipelineTemplateRows(tasks, stats.project.code);
+  const publishQueue = stats.latestVersions.filter((version) => version.status === "APPROVED").slice(0, 5);
+  const queueRows = buildPipelineQueueRows(tasks);
+
+  return (
+    <section className="border border-[#34322b] bg-[#151410]">
+      <div className="grid border-b border-[#34322b] xl:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="border-b border-[#34322b] p-5 xl:border-b-0 xl:border-r">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#d8b46a]">{copy.eyebrow}</p>
+          <h2 className="mt-3 text-2xl font-semibold text-[#f4f1e8]">{copy.title}</h2>
+          <p className="mt-3 text-sm leading-6 text-[#aaa599]">{copy.description}</p>
+          <div className="mt-5 grid grid-cols-3 gap-2">
+            <ConsoleMetric label={copy.metrics.contexts} value={templateRows.length} />
+            <ConsoleMetric label={copy.metrics.publish} value={publishQueue.length} />
+            <ConsoleMetric label={copy.metrics.queue} value={queueRows.length} />
+          </div>
+        </div>
+
+        <div className="grid min-w-0 gap-4 p-4 2xl:grid-cols-[1.05fr_0.95fr_0.95fr]">
+          <ConsolePanel title={copy.templatesTitle} meta={formatTemplate(copy.templatesMeta, { count: templateRows.length })} href={`/app/projects/${projectId}/tasks`} cta={copy.openTasks}>
+            {templateRows.length ? (
+              <div className="space-y-2">
+                {templateRows.map((row) => (
+                  <Link key={row.id} href={`/app/projects/${projectId}/tasks`} className="block border border-[#2a2a28] bg-[#151512] px-3 py-2 transition hover:border-[#d8b46a]/55">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-mono text-xs text-[#4a9eff]">{row.label}</p>
+                        <p className="mt-1 text-[10px] text-[#7f7a70]">{copy.contextKinds[row.kind]} · {formatTemplate(copy.taskCount, { count: row.taskCount })}</p>
+                      </div>
+                      <span className="shrink-0 border border-[#34322b] px-2 py-1 text-[10px] text-[#c9c3b5]">{row.stageCount}</span>
+                    </div>
+                    <p className="mt-2 truncate border-t border-[#24231f] pt-2 font-mono text-[10px] text-[#8f8a7e]">{row.template}</p>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <ConsoleEmptyState text={copy.emptyTemplates} />
+            )}
+          </ConsolePanel>
+
+          <ConsolePanel title={copy.publishTitle} meta={formatTemplate(copy.publishMeta, { count: publishQueue.length })} href={`/app/projects/${projectId}/media`} cta={copy.openMedia}>
+            {publishQueue.length ? (
+              <div className="space-y-2">
+                {publishQueue.map((version) => (
+                  <Link key={version.id} href={`/app/projects/${projectId}/media#${version.id}`} className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border border-[#2a2a28] bg-[#151512] px-3 py-2 transition hover:border-[#d8b46a]/55">
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-xs text-[#4a9eff]">{version.name}</p>
+                      <p className="mt-1 truncate text-[11px] text-[#8f8a7e]">{version.task.contextLabel} / {version.task.name}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="inline-flex border border-[#294838] bg-[#13221b] px-2 py-1 text-[10px] font-semibold text-[#9cccae]">{copy.publishReady}</span>
+                      <p className="mt-1 font-mono text-[10px] text-[#7f7a70]">v{String(version.number).padStart(3, "0")}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <ConsoleEmptyState text={copy.emptyPublish} />
+            )}
+          </ConsolePanel>
+
+          <ConsolePanel title={copy.queueTitle} meta={formatTemplate(copy.queueMeta, { count: queueRows.length })} href={`/app/projects/${projectId}/tasks`} cta={copy.openTasks}>
+            {queueRows.length ? (
+              <div className="space-y-2">
+                {queueRows.map((item) => (
+                  <Link key={item.task.id} href={`/app/projects/${projectId}/tasks?task=${encodeURIComponent(item.task.id)}`} className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 border border-[#2a2a28] bg-[#151512] px-3 py-2 transition hover:border-[#d8b46a]/55">
+                    <span className={["h-fit border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]", queueToneClass(item.tone)].join(" ")}>
+                      {copy.queueLabels[item.kind]}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-[#f4f1e8]">{item.task.context.label} / {item.task.name}</p>
+                      <p className="mt-1 truncate text-[11px] text-[#8f8a7e]">{labels.charts.taskStatuses[item.task.status]}</p>
+                    </div>
+                    <span className="font-mono text-[10px] text-[#7f7a70]">{item.meta}</span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <ConsoleEmptyState text={copy.emptyQueue} />
+            )}
+          </ConsolePanel>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -259,6 +360,58 @@ function buildShotRows(tasks: TaskTableItem[]) {
     .slice(0, 6);
 }
 
+function buildPipelineTemplateRows(tasks: TaskTableItem[], projectCode: string) {
+  const grouped = new Map<string, { kind: TaskTableItem["context"]["kind"]; label: string; tasks: TaskTableItem[] }>();
+
+  for (const task of tasks) {
+    const key = `${task.context.kind}:${task.context.label}`;
+    const current = grouped.get(key) ?? { kind: task.context.kind, label: task.context.label, tasks: [] };
+    current.tasks.push(task);
+    grouped.set(key, current);
+  }
+
+  return Array.from(grouped.values())
+    .map((row) => {
+      const stages = new Set(row.tasks.map((task) => getPipelineShortName(task.name)));
+      return {
+        id: `${row.kind}:${row.label}`,
+        kind: row.kind,
+        label: row.label,
+        taskCount: row.tasks.length,
+        stageCount: stages.size,
+        template: `/${projectCode}/${row.kind}/${row.label}/{stage}/work/v###`,
+      };
+    })
+    .sort((left, right) => right.taskCount - left.taskCount || left.label.localeCompare(right.label))
+    .slice(0, 5);
+}
+
+function buildPipelineQueueRows(tasks: TaskTableItem[]) {
+  return tasks
+    .map((task) => {
+      if (task.overBudget) {
+        return { task, kind: "budget" as const, tone: "hold" as const, meta: formatMoney(Math.max(0, task.calculatedCost - (task.estimatedCost ?? 0))) };
+      }
+
+      if (task.status === "PENDING_REVIEW") {
+        return { task, kind: "review" as const, tone: "watch" as const, meta: `${task.versionCount}v` };
+      }
+
+      if (task.predecessors.length || task.successors.length) {
+        return { task, kind: "dependency" as const, tone: "watch" as const, meta: `${task.predecessors.length}/${task.successors.length}` };
+      }
+
+      if (task.assignees.length === 0) {
+        return { task, kind: "owner" as const, tone: "hold" as const, meta: "--" };
+      }
+
+      return null;
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((left, right) => queueRank(left.tone) - queueRank(right.tone) || right.task.priority - left.task.priority)
+    .slice(0, 5);
+}
+
 function getPipelineShortName(name: string) {
   const upper = name.toUpperCase();
   return PIPELINE_STEPS.find((step) => upper.includes(step)) ?? name.slice(0, 3).toUpperCase();
@@ -275,6 +428,21 @@ function versionStatusClass(status: DashboardStats["latestVersions"][number]["st
   if (status === "PENDING_REVIEW") return "border-[#6f5631] bg-[#211b12] text-[#e8c678]";
   if (status === "APPROVED") return "border-[#294838] bg-[#13221b] text-[#9cccae]";
   return "border-[#28445f] bg-[#111b2a] text-[#8cc6ff]";
+}
+
+function queueToneClass(tone: "hold" | "watch") {
+  if (tone === "hold") return "border-[#6f2f2f] bg-[#2b1717] text-[#ff9a8f]";
+  return "border-[#6f5631] bg-[#211b12] text-[#e8c678]";
+}
+
+function queueRank(tone: "hold" | "watch") {
+  return tone === "hold" ? 0 : 1;
+}
+
+function formatMoney(value: number) {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 10_000) return `$${Math.round(value / 1000)}K`;
+  return `$${value.toLocaleString()}`;
 }
 
 function formatTemplate(template: string, values: Record<string, string | number>) {
